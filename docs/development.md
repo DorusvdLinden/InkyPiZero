@@ -10,8 +10,8 @@ Works on **Windows**, **macOS**, and **Linux**.
 
 ```bash
 # 1. Clone and set up a virtual environment
-git clone <this-repo-url>
-cd pi-weather-display
+git clone git@github.com:DorusvdLinden/InkyPiZero.git
+cd InkyPiZero
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 

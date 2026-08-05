@@ -1,4 +1,4 @@
-# Pi Weather Display
+# InkyPiZero
 
 <img src="./docs/images/inky_clock.jpg" />
 
@@ -45,8 +45,8 @@ upstream project this was forked from).
    [installation.md](./docs/installation.md) for detailed steps.
 2. Clone the repository and run the installer:
     ```bash
-    git clone <this-repo-url>
-    cd pi-weather-display
+    git clone git@github.com:DorusvdLinden/InkyPiZero.git
+    cd InkyPiZero
     sudo bash install/install.sh
     ```
 3. **Edit `config.py`** to set your location (`latitude`/`longitude`) and
