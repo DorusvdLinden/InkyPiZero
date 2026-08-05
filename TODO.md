@@ -9,6 +9,7 @@ them) once fixed.
 - [ ] **Missing font glyph fallback**: `AssetStore.font()` only loads Jost.ttf/Jost-SemiBold.ttf, which have no CJK (or other non-Latin) glyphs. When a location name comes back in a non-Latin script (e.g. Tokyo's Nominatim result), PIL silently drops the unsupported characters instead of rendering anything - the header ends up with a blank gap where the city name should be. The old Chromium/CSS renderer didn't hit this because browsers do automatic per-character font fallback; Pillow's single-TTF loader doesn't. Found via `mock_display_output/pi_zero/pi_zero_render_tokyo_japan.png`. Fix likely needs a bundled fallback font (broad Unicode coverage) tried per-character when Jost can't render something.
 - [x] ~~Chart: solid blue band across the whole bottom, looked like "the area below the chart isn't connected" + "tick marks too thick".~~ Fixed: the rain-bar highlight-cap rectangle was drawn at a fixed height regardless of the actual bar height, so on hours with ~0 rain it still drew a solid strip - across ~24 hourly columns that reads as one continuous false floor. `widgets/chart.py` now skips drawing a bar entirely when `rain < rain_axis_max * 0.03`.
 - [x] ~~Chart icon strip: icons didn't line up with each other (inconsistent size/vertical position between sun/cloud/moon icons).~~ Fixed: source icon PNGs have wildly inconsistent transparent padding within their 512x512 canvas (content height ranges from 352px to 468px depending on the icon), so a uniform resize made some icons look bigger or shifted relative to others. `AssetStore.icon()` now crops to the actual content bounding box first, then scales-to-fit and centers within the requested size, for every icon usage (current icon, forecast cards, chart strip).
+- [x] ~~Weather condition/moon-phase/sunrise-sunset icons were individually sourced from different Flaticon authors (see attribution.md history), which is what caused the inconsistent-padding bug above in the first place - `AssetStore`'s crop-and-fit only compensated for it, didn't remove the root cause.~~ Fixed at the source: replaced with recolored PNGs rendered from [erikflowers/weather-icons](https://github.com/erikflowers/weather-icons) SVGs, a single coherent icon set with a consistent `viewBox="0 0 30 30"` per icon. See "Regenerating icons" below.
 
 ## Polish / not pixel-tuned yet
 
@@ -16,3 +17,19 @@ them) once fixed.
 - [ ] All fonts, gauge sizes, and region positions in `layout.py` are a first-pass approximation of `weather.css`'s proportions, not pixel-matched to the original design yet.
 - [ ] Chart's hourly icon strip can overflow slightly past the bottom edge of `CHART_AREA` (~4px) depending on content.
 - [ ] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far.
+- [ ] 71d/73d/77d (light/moderate snow/snow-grains) all render as the exact same icon (`wi-day-snow`) - weather-icons doesn't have graduated snow-intensity variants the way the old per-condition Flaticon set implied. Similarly 51d/53d/09d (light/moderate/heavy rain) use different source icons but look very similar at small render sizes. Not wrong, just less differentiated than before.
+- [ ] `wi-night-clear` (icon `01n`) renders as a noticeably thinner/paler crescent than the `wi-moon-*` family used for moon phases - same fill color, different path weight in the source SVG. Cosmetic only.
+
+## Regenerating icons
+
+Weather condition/moon-phase/sunrise-sunset icons in `assets/icons/` are generated
+by `scripts/generate_icons.py`, not hand-drawn or downloaded individually - see
+`docs/attribution.md` for the source project. To regenerate (e.g. after changing a
+color or picking a different source icon):
+
+1. `git clone https://github.com/erikflowers/weather-icons.git` next to this repo
+   (or edit `SVG_DIR` in the script to point wherever you cloned it)
+2. `pip install resvg-py` (dev-only tool, not an app dependency - pure-Rust SVG
+   renderer, no system Cairo needed, unlike `cairosvg` which doesn't work out of
+   the box on Windows)
+3. `python scripts/generate_icons.py`
