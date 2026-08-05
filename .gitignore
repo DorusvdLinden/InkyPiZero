@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+
+# Environments
+.env
+venv/
+env/
+ENV/
+inkyenv/
+.venv/
+
+# Development artifacts - kept locally, never committed
+mock_display_output/
+
+# IDE files
+.idea
+.vscode/
+
+# OS
+.DS_Store
