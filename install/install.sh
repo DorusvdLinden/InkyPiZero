@@ -75,6 +75,12 @@ enable_interfaces() {
   sed -i 's/^#dtparam=spi=.*/dtparam=spi=on/' /boot/firmware/config.txt
   raspi-config nonint do_spi 0
   echo_success "\tSPI interface enabled."
+
+  echo "Enabling I2C interface (required for Inky EEPROM auto-detection)."
+  sed -i 's/^dtparam=i2c_arm=.*/dtparam=i2c_arm=on/' /boot/firmware/config.txt
+  sed -i 's/^#dtparam=i2c_arm=.*/dtparam=i2c_arm=on/' /boot/firmware/config.txt
+  raspi-config nonint do_i2c 0
+  echo_success "\tI2C interface enabled."
 }
 
 create_venv() {
