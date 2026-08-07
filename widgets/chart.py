@@ -17,7 +17,7 @@ BOTTOM_MARGIN = 34
 ICON_SIZE = 20
 
 
-def _darken(icon: Image.Image, factor: float = 0.7) -> Image.Image:
+def _darken(icon: Image.Image, factor: float = 0.5) -> Image.Image:
     """Darkens an RGBA icon's color while preserving its alpha channel - makes
     the small chart-strip icons read as bolder/higher-contrast against the
     pale background than the shared full-brightness asset colors."""
