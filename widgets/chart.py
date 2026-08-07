@@ -73,24 +73,24 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         draw.rectangle([x - w / 2, top, x + w / 2, plot_y1], fill=(*BLUE, 130))
         draw.rectangle([x - w / 2, top, x + w / 2, min(top + 3, plot_y1)], fill=(*BLUE, 230))
 
-    # temperature fill (between the curve and the 0 degree line)
+    # temperature fill (between the curve and the 0 degree line) - drawn on a
+    # separate RGBA layer and alpha-composited in, since ImageDraw on the
+    # main RGB image silently drops the alpha byte and renders fully opaque
     curve = [(x, y_temp(t)) for x, t in zip(xs, temps)]
     fill_poly = curve + [(xs[-1], y_zero), (xs[0], y_zero)]
-    draw.polygon(fill_poly, fill=(*FILL_YELLOW, 90))
+    fill_layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    ImageDraw.Draw(fill_layer).polygon(fill_poly, fill=(*FILL_YELLOW, 90))
+    image.paste(fill_layer, (0, 0), fill_layer)
 
     # temperature line, colored per segment by sign
     for (x1, y1), (x2, y2), t1, t2 in zip(curve, curve[1:], temps, temps[1:]):
         color = ORANGE if (t1 + t2) >= 0 else BLUE
         draw.line([(x1, y1), (x2, y2)], fill=color, width=4, joint="curve")
 
-    # dashed actual min/max lines
+    # actual min/max labels (no reference line - just the value at its height)
     for value, label_dy, color in [(actual_max, -14, ORANGE if actual_max >= 0 else BLUE),
                                     (actual_min, 4, ORANGE if actual_min >= 0 else BLUE)]:
         y = y_temp(value)
-        x = plot_x0
-        while x < plot_x1:
-            draw.line([(x, y), (min(x + 5, plot_x1), y)], fill=color, width=2)
-            x += 9
         label = f"{value}°" if unit_label_temp != "K" else str(value)
         draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
 
