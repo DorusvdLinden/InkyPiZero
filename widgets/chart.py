@@ -4,7 +4,7 @@ weather.html. Draws directly into the target region of the main canvas
 there's no rotation/scaling involved)."""
 
 import math
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 ORANGE = (230, 81, 0)
 BLUE = (13, 71, 161)
@@ -15,6 +15,8 @@ RIGHT_MARGIN = 42
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 34
 ICON_SIZE = 20
+MOON_ICON_SIZE = 14
+MOON_ICON_KEYS = {"01n", "022n"}
 
 
 def _darken(icon: Image.Image, factor: float = 0.5) -> Image.Image:
@@ -24,6 +26,41 @@ def _darken(icon: Image.Image, factor: float = 0.5) -> Image.Image:
     r, g, b, a = icon.split()
     scale = lambda band: band.point(lambda v: int(v * factor))
     return Image.merge("RGBA", (scale(r), scale(g), scale(b), a))
+
+
+def _fill_holes(icon: Image.Image, close_radius: int = 1) -> Image.Image:
+    """Some weather-icons glyphs (the ring-style sun, the thin moon-crescent
+    outline, the sunrise/sunset ring-with-a-horizon-gap) are drawn as an
+    outline with a transparent interior rather than a solid shape - fine at
+    the larger sizes used elsewhere, but reads as faint and hard to see at
+    the chart strip's small ICON_SIZE. Flood-fills any transparent area
+    enclosed by the icon's own opaque pixels with the icon's own color,
+    leaving true (edge-connected) background transparent and the original
+    antialiased edges untouched.
+
+    The outside-reachability test (only) is run on a slightly eroded copy of
+    the transparent mask, so a hairline gap in an otherwise-closed outline -
+    like the horizon notch in the sunrise/sunset glyph - doesn't leak the
+    flood fill into what should read as an enclosed hole."""
+    w, h = icon.size
+    color = next((p[:3] for p in icon.getdata() if p[3] > 16), (0, 0, 0))
+
+    is_transparent = icon.split()[3].point(lambda a: 255 if a <= 16 else 0)
+    closed = is_transparent
+    for _ in range(close_radius):
+        closed = closed.filter(ImageFilter.MinFilter(3))
+
+    padded = Image.new("L", (w + 2, h + 2), 255)
+    padded.paste(closed, (1, 1))
+    ImageDraw.floodfill(padded, (0, 0), 128)
+    flooded = padded.crop((1, 1, w + 1, h + 1))
+    reached_bg = flooded.point(lambda v: 255 if v == 128 else 0)
+    hole_mask = ImageChops.subtract(is_transparent, reached_bg)
+
+    filled = icon.copy()
+    patch = Image.new("RGBA", (w, h), (*color, 255))
+    filled.paste(patch, (0, 0), hole_mask)
+    return filled
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -134,7 +171,10 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         if icon_key is None and i % graph_icon_step != 0:
             continue
         icon_key = icon_key or hourly[i].icon_key
-        icon = icon_lookup(icon_key, (ICON_SIZE, ICON_SIZE))
+        size = MOON_ICON_SIZE if icon_key in MOON_ICON_KEYS else ICON_SIZE
+        icon = icon_lookup(icon_key, (size, size))
         if icon:
-            icon = _darken(icon)
-            image.paste(icon, (int(xs[i] - ICON_SIZE / 2), icon_y), icon)
+            icon = _fill_holes(_darken(icon))
+            px = int(xs[i] - size / 2)
+            py = icon_y + (ICON_SIZE - size) // 2
+            image.paste(icon, (px, py), icon)
