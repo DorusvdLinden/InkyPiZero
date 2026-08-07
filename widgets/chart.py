@@ -17,6 +17,15 @@ BOTTOM_MARGIN = 34
 ICON_SIZE = 20
 
 
+def _darken(icon: Image.Image, factor: float = 0.7) -> Image.Image:
+    """Darkens an RGBA icon's color while preserving its alpha channel - makes
+    the small chart-strip icons read as bolder/higher-contrast against the
+    pale background than the shared full-brightness asset colors."""
+    r, g, b, a = icon.split()
+    scale = lambda band: band.point(lambda v: int(v * factor))
+    return Image.merge("RGBA", (scale(r), scale(g), scale(b), a))
+
+
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
     """Pastes text rotated 90 degrees (bottom-to-top), left edge at `position`."""
     bbox = font.getbbox(text)
@@ -127,4 +136,5 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         icon_key = icon_key or hourly[i].icon_key
         icon = icon_lookup(icon_key, (ICON_SIZE, ICON_SIZE))
         if icon:
+            icon = _darken(icon)
             image.paste(icon, (int(xs[i] - ICON_SIZE / 2), icon_y), icon)
