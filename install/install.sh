@@ -81,6 +81,10 @@ enable_interfaces() {
   sed -i 's/^#dtparam=i2c_arm=.*/dtparam=i2c_arm=on/' /boot/firmware/config.txt
   raspi-config nonint do_i2c 0
   echo_success "\tI2C interface enabled."
+
+  echo "Freeing SPI chip-select pins for the Inky driver's own GPIO control."
+  grep -qxF 'dtoverlay=spi0-0cs' /boot/firmware/config.txt || echo 'dtoverlay=spi0-0cs' >> /boot/firmware/config.txt
+  echo_success "\tSPI0 chip-select overlay set."
 }
 
 create_venv() {
