@@ -16,11 +16,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SVG_DIR = os.path.join(SCRIPT_DIR, "..", "..", "weather-icons", "svg")
 OUT_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "icons")
 
-ORANGE = "#f5a623"       # sun
-MOON_YELLOW = "#f2c14e"  # moon
-CLOUD_BLUE = "#1565c0"   # plain cloud, rain cloud, and snow cloud all share this
-FOG = "#8f8f8f"
-STORM = "#37474f"
+ORANGE = "#ff8c00"       # sun - Pimoroni ACeP-native orange
+MOON_YELLOW = "#ffff00"  # moon - Pimoroni ACeP-native yellow
+CLOUD_BLUE = "#0000ff"   # plain cloud, rain cloud, and snow cloud all share this - ACeP-native blue
+FOG = "#000000"          # no native gray on the panel - flat black avoids dithering
+STORM = "#000000"
 
 # icon_key -> (weather-icons svg name, fill color)
 WEATHER_ICONS = {
