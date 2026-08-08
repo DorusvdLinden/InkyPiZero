@@ -38,8 +38,9 @@ SERVICE_FILE_SOURCE="$SCRIPT_DIR/$APPNAME.service"
 SERVICE_FILE_TARGET="/etc/systemd/system/$APPNAME.service"
 TIMER_FILE_SOURCE="$SCRIPT_DIR/$APPNAME.timer"
 TIMER_FILE_TARGET="/etc/systemd/system/$APPNAME.timer"
-SHUTDOWN_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$APPNAME-shutdown.service"
-SHUTDOWN_SERVICE_FILE_TARGET="/etc/systemd/system/$APPNAME-shutdown.service"
+SHUTDOWN_APPNAME="pi-weather-shutdown"
+SHUTDOWN_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$SHUTDOWN_APPNAME.service"
+SHUTDOWN_SERVICE_FILE_TARGET="/etc/systemd/system/$SHUTDOWN_APPNAME.service"
 
 echo_success() {
   echo -e "$1 [\e[32m\xE2\x9C\x94\e[0m]"
@@ -119,7 +120,7 @@ install_service() {
   cp "$SHUTDOWN_SERVICE_FILE_SOURCE" "$SHUTDOWN_SERVICE_FILE_TARGET"
   systemctl daemon-reload
   systemctl enable --now "$APPNAME.timer"
-  systemctl enable --now "$APPNAME-shutdown.service"
+  systemctl enable --now "$SHUTDOWN_APPNAME.service"
   echo_success "\tService, timer, and shutdown-button listener installed and started."
 }
 
