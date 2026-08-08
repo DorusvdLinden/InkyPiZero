@@ -106,4 +106,4 @@ class Palette:
         self.__dict__.update(Palette(saturation).__dict__)
 
 
-PALETTE = Palette(saturation=1.0)  # must match DisplayConfig.inky_saturation
+PALETTE = Palette(saturation=0.0)  # must match DisplayConfig.inky_saturation
