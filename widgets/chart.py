@@ -51,6 +51,18 @@ def _positive_fill_segments(xs, temps, y_temp, y_zero):
     return [seg for seg in segments if len(seg) >= 2]
 
 
+def _decimal_point_center_x(label: str, font) -> float | None:
+    """x-offset (from the label's own left edge) to the horizontal center
+    of its "." character, or None if the label has no decimal point (e.g.
+    a whole-number rain value like "1 mm")."""
+    dot_idx = label.find(".")
+    if dot_idx == -1:
+        return None
+    before = font.getbbox(label[:dot_idx])[2] if dot_idx > 0 else 0
+    upto = font.getbbox(label[:dot_idx + 1])[2]
+    return (before + upto) / 2
+
+
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
     """Pastes text rotated 90 degrees (bottom-to-top), left edge at `position`."""
     bbox = font.getbbox(text)
@@ -163,16 +175,26 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.line([(plot_x1, plot_y0), (plot_x1, plot_y1)], fill=text_color, width=2)
     draw.line([(plot_x0, plot_y1), (plot_x1, plot_y1)], fill=text_color, width=2)
 
+    rain_max_label = f"{rain_axis_max:g} {unit_label_rain}"
     draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}°", font=font_bold, fill=text_color, anchor="rm")
     draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}°", font=font_bold, fill=text_color, anchor="rm")
-    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), f"{rain_axis_max:g} {unit_label_rain}", font=font_bold, fill=text_color, anchor="lm")
+    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_bold, fill=text_color, anchor="lm")
     draw.text((plot_x1 + 6, y_rain(0)), f"0 {unit_label_rain}", font=font_bold, fill=text_color, anchor="lm")
 
     _vertical_text(image, (region.x + 4, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
-    # sits at the same x as the "0 mm"/upper-value rain labels, vertically
-    # centered in the gap between them, instead of its own column further
-    # right - frees up RIGHT_MARGIN for a wider plot area.
-    _vertical_text(image, (plot_x1 + 6, (plot_y0 + plot_y1) // 2), "Regen", font_bold, text_color)
+    # "Regen" is centered on the decimal point of the rain-axis-max label
+    # (e.g. the "." in "4.5 mm") when that label has one, so the two read
+    # as visually aligned rather than the label just trailing off to the
+    # right of it. Whole-number labels ("1 mm"/"0 mm") have no "." to
+    # align to, so fall back to a flat 2mm (~10px) gap off the axis line.
+    regen_bbox = font_bold.getbbox("Regen")
+    regen_rotated_w = (regen_bbox[3] - regen_bbox[1]) + 2
+    dot_offset = _decimal_point_center_x(rain_max_label, font_bold)
+    if dot_offset is not None:
+        regen_x = plot_x1 + 6 + dot_offset - regen_rotated_w / 2
+    else:
+        regen_x = plot_x1 + 10
+    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), "Regen", font_bold, text_color)
 
     # x-axis hour labels - same cadence as the icon strip below, so each
     # icon sits directly under its hour's label instead of drifting out of
