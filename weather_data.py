@@ -189,6 +189,24 @@ def get_uv_fraction(uv_index) -> float:
     return min(1.0, max(0.0, uv_index / 11))
 
 
+def get_uv_rating_nl(uv_index) -> str:
+    """Standard EPA/WHO Global Solar UV Index categories: Low 0-2, Moderate
+    3-5, High 6-7, Very High 8-10, Extreme 11+."""
+    try:
+        uv_index = float(uv_index)
+    except (TypeError, ValueError):
+        return ""
+    if uv_index < 3:
+        return "Laag"
+    elif uv_index < 6:
+        return "Matig"
+    elif uv_index < 8:
+        return "Hoog"
+    elif uv_index < 11:
+        return "Zeer hoog"
+    return "Extreem"
+
+
 def get_uv_color(uv_index) -> str:
     low_color, high_color = (255, 179, 0), (216, 67, 21)
     fraction = get_uv_fraction(uv_index)
@@ -441,11 +459,14 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
 
     uv_times = aqi_data.get("hourly", {}).get("time", [])
     uv_values = aqi_data.get("hourly", {}).get("uv_index", [])
-    uv_index = _value_at_current_hour(uv_times, uv_values, tz, current_time)
-    uv_index = uv_index if uv_index is not None else "N/A"
+    uv_index_raw = _value_at_current_hour(uv_times, uv_values, tz, current_time)
+    uv_rating = get_uv_rating_nl(uv_index_raw)
+    uv_color = get_uv_color(uv_index_raw)
+    uv_beams = get_uv_beam_points(uv_index_raw)
+    uv_index = round(uv_index_raw) if uv_index_raw is not None else "N/A"
     data_points.append({
-        "kind": "uv", "label": "UV-index", "measurement": uv_index, "unit": "",
-        "uv_color": get_uv_color(uv_index), "uv_beams": get_uv_beam_points(uv_index),
+        "kind": "uv", "label": "UV-index", "measurement": uv_index, "unit": uv_rating,
+        "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
     if units == "imperial":
