@@ -26,8 +26,8 @@ STORM = "#000000"
 WEATHER_ICONS = {
     "01d": ("wi-day-sunny", ORANGE),
     "01n": ("wi-night-clear", MOON_YELLOW),
-    "022d": ("wi-day-sunny-overcast", CLOUD_BLUE),
-    "022n": ("wi-night-alt-partly-cloudy", CLOUD_BLUE),
+    "022d": ("wi-day-sunny-overcast", ORANGE),
+    "022n": ("wi-night-alt-partly-cloudy", MOON_YELLOW),
     "02d": ("wi-day-cloudy", CLOUD_BLUE),
     "02n": ("wi-night-alt-cloudy", CLOUD_BLUE),
     "04d": ("wi-cloudy", CLOUD_BLUE),
