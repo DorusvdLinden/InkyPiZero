@@ -20,6 +20,16 @@ automatically, without being asked each time.
   `mock_display_output/` in the repo root with a descriptive filename, and **leave it
   there** — don't clean these up. They're a kept record of each iteration for comparison.
 
+## Testing
+
+- **Always test the 14 locations**: `python scripts/test_locations.py` renders 14
+  diverse real locations (hot/cold/rain/snow/night/zero-crossing temps/etc.) via the
+  real fetch -> render pipeline, saving each to
+  `mock_display_output/location_consistency_test/`. Run this after every change to the
+  rendering pipeline (`widgets/`, `canvas.py`, `layout.py`, `weather_data.py`) to check
+  for regressions before considering the change done. Do this automatically, without
+  being asked each time.
+
 ## Bugs / ideas tracking
 
 - `TODO.md` tracks known bugs and polish items. Add to it when something rough turns up;
