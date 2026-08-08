@@ -33,7 +33,7 @@ HEADER = Region(0, 6, 800, 34)
 TODAY = Region(0, HEADER.bottom + 6, 800, 165)
 CURRENT_TEMPERATURE = Region(TODAY.x, TODAY.y, 320, TODAY.h)
 DATA_POINTS = Region(320, TODAY.y, 480, TODAY.h)
-CHART_AREA = Region(0, TODAY.bottom + 6, 800, 160)
+CHART_AREA = Region(0, TODAY.bottom + 6, 800, 150)
 FORECAST_ROW = Region(0, CHART_AREA.bottom + 8, 800, 95)
 
 # Data-point grid: 2 columns x 3 rows, filled row-major in the same order as
