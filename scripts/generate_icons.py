@@ -16,11 +16,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SVG_DIR = os.path.join(SCRIPT_DIR, "..", "..", "weather-icons", "svg")
 OUT_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "icons")
 
-ORANGE = "#ff8c00"       # sun - Pimoroni ACeP-native orange
-MOON_YELLOW = "#ffff00"  # moon - Pimoroni ACeP-native yellow
-CLOUD_BLUE = "#0000ff"   # plain cloud, rain cloud, and snow cloud all share this - ACeP-native blue
-FOG = "#000000"          # no native gray on the panel - flat black avoids dithering
-STORM = "#000000"
+ORANGE = "#f5a623"       # sun
+MOON_YELLOW = "#f2c14e"  # moon
+CLOUD = "#5b7c9d"        # cloud, day
+CLOUD_NIGHT = "#3d5a75"  # cloud, night (darker)
+RAIN = "#1565c0"
+SNOW = "#4fc3f7"
+FOG = "#8f8f8f"
+STORM = "#37474f"
 
 # icon_key -> (weather-icons svg name, fill color)
 WEATHER_ICONS = {
@@ -28,20 +31,20 @@ WEATHER_ICONS = {
     "01n": ("wi-night-clear", MOON_YELLOW),
     "022d": ("wi-day-sunny-overcast", ORANGE),
     "022n": ("wi-night-alt-partly-cloudy", MOON_YELLOW),
-    "02d": ("wi-day-cloudy", CLOUD_BLUE),
-    "02n": ("wi-night-alt-cloudy", CLOUD_BLUE),
-    "04d": ("wi-cloudy", CLOUD_BLUE),
+    "02d": ("wi-day-cloudy", CLOUD),
+    "02n": ("wi-night-alt-cloudy", CLOUD_NIGHT),
+    "04d": ("wi-cloudy", CLOUD),
     "50d": ("wi-day-fog", FOG),
     "48d": ("wi-day-fog", FOG),
-    "51d": ("wi-day-sprinkle", CLOUD_BLUE),
-    "53d": ("wi-day-rain", CLOUD_BLUE),
-    "09d": ("wi-day-showers", CLOUD_BLUE),
-    "56d": ("wi-day-sleet", CLOUD_BLUE),
-    "57d": ("wi-day-sleet", CLOUD_BLUE),
-    "71d": ("wi-day-snow", CLOUD_BLUE),
-    "73d": ("wi-day-snow", CLOUD_BLUE),
-    "13d": ("wi-day-snow-wind", CLOUD_BLUE),
-    "77d": ("wi-day-snow", CLOUD_BLUE),
+    "51d": ("wi-day-sprinkle", RAIN),
+    "53d": ("wi-day-rain", RAIN),
+    "09d": ("wi-day-showers", RAIN),
+    "56d": ("wi-day-sleet", SNOW),
+    "57d": ("wi-day-sleet", SNOW),
+    "71d": ("wi-day-snow", SNOW),
+    "73d": ("wi-day-snow", SNOW),
+    "13d": ("wi-day-snow-wind", SNOW),
+    "77d": ("wi-day-snow", SNOW),
     "11d": ("wi-day-thunderstorm", STORM),
 }
 
