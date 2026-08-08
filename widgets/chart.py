@@ -10,6 +10,7 @@ from widgets.icons import thicken_icon
 
 ORANGE = (230, 81, 0)
 BLUE = (13, 71, 161)
+BLACK = (0, 0, 0)
 FILL_YELLOW = (252, 204, 5)
 
 LEFT_MARGIN = 34
@@ -17,6 +18,37 @@ RIGHT_MARGIN = 76
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
 ICON_SIZE = 30
+
+
+def _positive_fill_segments(xs, temps, y_temp, y_zero):
+    """Splits the temperature curve into contiguous above-zero runs, each
+    ready to be closed into its own fill polygon against the zero line -
+    below-zero stretches get no shading at all. Interpolates the exact
+    crossing x position wherever the curve crosses 0deg between two hourly
+    points, so a segment's edges land exactly on the zero line rather than
+    snapping to the nearest hour."""
+    segments = []
+    current = []
+    for i in range(len(xs) - 1):
+        x1, t1 = xs[i], temps[i]
+        x2, t2 = xs[i + 1], temps[i + 1]
+        if t1 >= 0:
+            current.append((x1, y_temp(t1)))
+        if (t1 >= 0) != (t2 >= 0):
+            frac = t1 / (t1 - t2)
+            cross_x = x1 + frac * (x2 - x1)
+            current.append((cross_x, y_zero))
+            if t1 >= 0:
+                segments.append(current)
+                current = []
+            else:
+                current = [(cross_x, y_zero)]
+    x_last, t_last = xs[-1], temps[-1]
+    if t_last >= 0:
+        current.append((x_last, y_temp(t_last)))
+    if current:
+        segments.append(current)
+    return [seg for seg in segments if len(seg) >= 2]
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -75,13 +107,17 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         draw.rectangle([x - w / 2, top, x + w / 2, plot_y1], fill=(*BLUE, 130))
         draw.rectangle([x - w / 2, top, x + w / 2, min(top + 3, plot_y1)], fill=(*BLUE, 230))
 
-    # temperature fill (between the curve and the 0 degree line) - drawn on a
-    # separate RGBA layer and alpha-composited in, since ImageDraw on the
-    # main RGB image silently drops the alpha byte and renders fully opaque
+    # temperature fill (between the curve and the 0 degree line), only where
+    # the curve is at or above 0 - below-zero stretches get no shading -
+    # drawn on a separate RGBA layer and alpha-composited in, since
+    # ImageDraw on the main RGB image silently drops the alpha byte and
+    # renders fully opaque
     curve = [(x, y_temp(t)) for x, t in zip(xs, temps)]
-    fill_poly = curve + [(xs[-1], y_zero), (xs[0], y_zero)]
     fill_layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    ImageDraw.Draw(fill_layer).polygon(fill_poly, fill=(*FILL_YELLOW, 90))
+    fill_draw = ImageDraw.Draw(fill_layer)
+    for segment in _positive_fill_segments(xs, temps, y_temp, y_zero):
+        fill_poly = segment + [(segment[-1][0], y_zero), (segment[0][0], y_zero)]
+        fill_draw.polygon(fill_poly, fill=(*FILL_YELLOW, 90))
     image.paste(fill_layer, (0, 0), fill_layer)
 
     # temperature line, colored per segment by sign
@@ -89,14 +125,17 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         color = ORANGE if (t1 + t2) >= 0 else BLUE
         draw.line([(x1, y1), (x2, y2)], fill=color, width=4, joint="curve")
 
-    # dashed actual min/max lines - label defaults to sitting below its line,
-    # but flips above when the line sits at/near the plot's bottom edge.
-    # That's not a rare case: min_temp = min(actual_min, 0), so the min
-    # line lands exactly on the bottom axis any time the day's actual low
-    # is <=0deg - a "below" label there collides with the x-axis hour
-    # labels/icon strip (found via a below-zero-temperature location).
-    for value, color in [(actual_max, ORANGE if actual_max >= 0 else BLUE),
-                          (actual_min, ORANGE if actual_min >= 0 else BLUE)]:
+    # dashed actual min/max lines - skip whichever one exactly coincides
+    # with its axis extreme (min_temp/max_temp clamp to 0, so e.g. the min
+    # line sits exactly on the bottom axis whenever the actual low is
+    # <=0deg) - the axis's own value label already shows that number, so a
+    # second dashed line+label right on top of it is pure redundancy.
+    dashed_lines = []
+    if actual_max != max_temp:
+        dashed_lines.append((actual_max, ORANGE if actual_max >= 0 else BLUE))
+    if actual_min != min_temp:
+        dashed_lines.append((actual_min, ORANGE if actual_min >= 0 else BLUE))
+    for value, color in dashed_lines:
         y = y_temp(value)
         x = plot_x0
         while x < plot_x1:
@@ -105,6 +144,19 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         label_dy = 14 if (plot_y1 - y) > 20 else -14
         label = f"{value}°" if unit_label_temp != "K" else str(value)
         draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
+
+    # black dashed 0deg reference line, only shown when the day actually
+    # dips below freezing (min_temp < 0 means actual_min < 0 too, since
+    # min_temp = min(actual_min, 0)) - without this there'd be no marker
+    # at all for where freezing sits once the axis itself is clamped to
+    # the actual (negative) low instead of 0.
+    if min_temp < 0:
+        x = plot_x0
+        while x < plot_x1:
+            draw.line([(x, y_zero), (min(x + 5, plot_x1), y_zero)], fill=BLACK, width=2)
+            x += 9
+        label_dy = 14 if (plot_y1 - y_zero) > 20 else -14
+        draw.text((plot_x0 + plot_w / 2, y_zero + label_dy), "0°", font=font_bold, fill=BLACK, anchor="mm")
 
     # axes
     draw.line([(plot_x0, plot_y0), (plot_x0, plot_y1)], fill=text_color, width=2)
