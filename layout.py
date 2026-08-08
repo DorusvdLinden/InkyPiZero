@@ -23,6 +23,10 @@ class Region:
 
 CANVAS_SIZE = (800, 480)
 
+# 2mm physical margin on the 7.3" Inky Impression (800x480, ~127.8ppi from the
+# panel's diagonal: sqrt(800**2+480**2)/7.3) -> ~5.03px/mm -> ~10px.
+MARGIN_PX = 10
+
 # Fixed pixel regions, derived from weather.css's dvh/dvw proportions at 800x480
 # (no more responsive units needed - there's only ever one physical resolution).
 # These are a first pass for visual review, not pixel-tuned yet. Stacked
