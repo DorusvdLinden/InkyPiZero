@@ -62,7 +62,6 @@ class Palette:
         self.chart_warm = c["orange"]
         self.chart_cool = c["blue"]
         self.chart_zero_line = c["black"]
-        self.chart_fill = c["yellow"]
 
         # forecast cards (widgets/forecast.py)
         self.card_border = c["black"]
