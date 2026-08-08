@@ -12,6 +12,7 @@ import os
 import sys
 
 import resvg_py
+from PIL import Image
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(SCRIPT_DIR))
@@ -19,6 +20,24 @@ from widgets.palette import PALETTE
 
 SVG_DIR = os.path.join(SCRIPT_DIR, "..", "..", "weather-icons", "svg")
 OUT_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "icons")
+
+# Not SVG-sourced like the icons above - two small transparent PNGs
+# hand-cropped from an old pi4-app screenshot (see TODO.md), used as a
+# shape/alpha template only. Their baked-in RGB was never updated to match
+# the panel's actual palette, which is why they dithered almost invisible
+# once the panel-matching work above made every *other* icon color exact.
+HUMIDITY_DROP_FILES = ["humidity_drop_filled", "humidity_drop_empty"]
+
+
+def _recolor_humidity_drops(out_dir: str):
+    color = PALETTE.humidity_drop
+    for name in HUMIDITY_DROP_FILES:
+        template = Image.open(os.path.join(OUT_DIR, f"{name}.png")).convert("RGBA")
+        alpha = template.split()[3]
+        recolored = Image.new("RGBA", template.size, (*color, 0))
+        recolored.putalpha(alpha)
+        recolored.save(os.path.join(out_dir, f"{name}.png"))
+        print(f"{name:24s} <- (recolored template)      {_hex(color)}")
 
 
 def _hex(rgb: tuple[int, int, int]) -> str:
@@ -91,7 +110,8 @@ def regenerate(out_dir: str = OUT_DIR):
             f.write(bytes(png_bytes))
         print(f"{key:8s} <- {svg_name:30s} {color}")
 
-    print(f"\n{len(all_icons)} icons written to {out_dir}")
+    _recolor_humidity_drops(out_dir)
+    print(f"\n{len(all_icons) + len(HUMIDITY_DROP_FILES)} icons written to {out_dir}")
 
 
 if __name__ == "__main__":

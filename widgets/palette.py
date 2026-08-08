@@ -52,6 +52,7 @@ class Palette:
         self.cloud = c["blue"]
         self.fog = c["black"]
         self.storm = c["black"]
+        self.humidity_drop = c["blue"]
 
         # chart (widgets/chart.py)
         self.chart_warm = c["orange"]
