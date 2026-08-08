@@ -13,7 +13,7 @@ BLUE = (13, 71, 161)
 FILL_YELLOW = (252, 204, 5)
 
 LEFT_MARGIN = 34
-RIGHT_MARGIN = 42
+RIGHT_MARGIN = 76
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
 ICON_SIZE = 30
@@ -111,7 +111,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.text((plot_x1 + 6, y_rain(0)), f"0 {unit_label_rain}", font=font_bold, fill=text_color, anchor="lm")
 
     _vertical_text(image, (region.x + 4, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
-    _vertical_text(image, (region.right - 16, (plot_y0 + plot_y1) // 2), "Regen", font_bold, text_color)
+    _vertical_text(image, (region.right - 14, (plot_y0 + plot_y1) // 2), "Regen", font_bold, text_color)
 
     # x-axis hour labels - same cadence as the icon strip below, so each
     # icon sits directly under its hour's label instead of drifting out of
