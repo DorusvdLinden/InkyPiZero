@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(SCRIPT_DIR))
 from widgets.palette import PALETTE
+from widgets.icons import thicken_icon
 
 SVG_DIR = os.path.join(SCRIPT_DIR, "..", "..", "weather-icons", "svg")
 OUT_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "icons")
@@ -120,6 +121,15 @@ def _composite_icon(spec: dict, canvas_size: int = 300, base_size: int = 256) ->
     back_svg, back_role, back_scale, back_dx, back_dy = spec["back"]
     back_color = getattr(PALETTE, back_role)
     back_render = _render_svg(back_svg, _hex(back_color), size=int(base_size * back_scale))
+    # Extra baked-in boldness on top of whatever the normal use-time
+    # thicken_icon() pass applies (chart.py/forecast.py thicken every icon
+    # already) - a hollow ring's antialiased edge is a big fraction of its
+    # total pixels, and blended orange-on-white sits almost equidistant
+    # between the panel's orange/yellow/white palette entries, so those
+    # edge pixels flip unpredictably under dithering (visible speckle).
+    # More stroke width per antialiased-edge pixel shrinks that ratio
+    # without going all the way to a full solid fill.
+    back_render = thicken_icon(back_render, amount=1, strength=1.0)
     canvas.paste(back_render, (back_dx, back_dy), back_render)
 
     front_svg, front_role, front_scale, front_dx, front_dy = spec["front"]
