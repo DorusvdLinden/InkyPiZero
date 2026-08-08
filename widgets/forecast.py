@@ -1,5 +1,7 @@
 from PIL import ImageDraw
 
+from widgets.icons import thicken_icon
+
 CARD_BORDER = (90, 156, 90)
 CARD_FILL = (227, 241, 227)
 
@@ -16,6 +18,7 @@ def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
     cx = region.center[0]
     top_y = region.y + 6
     if icon:
+        icon = thicken_icon(icon)
         image.paste(icon, (cx - icon_size // 2, top_y), icon)
 
     temps_y = top_y + icon_size + 4
@@ -28,6 +31,7 @@ def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
         moon_y = region.bottom - moon_size - 4
         moon_icon = assets.icon(day.moon_icon_key, (moon_size, moon_size))
         if moon_icon:
+            moon_icon = thicken_icon(moon_icon)
             image.paste(moon_icon, (region.x + 6, moon_y), moon_icon)
         draw.text((region.x + 6 + moon_size + 4, moon_y + moon_size // 2), f"{day.moon_phase_pct}%",
                    font=assets.font("normal", 11), fill=text_color, anchor="lm")

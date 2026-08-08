@@ -1,9 +1,35 @@
 import os
-from PIL import Image, ImageFont
+from PIL import Image, ImageFilter, ImageFont
 
 # width / height of the source humidity_drop_filled.png / humidity_drop_empty.png
 # assets (cropped from a pi4-app render - see pi_weather_display/TODO.md)
 DROPLET_ASPECT = 28 / 38
+
+ICON_THICKEN_PX = 1
+ICON_THICKEN_STRENGTH = 0.5  # 0 = original thin lines, 1 = full 1px dilation
+
+
+def thicken_icon(icon: Image.Image, amount: int = ICON_THICKEN_PX,
+                  strength: float = ICON_THICKEN_STRENGTH) -> Image.Image:
+    """Dilates the icon's alpha channel to make thin strokes (the sun's
+    ring, cloud outlines, etc.) read as bolder at small sizes, without
+    filling any enclosed interior - a ring stays a ring, just a thicker
+    one. Uses the icon's own dominant color for any newly-opaque pixels so
+    the thickened edge doesn't pick up stray/undefined color from fully-
+    transparent source pixels.
+
+    A full 1px dilation (strength=1) reads a bit heavier than wanted, and
+    MaxFilter only supports whole-pixel steps, so `strength` blends
+    between the original and dilated alpha to land in between."""
+    color = next((p[:3] for p in icon.getdata() if p[3] > 16), None)
+    if color is None:
+        return icon
+    original_alpha = icon.split()[3]
+    dilated_alpha = original_alpha.filter(ImageFilter.MaxFilter(amount * 2 + 1))
+    thickened_alpha = Image.blend(original_alpha, dilated_alpha, strength)
+    thickened = Image.new("RGBA", icon.size, (*color, 0))
+    thickened.putalpha(thickened_alpha)
+    return thickened
 
 # Moon glyphs (the night-clear/partly-cloudy condition icons, plus every moon
 # phase) read as oversized next to the sun/cloud icons at the same box size -
