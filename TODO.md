@@ -24,7 +24,7 @@ them) once fixed.
 - [ ] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far.
 - [ ] 71d/73d/77d (light/moderate snow/snow-grains) all render as the exact same icon (`wi-day-snow`) - weather-icons doesn't have graduated snow-intensity variants the way the old per-condition Flaticon set implied. Similarly 51d/53d/09d (light/moderate/heavy rain) use different source icons but look very similar at small render sizes. Not wrong, just less differentiated than before.
 - [ ] `wi-night-clear` (icon `01n`) renders as a noticeably thinner/paler crescent than the `wi-moon-*` family used for moon phases - same fill color, different path weight in the source SVG. Cosmetic only.
-- [ ] Chart's dashed min-reference line becomes invisible (merges into the 0deg axis line/label) on days where the actual low is exactly 0deg, since `min_temp = min(actual_min, 0)` clamps the y-axis floor to the same value. Found via Ushuaia (Argentine winter) in the 12-location consistency test. Rare (needs an exact 0.0 reading, not just close to it) and low-impact (the axis's own "0deg" label already conveys it), so left as-is.
+- [x] ~~Chart's dashed min-reference line becomes invisible (merges into the 0deg axis line/label) on days where the actual low is exactly 0deg, since `min_temp = min(actual_min, 0)` clamps the y-axis floor to the same value.~~ Found via Ushuaia (Argentine winter) in the 12-location consistency test. Fixed as a side effect of the min-line/x-axis-label collision fix above: the label flipping to sit above its line whenever near the bottom edge means it's now visible (e.g. "0deg") instead of merged into the axis, even in this exact-zero case.
 
 ## Regenerating icons
 
