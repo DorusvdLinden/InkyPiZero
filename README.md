@@ -23,6 +23,8 @@ Pi Zero W) that can't comfortably run a headless browser.
   Python file
 - Runs as a `systemd` timer (e.g. every 10 minutes), not a persistent service
 - Weather data from [Open-Meteo](https://open-meteo.com/) - no API key needed
+- Press button A on the back of the Inky Impression to blank the screen and
+  safely shut the Pi down
 
 ## Hardware
 
@@ -64,6 +66,7 @@ Useful commands after installing:
 systemctl status pi-weather-display.timer     # confirm the timer is active
 journalctl -u pi-weather-display.service      # view render logs
 sudo systemctl start pi-weather-display.service  # force an immediate render
+systemctl status pi-weather-shutdown.service  # confirm the button listener is active
 ```
 
 To update: `git pull` then rerun `sudo bash install/install.sh` (safe to
@@ -93,6 +96,9 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   edited directly in source, since there's no web UI
 - `main.py` - fetch -> render -> display, no scheduling loop of its own
   (that's the systemd timer's job)
+- `shutdown_button.py` - listens for button A (GPIO5) and blanks the screen +
+  powers off; unlike `main.py` this runs as its own persistent
+  `pi-weather-shutdown.service`, since a button press can happen anytime
 - `TODO.md` - known bugs and rough edges
 
 Chosen over an ESP32-S3/embedded-C rewrite because it reuses Pimoroni's

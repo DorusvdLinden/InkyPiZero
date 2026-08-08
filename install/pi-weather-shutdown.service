@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Weather Display shutdown button listener
+After=multi-user.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/local/pi-weather-display/app
+ExecStart=/usr/local/pi-weather-display/venv/bin/python /usr/local/pi-weather-display/app/shutdown_button.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

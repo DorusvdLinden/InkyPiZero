@@ -38,6 +38,8 @@ SERVICE_FILE_SOURCE="$SCRIPT_DIR/$APPNAME.service"
 SERVICE_FILE_TARGET="/etc/systemd/system/$APPNAME.service"
 TIMER_FILE_SOURCE="$SCRIPT_DIR/$APPNAME.timer"
 TIMER_FILE_TARGET="/etc/systemd/system/$APPNAME.timer"
+SHUTDOWN_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$APPNAME-shutdown.service"
+SHUTDOWN_SERVICE_FILE_TARGET="/etc/systemd/system/$APPNAME-shutdown.service"
 
 echo_success() {
   echo -e "$1 [\e[32m\xE2\x9C\x94\e[0m]"
@@ -108,15 +110,17 @@ install_app() {
 
 install_service() {
   echo "Installing $APPNAME systemd service and timer."
-  if [ ! -f "$SERVICE_FILE_SOURCE" ] || [ ! -f "$TIMER_FILE_SOURCE" ]; then
+  if [ ! -f "$SERVICE_FILE_SOURCE" ] || [ ! -f "$TIMER_FILE_SOURCE" ] || [ ! -f "$SHUTDOWN_SERVICE_FILE_SOURCE" ]; then
     echo_error "ERROR: Service/timer files not found in $SCRIPT_DIR!"
     exit 1
   fi
   cp "$SERVICE_FILE_SOURCE" "$SERVICE_FILE_TARGET"
   cp "$TIMER_FILE_SOURCE" "$TIMER_FILE_TARGET"
+  cp "$SHUTDOWN_SERVICE_FILE_SOURCE" "$SHUTDOWN_SERVICE_FILE_TARGET"
   systemctl daemon-reload
   systemctl enable --now "$APPNAME.timer"
-  echo_success "\tService and timer installed, timer started."
+  systemctl enable --now "$APPNAME-shutdown.service"
+  echo_success "\tService, timer, and shutdown-button listener installed and started."
 }
 
 check_permissions
@@ -132,3 +136,4 @@ echo_header "[-] A reboot may be required for the SPI interface change to take e
 echo_header "[-] Check status with: systemctl status $APPNAME.timer"
 echo_header "[-] View logs with: journalctl -u $APPNAME.service"
 echo_header "[-] Force an immediate render with: systemctl start $APPNAME.service"
+echo_header "[-] Press button A on the back of the display to blank the screen and shut down."
