@@ -18,10 +18,7 @@ OUT_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "icons")
 
 ORANGE = "#f5a623"       # sun
 MOON_YELLOW = "#f2c14e"  # moon
-CLOUD = "#5b7c9d"        # cloud, day
-CLOUD_NIGHT = "#3d5a75"  # cloud, night (darker)
-RAIN = "#1565c0"
-SNOW = "#4fc3f7"
+CLOUD_BLUE = "#1565c0"   # plain cloud, rain cloud, and snow cloud all share this
 FOG = "#8f8f8f"
 STORM = "#37474f"
 
@@ -31,20 +28,20 @@ WEATHER_ICONS = {
     "01n": ("wi-night-clear", MOON_YELLOW),
     "022d": ("wi-day-sunny-overcast", ORANGE),
     "022n": ("wi-night-alt-partly-cloudy", MOON_YELLOW),
-    "02d": ("wi-day-cloudy", CLOUD),
-    "02n": ("wi-night-alt-cloudy", CLOUD_NIGHT),
-    "04d": ("wi-cloudy", CLOUD),
+    "02d": ("wi-day-cloudy", CLOUD_BLUE),
+    "02n": ("wi-night-alt-cloudy", CLOUD_BLUE),
+    "04d": ("wi-cloudy", CLOUD_BLUE),
     "50d": ("wi-day-fog", FOG),
     "48d": ("wi-day-fog", FOG),
-    "51d": ("wi-day-sprinkle", RAIN),
-    "53d": ("wi-day-rain", RAIN),
-    "09d": ("wi-day-showers", RAIN),
-    "56d": ("wi-day-sleet", SNOW),
-    "57d": ("wi-day-sleet", SNOW),
-    "71d": ("wi-day-snow", SNOW),
-    "73d": ("wi-day-snow", SNOW),
-    "13d": ("wi-day-snow-wind", SNOW),
-    "77d": ("wi-day-snow", SNOW),
+    "51d": ("wi-day-sprinkle", CLOUD_BLUE),
+    "53d": ("wi-day-rain", CLOUD_BLUE),
+    "09d": ("wi-day-showers", CLOUD_BLUE),
+    "56d": ("wi-day-sleet", CLOUD_BLUE),
+    "57d": ("wi-day-sleet", CLOUD_BLUE),
+    "71d": ("wi-day-snow", CLOUD_BLUE),
+    "73d": ("wi-day-snow", CLOUD_BLUE),
+    "13d": ("wi-day-snow-wind", CLOUD_BLUE),
+    "77d": ("wi-day-snow", CLOUD_BLUE),
     "11d": ("wi-day-thunderstorm", STORM),
 }
 
