@@ -28,14 +28,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from widgets.palette import native_colors
 
 
-def simulate_panel(image: Image.Image, saturation: float = 0.5) -> Image.Image:
-    """Returns what `image` will actually look like once quantized+dithered
-    to the panel's palette - same algorithm the real `inky` driver runs."""
+def simulate_panel(image: Image.Image, saturation: float = 0.5,
+                    dither: Image.Dither = Image.Dither.FLOYDSTEINBERG) -> Image.Image:
+    """Returns what `image` will actually look like once quantized to the
+    panel's palette - same algorithm the real `inky` driver runs by default
+    (dither=FLOYDSTEINBERG). Pass dither=Image.Dither.NONE to preview
+    nearest-color quantization instead - see display/inky_driver.py, which
+    pre-quantizes with this same function so it can choose NONE for actual
+    hardware output."""
     palette = list(native_colors(saturation).values())
     palette_image = Image.new("P", (1, 1))
     flat = [c for rgb in palette for c in rgb]
     palette_image.putpalette(flat + [0, 0, 0] * (256 - len(palette)))
-    quantized = image.convert("RGB").quantize(palette=palette_image, dither=Image.FLOYDSTEINBERG)
+    quantized = image.convert("RGB").quantize(palette=palette_image, dither=dither)
     return quantized.convert("RGB")
 
 
