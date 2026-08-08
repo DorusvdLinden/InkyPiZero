@@ -145,11 +145,12 @@ def get_beaufort_description_nl(speed_ms: float) -> str:
 
 
 def get_humidity_drop_count(humidity) -> int:
+    """0-100% split into 6 equal bands (~16.7 each) -> 0 to 5 filled drops."""
     try:
         humidity = float(humidity)
     except (TypeError, ValueError):
-        return 1
-    return min(5, max(1, math.ceil(humidity / 20)))
+        humidity = 50
+    return min(5, max(0, int(humidity // (100 / 6))))
 
 
 def get_pressure_gauge_rotation(pressure) -> float:
