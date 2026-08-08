@@ -20,9 +20,9 @@ from widgets.icons import AssetStore  # noqa: E402
 
 ICON_DIR = os.path.join(REPO_DIR, "assets", "icons")
 FONT_DIR = os.path.join(REPO_DIR, "assets", "fonts")
-OUT_PATH = os.path.join(REPO_DIR, "mock_display_output", "icon_overviews", "full_icon_set.png")
+OUT_PATH = os.path.join(REPO_DIR, "mock_display_output", "icon_overviews", "full_icon_set_white_bg.png")
 
-BACKGROUND = (255, 248, 229)  # matches config.DisplayConfig.background_color
+BACKGROUND = (255, 255, 255)  # matches config.DisplayConfig.background_color
 TEXT_COLOR = (0, 0, 0)
 
 COLUMNS = 6
