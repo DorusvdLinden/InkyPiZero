@@ -1,5 +1,7 @@
 import logging
 
+from display.quantize import quantize_for_panel
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,5 +18,9 @@ class InkyDriver:
 
     def show(self, image):
         logger.info("Displaying image to Inky display.")
-        self.inky_display.set_image(image, saturation=self.saturation)
+        # Pre-quantized ourselves (nearest-color, not inky's default Floyd-
+        # Steinberg) - see display/quantize.py. Passing an already-"P"-mode
+        # image makes set_image() skip its own internal quantization.
+        quantized = quantize_for_panel(image, saturation=self.saturation)
+        self.inky_display.set_image(quantized)
         self.inky_display.show()
