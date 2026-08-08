@@ -53,6 +53,10 @@ class Palette:
         self.fog = c["black"]
         self.storm = c["black"]
         self.humidity_drop = c["blue"]
+        # solid interior of the cloud in the half-cloudy composites
+        # (generate_icons.py) - matches config.background_color's white so
+        # it reads as "the same paper showing through", not a distinct fill
+        self.cloud_interior = c["white"]
 
         # chart (widgets/chart.py)
         self.chart_warm = c["orange"]

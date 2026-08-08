@@ -13,7 +13,7 @@ import os
 import sys
 
 import resvg_py
-from PIL import Image
+from PIL import Image, ImageDraw
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(SCRIPT_DIR))
@@ -73,13 +73,55 @@ def _render_svg(svg_name: str, color_hex: str, size: int = 256) -> Image.Image:
     return Image.open(io.BytesIO(bytes(png_bytes))).convert("RGBA")
 
 
+def _solid_silhouette(icon: Image.Image, alpha_threshold: int = 16) -> Image.Image:
+    """weather-icons are drawn as hollow outlines (a ring, not a disc) - the
+    icon's own path only covers the stroke, leaving the interior fully
+    transparent. Returns an "L" mask that's opaque for the stroke AND any
+    area it fully encloses, by flood-filling in from every corner and
+    treating whatever the flood never reaches as "enclosed" rather than
+    "background". Used to turn a hollow icon into a solid filled shape."""
+    alpha = icon.split()[3]
+    binary = alpha.point(lambda a: 255 if a > alpha_threshold else 0)
+    flood = binary.copy()
+    corners = [(0, 0), (flood.width - 1, 0), (0, flood.height - 1), (flood.width - 1, flood.height - 1)]
+    for seed in corners:
+        if flood.getpixel(seed) == 0:
+            ImageDraw.floodfill(flood, seed, 128, thresh=10)
+    return flood.point(lambda v: 0 if v == 128 else 255)
+
+
+def _solid_fill(icon: Image.Image, color: tuple[int, int, int]) -> Image.Image:
+    """Fills icon's silhouette (stroke + any enclosed holes) with one flat
+    color - e.g. turns a hollow-ring sun icon into a solid disc+rays."""
+    silhouette = _solid_silhouette(icon)
+    solid = Image.new("RGBA", icon.size, (*color, 255))
+    solid.putalpha(silhouette)
+    return solid
+
+
 def _composite_icon(spec: dict, canvas_size: int = 300) -> Image.Image:
+    """Composites `back` (sun/moon) behind `front` (cloud), both solid-
+    filled so the cloud's opaque white interior actually occludes the part
+    of the sun/moon it overlaps, rather than the sun/moon showing through a
+    hollow cloud outline - see mock_display_output/sun_cloud_composite_v5.png."""
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
-    for svg_name, role, scale, dx, dy in (spec["back"], spec["front"]):
-        layer = _render_svg(svg_name, _hex(getattr(PALETTE, role)))
-        size = int(layer.width * scale)
-        resized = layer.resize((size, size), Image.LANCZOS)
-        canvas.paste(resized, (dx, dy), resized)
+
+    back_svg, back_role, back_scale, back_dx, back_dy = spec["back"]
+    back_color = getattr(PALETTE, back_role)
+    back_solid = _solid_fill(_render_svg(back_svg, _hex(back_color)), back_color)
+    back_size = int(back_solid.width * back_scale)
+    back_resized = back_solid.resize((back_size, back_size), Image.LANCZOS)
+    canvas.paste(back_resized, (back_dx, back_dy), back_resized)
+
+    front_svg, front_role, front_scale, front_dx, front_dy = spec["front"]
+    front_outline_color = getattr(PALETTE, front_role)
+    front_outline = _render_svg(front_svg, _hex(front_outline_color))
+    front_fill = _solid_fill(front_outline, PALETTE.cloud_interior)
+    front_combined = Image.alpha_composite(front_fill, front_outline)
+    front_size = int(front_combined.width * front_scale)
+    front_resized = front_combined.resize((front_size, front_size), Image.LANCZOS)
+    canvas.paste(front_resized, (front_dx, front_dy), front_resized)
+
     return canvas
 
 
