@@ -21,7 +21,14 @@ def thicken_icon(icon: Image.Image, amount: int = ICON_THICKEN_PX,
     A full 1px dilation (strength=1) reads a bit heavier than wanted, and
     MaxFilter only supports whole-pixel steps, so `strength` blends
     between the original and dilated alpha to land in between."""
-    color = next((p[:3] for p in icon.getdata() if p[3] > 16), None)
+    # Sample from a near-fully-opaque pixel, not just any alpha>16 pixel -
+    # low-alpha antialiased edge pixels can carry a contaminated/darkened
+    # RGB (e.g. a bright yellow's edge sampling as dark olive), which then
+    # got used to fill in the newly-thickened border, visibly discoloring
+    # the whole icon.
+    color = next((p[:3] for p in icon.getdata() if p[3] > 200), None)
+    if color is None:
+        color = next((p[:3] for p in icon.getdata() if p[3] > 16), None)
     if color is None:
         return icon
     original_alpha = icon.split()[3]
