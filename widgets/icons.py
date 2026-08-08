@@ -5,6 +5,27 @@ from PIL import Image, ImageFont
 # assets (cropped from a pi4-app render - see pi_weather_display/TODO.md)
 DROPLET_ASPECT = 28 / 38
 
+# Moon glyphs (the night-clear/partly-cloudy condition icons, plus every moon
+# phase) read as oversized next to the sun/cloud icons at the same box size -
+# their bbox is tighter/more square, so a uniform fit-to-box scales them up
+# more. Padding the cached base image (after crop, before any resize) makes
+# them render smaller everywhere they're used, without a per-call-site hack.
+MOON_ICON_KEYS = {
+    "01n", "022n", "newmoon", "waxingcrescent", "firstquarter", "waxinggibbous",
+    "fullmoon", "waninggibbous", "lastquarter", "waningcrescent",
+}
+MOON_FILL_FRACTION = 0.625
+
+
+def _pad_to_fraction(img: Image.Image, fraction: float) -> Image.Image:
+    """Returns img centered on a larger transparent canvas so it only fills
+    `fraction` of the new canvas's width/height."""
+    w, h = img.size
+    new_w, new_h = round(w / fraction), round(h / fraction)
+    padded = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 0))
+    padded.paste(img, ((new_w - w) // 2, (new_h - h) // 2), img)
+    return padded
+
 
 class AssetStore:
     def __init__(self, icon_dir: str, font_dir: str):
@@ -28,6 +49,8 @@ class AssetStore:
             # bigger/smaller or off-center than others.
             bbox = raw.getbbox()
             img = raw.crop(bbox) if bbox else raw
+            if key in MOON_ICON_KEYS:
+                img = _pad_to_fraction(img, MOON_FILL_FRACTION)
             self._icon_cache[key] = img
         if size is None:
             return img
