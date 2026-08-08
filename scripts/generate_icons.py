@@ -8,6 +8,7 @@ Usage:
     python scripts/generate_icons.py
 """
 
+import io
 import os
 import sys
 
@@ -20,6 +21,26 @@ from widgets.palette import PALETTE
 
 SVG_DIR = os.path.join(SCRIPT_DIR, "..", "..", "weather-icons", "svg")
 OUT_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "icons")
+
+# "Half cloudy" icons (sun/moon peeking out from behind a cloud) - the
+# source weather-icons SVGs pack the whole glyph (sun/moon rays AND cloud)
+# into one single <path>, so there's no way to give the cloud a different
+# color than the sun/moon via CSS the way the single-color icons above do.
+# Composited here instead from two separately-colored icons: `role` picks
+# which PALETTE color to render each layer in, `scale`/`dx`/`dy` position it
+# on a 300x300 canvas (hand-tuned - see mock_display_output/sun_cloud_
+# composite_v2.png / moon_cloud_composite_v4.png for the iterations this
+# landed on).
+COMPOSITE_ICONS = {
+    "022d": {
+        "back": ("wi-day-sunny", "sun", 0.85, 40, 0),
+        "front": ("wi-cloud", "cloud", 0.78, 0, 70),
+    },
+    "022n": {
+        "back": ("wi-night-clear", "moon", 1.15, 5, -30),
+        "front": ("wi-cloud", "cloud", 0.78, 0, 70),
+    },
+}
 
 # Not SVG-sourced like the icons above - two small transparent PNGs
 # hand-cropped from an old pi4-app screenshot (see TODO.md), used as a
@@ -44,6 +65,24 @@ def _hex(rgb: tuple[int, int, int]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
+def _render_svg(svg_name: str, color_hex: str, size: int = 256) -> Image.Image:
+    png_bytes = resvg_py.svg_to_bytes(
+        svg_path=os.path.join(SVG_DIR, f"{svg_name}.svg"), width=size, height=size,
+        style_sheet=f"path {{ fill: {color_hex}; }}",
+    )
+    return Image.open(io.BytesIO(bytes(png_bytes))).convert("RGBA")
+
+
+def _composite_icon(spec: dict, canvas_size: int = 300) -> Image.Image:
+    canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+    for svg_name, role, scale, dx, dy in (spec["back"], spec["front"]):
+        layer = _render_svg(svg_name, _hex(getattr(PALETTE, role)))
+        size = int(layer.width * scale)
+        resized = layer.resize((size, size), Image.LANCZOS)
+        canvas.paste(resized, (dx, dy), resized)
+    return canvas
+
+
 def _icon_map():
     """Built fresh (not at import time) so it always reflects the current
     PALETTE - matters for scripts/color_options.py, which mutates PALETTE
@@ -54,8 +93,7 @@ def _icon_map():
     weather_icons = {
         "01d": ("wi-day-sunny", orange),
         "01n": ("wi-night-clear", moon_yellow),
-        "022d": ("wi-day-sunny-overcast", orange),
-        "022n": ("wi-night-alt-partly-cloudy", moon_yellow),
+        # 022d/022n are composited separately - see COMPOSITE_ICONS
         "02d": ("wi-day-cloudy", cloud_blue),
         "02n": ("wi-night-alt-cloudy", cloud_blue),
         "04d": ("wi-cloudy", cloud_blue),
@@ -110,8 +148,15 @@ def regenerate(out_dir: str = OUT_DIR):
             f.write(bytes(png_bytes))
         print(f"{key:8s} <- {svg_name:30s} {color}")
 
+    for key, spec in COMPOSITE_ICONS.items():
+        icon = _composite_icon(spec)
+        icon.save(os.path.join(out_dir, f"{key}.png"))
+        back_name, front_name = spec["back"][0], spec["front"][0]
+        print(f"{key:8s} <- composite: {back_name} + {front_name}")
+
     _recolor_humidity_drops(out_dir)
-    print(f"\n{len(all_icons) + len(HUMIDITY_DROP_FILES)} icons written to {out_dir}")
+    total = len(all_icons) + len(COMPOSITE_ICONS) + len(HUMIDITY_DROP_FILES)
+    print(f"\n{total} icons written to {out_dir}")
 
 
 if __name__ == "__main__":

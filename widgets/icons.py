@@ -14,37 +14,54 @@ def thicken_icon(icon: Image.Image, amount: int = ICON_THICKEN_PX,
     """Dilates the icon's alpha channel to make thin strokes (the sun's
     ring, cloud outlines, etc.) read as bolder at small sizes, without
     filling any enclosed interior - a ring stays a ring, just a thicker
-    one. Uses the icon's own dominant color for any newly-opaque pixels so
-    the thickened edge doesn't pick up stray/undefined color from fully-
-    transparent source pixels.
+    one.
+
+    Multi-color aware: two-tone composite icons (e.g. "022d"'s orange sun
+    behind a blue cloud, see generate_icons.py) get each color's own alpha
+    dilated independently and re-stacked, rather than flattening the whole
+    icon to one sampled color - colors are composited back in the order
+    they first appear scanning top-to-bottom, which for these composites
+    happens to match their original front/back layering (the foreground
+    layer's pixels start lower in the icon, so its color always ends up
+    composited last/on top).
 
     A full 1px dilation (strength=1) reads a bit heavier than wanted, and
     MaxFilter only supports whole-pixel steps, so `strength` blends
     between the original and dilated alpha to land in between."""
-    # Sample from a near-fully-opaque pixel, not just any alpha>16 pixel -
-    # low-alpha antialiased edge pixels can carry a contaminated/darkened
-    # RGB (e.g. a bright yellow's edge sampling as dark olive), which then
-    # got used to fill in the newly-thickened border, visibly discoloring
-    # the whole icon.
-    color = next((p[:3] for p in icon.getdata() if p[3] > 200), None)
-    if color is None:
-        color = next((p[:3] for p in icon.getdata() if p[3] > 16), None)
-    if color is None:
+    pixels = list(icon.getdata())
+    # Only near-fully-opaque pixels count as "a color" - low-alpha
+    # antialiased edge pixels can carry a contaminated/darkened RGB (e.g. a
+    # bright yellow's edge sampling as dark olive), which would otherwise
+    # get used to fill in the newly-thickened border, visibly discoloring
+    # the icon.
+    colors = list(dict.fromkeys(p[:3] for p in pixels if p[3] > 200))
+    if not colors:
+        color = next((p[:3] for p in pixels if p[3] > 16), None)
+        colors = [color] if color else []
+    if not colors:
         return icon
-    original_alpha = icon.split()[3]
-    dilated_alpha = original_alpha.filter(ImageFilter.MaxFilter(amount * 2 + 1))
-    thickened_alpha = Image.blend(original_alpha, dilated_alpha, strength)
-    thickened = Image.new("RGBA", icon.size, (*color, 0))
-    thickened.putalpha(thickened_alpha)
-    return thickened
 
-# Moon glyphs (the night-clear/partly-cloudy condition icons, plus every moon
-# phase) read as oversized next to the sun/cloud icons at the same box size -
-# their bbox is tighter/more square, so a uniform fit-to-box scales them up
-# more. Padding the cached base image (after crop, before any resize) makes
-# them render smaller everywhere they're used, without a per-call-site hack.
+    result = Image.new("RGBA", icon.size, (0, 0, 0, 0))
+    for color in colors:
+        mask = Image.new("L", icon.size)
+        mask.putdata([p[3] if p[:3] == color else 0 for p in pixels])
+        dilated = mask.filter(ImageFilter.MaxFilter(amount * 2 + 1))
+        thickened_mask = Image.blend(mask, dilated, strength)
+        layer = Image.new("RGBA", icon.size, (*color, 0))
+        layer.putalpha(thickened_mask)
+        result = Image.alpha_composite(result, layer)
+    return result
+
+# Moon glyphs (the night-clear condition icon, plus every moon phase) read as
+# oversized next to the sun/cloud icons at the same box size - their bbox is
+# tighter/more square, so a uniform fit-to-box scales them up more. Padding
+# the cached base image (after crop, before any resize) makes them render
+# smaller everywhere they're used, without a per-call-site hack. Doesn't
+# include "022n" - that's a moon+cloud composite (see generate_icons.py),
+# already cloud-icon-proportioned like "02n", not tightly-cropped like a bare
+# moon.
 MOON_ICON_KEYS = {
-    "01n", "022n", "newmoon", "waxingcrescent", "firstquarter", "waxinggibbous",
+    "01n", "newmoon", "waxingcrescent", "firstquarter", "waxinggibbous",
     "fullmoon", "waninggibbous", "lastquarter", "waningcrescent",
 }
 MOON_FILL_FRACTION = 0.625
