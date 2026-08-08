@@ -99,31 +99,35 @@ def _solid_fill(icon: Image.Image, color: tuple[int, int, int]) -> Image.Image:
     return solid
 
 
-def _composite_icon(spec: dict, canvas_size: int = 300) -> Image.Image:
+def _composite_icon(spec: dict, canvas_size: int = 300, base_size: int = 256) -> Image.Image:
     """Composites `back` (sun/moon) behind `front` (cloud). The cloud is
     solid-filled so its opaque white interior actually occludes the part of
     the sun/moon it overlaps, rather than the sun/moon showing through a
     hollow cloud outline - see mock_display_output/sun_cloud_composite_v5.png.
     The sun/moon itself stays a hollow outline, matching the standalone
     01d/01n icons elsewhere - only the occluded portion disappears, behind
-    the cloud's solid fill."""
+    the cloud's solid fill.
+
+    Each layer is rendered directly at its final (already-scaled) pixel
+    size via resvg rather than rendered at 256 and then bitmap-resized down
+    with PIL - resvg rescales the vector losslessly, where an extra PIL
+    resize pass here just blurred the icon before AssetStore's own
+    crop+resize-to-display-size got to it, leaving these composites
+    visibly softer than the single-color icons (which only ever go through
+    that one resize)."""
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
 
     back_svg, back_role, back_scale, back_dx, back_dy = spec["back"]
     back_color = getattr(PALETTE, back_role)
-    back_render = _render_svg(back_svg, _hex(back_color))
-    back_size = int(back_render.width * back_scale)
-    back_resized = back_render.resize((back_size, back_size), Image.LANCZOS)
-    canvas.paste(back_resized, (back_dx, back_dy), back_resized)
+    back_render = _render_svg(back_svg, _hex(back_color), size=int(base_size * back_scale))
+    canvas.paste(back_render, (back_dx, back_dy), back_render)
 
     front_svg, front_role, front_scale, front_dx, front_dy = spec["front"]
     front_outline_color = getattr(PALETTE, front_role)
-    front_outline = _render_svg(front_svg, _hex(front_outline_color))
+    front_outline = _render_svg(front_svg, _hex(front_outline_color), size=int(base_size * front_scale))
     front_fill = _solid_fill(front_outline, PALETTE.cloud_interior)
     front_combined = Image.alpha_composite(front_fill, front_outline)
-    front_size = int(front_combined.width * front_scale)
-    front_resized = front_combined.resize((front_size, front_size), Image.LANCZOS)
-    canvas.paste(front_resized, (front_dx, front_dy), front_resized)
+    canvas.paste(front_combined, (front_dx, front_dy), front_combined)
 
     return canvas
 
