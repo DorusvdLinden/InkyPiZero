@@ -5,6 +5,7 @@ from config import DisplayConfig
 from weather_data import WeatherSnapshot
 from widgets import gauge, forecast as forecast_widget, icons as icons_widget
 from widgets import chart as chart_widget
+from widgets.palette import PALETTE
 
 
 def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
@@ -52,7 +53,7 @@ class WeatherCanvas:
             date_text += f", {data.location}"
         draw.text((layout.HEADER.x, layout.HEADER.bottom), date_text, font=font_date, fill=self.text_color, anchor="lb")
         draw.text((layout.HEADER.right - 4, layout.HEADER.y), f"Laatste update: {data.last_refresh_time}",
-                   font=font_refresh, fill=(51, 51, 51), anchor="ra")
+                   font=font_refresh, fill=PALETTE.text_muted, anchor="ra")
 
     def _draw_current_conditions(self, image, draw, data: WeatherSnapshot):
         region = layout.CURRENT_TEMPERATURE

@@ -6,6 +6,8 @@ this keeps the coordinates here a near-direct port of the SVG paths."""
 import math
 from PIL import Image, ImageDraw
 
+from widgets.palette import PALETTE
+
 
 def rotate_points(points, center, angle_deg):
     """Matches CSS `transform: rotate(angle_deg)` around center, in screen (y-down) coords."""
@@ -49,15 +51,15 @@ def render_wind_compass(rotation_deg: float) -> Image.Image:
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     cx, cy, r = 100, 90, 75
-    color = (26, 26, 26)
+    color = PALETTE.wind_dial
 
     _dashed_circle(draw, (cx, cy), r, color, width=5)
     for x1, y1, x2, y2 in [(100, 5, 100, 175), (15, 90, 185, 90), (160.1, 29.9, 39.9, 150.1), (39.9, 29.9, 160.1, 150.1)]:
         _dashed_line(draw, (x1, y1), (x2, y2), color, width=5)
 
     needle = rotate_points([(100, 20), (116, 125), (100, 119), (84, 125)], (cx, cy), rotation_deg)
-    draw.polygon(needle, fill=(183, 28, 28))
-    draw.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], fill=(255, 255, 255))
+    draw.polygon(needle, fill=PALETTE.wind_needle)
+    draw.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], fill=PALETTE.wind_hub)
     return img
 
 
@@ -72,7 +74,7 @@ def render_pressure_gauge(rotation_deg: float) -> Image.Image:
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     cx, cy, r = 100, 110, 85
-    color = (13, 71, 161)
+    color = PALETTE.pressure_dial
     a, b = (20.1, 139.07), (179.9, 139.07)
 
     # dome arc through the top (the "long way" between a and b), plus a flat bottom line
@@ -92,7 +94,7 @@ def render_pressure_gauge(rotation_deg: float) -> Image.Image:
     # rain (low pressure) - translate(45,100) scale(1.25)
     def tr(x, y):
         return (45 + x * 1.25, 100 + y * 1.25)
-    rain_color = (26, 74, 122)
+    rain_color = PALETTE.pressure_rain_icon
     for cx_, cy_, rx, ry in [(-4, 0, 4.5, 3.5), (2, -2, 5.5, 4.5), (8, 0, 3.5, 3)]:
         x, y = tr(cx_, cy_)
         draw.ellipse([x - rx * 1.25, y - ry * 1.25, x + rx * 1.25, y + ry * 1.25], fill=rain_color)
@@ -105,7 +107,7 @@ def render_pressure_gauge(rotation_deg: float) -> Image.Image:
     # cloud (mid pressure) - translate(100,56) scale(1.25)
     def tc(x, y):
         return (100 + x * 1.25, 56 + y * 1.25)
-    cloud_color = (92, 92, 92)
+    cloud_color = PALETTE.pressure_cloud_icon
     for cx_, cy_, rx, ry in [(-4, 1, 5, 4), (3, -1, 6, 5), (9, 1, 4, 3.5)]:
         x, y = tc(cx_, cy_)
         draw.ellipse([x - rx * 1.25, y - ry * 1.25, x + rx * 1.25, y + ry * 1.25], fill=cloud_color)
@@ -116,7 +118,7 @@ def render_pressure_gauge(rotation_deg: float) -> Image.Image:
     # sun (high pressure) - translate(155,100) scale(1.25)
     def ts(x, y):
         return (155 + x * 1.25, 100 + y * 1.25)
-    sun_color = (245, 124, 0)
+    sun_color = PALETTE.pressure_sun_icon
     sx, sy = ts(0, 0)
     draw.ellipse([sx - 7.5, sy - 7.5, sx + 7.5, sy + 7.5], fill=sun_color)
     for x1, y1, x2, y2 in [
@@ -126,8 +128,8 @@ def render_pressure_gauge(rotation_deg: float) -> Image.Image:
         draw.line([ts(x1, y1), ts(x2, y2)], fill=sun_color, width=3)
 
     needle = rotate_points([(100, 40), (117, 98), (100, 89), (83, 98)], (cx, cy), rotation_deg)
-    draw.polygon(needle, fill=(17, 17, 17), outline=(255, 255, 255), width=3)
-    draw.ellipse([cx - 11, cy - 11, cx + 11, cy + 11], fill=(17, 17, 17), outline=(255, 255, 255), width=3)
+    draw.polygon(needle, fill=PALETTE.pressure_needle, outline=PALETTE.pressure_needle_outline, width=3)
+    draw.ellipse([cx - 11, cy - 11, cx + 11, cy + 11], fill=PALETTE.pressure_needle, outline=PALETTE.pressure_needle_outline, width=3)
     return img
 
 
@@ -147,10 +149,10 @@ def render_aqi_gauge(rotation_deg: float) -> Image.Image:
     draw = ImageDraw.Draw(img)
     cx, cy, r = 100, 120, 75
     bands = [
-        (180, 225, (242, 80, 74)),
-        (225, 270, (245, 163, 0)),
-        (270, 315, (247, 198, 0)),
-        (315, 360, (51, 168, 82)),
+        (180, 225, PALETTE.aqi_band_very_high),
+        (225, 270, PALETTE.aqi_band_high),
+        (270, 315, PALETTE.aqi_band_moderate),
+        (315, 360, PALETTE.aqi_band_low),
     ]
     for start, end, color in bands:
         draw.arc([cx - r, cy - r, cx + r, cy + r], start, end, fill=color, width=28)
@@ -159,6 +161,6 @@ def render_aqi_gauge(rotation_deg: float) -> Image.Image:
         [(100, 114), (140, 114), (140, 102), (168, 120), (140, 138), (140, 126), (100, 126)],
         (cx, cy), rotation_deg,
     )
-    draw.polygon(needle, fill=(61, 61, 82))
-    draw.ellipse([cx - 12, cy - 12, cx + 12, cy + 12], fill=(61, 61, 82))
+    draw.polygon(needle, fill=PALETTE.aqi_needle)
+    draw.ellipse([cx - 12, cy - 12, cx + 12, cy + 12], fill=PALETTE.aqi_needle)
     return img

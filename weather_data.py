@@ -12,6 +12,7 @@ import requests
 from astral import moon
 
 from config import DisplayConfig
+from widgets.palette import PALETTE
 
 logger = logging.getLogger(__name__)
 
@@ -208,10 +209,25 @@ def get_uv_rating_nl(uv_index) -> str:
 
 
 def get_uv_color(uv_index) -> str:
-    low_color, high_color = (255, 179, 0), (216, 67, 21)
-    fraction = get_uv_fraction(uv_index)
-    r, g, b = (round(low + (high - low) * fraction) for low, high in zip(low_color, high_color))
-    return f"#{r:02x}{g:02x}{b:02x}"
+    """Discrete per the same tiers get_uv_rating_nl shows as text - a
+    continuous gradient would dither into speckle on the panel's fixed
+    7-colour palette instead of rendering as a flat native color (see
+    widgets/palette.py)."""
+    try:
+        uv_index = float(uv_index)
+    except (TypeError, ValueError):
+        uv_index = 0
+    if uv_index < 3:
+        color = PALETTE.uv_low
+    elif uv_index < 6:
+        color = PALETTE.uv_moderate
+    elif uv_index < 8:
+        color = PALETTE.uv_high
+    elif uv_index < 11:
+        color = PALETTE.uv_very_high
+    else:
+        color = PALETTE.uv_extreme
+    return "#{:02x}{:02x}{:02x}".format(*color)
 
 
 def get_uv_beam_points(uv_index, beam_count=10, cx=60, cy=60, core_r=24, min_len=10, max_len=32, half_width=5):
