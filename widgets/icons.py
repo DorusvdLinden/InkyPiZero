@@ -115,7 +115,7 @@ def draw_humidity_drops(image: Image.Image, region, assets: AssetStore, filled_c
     drawing the teardrop shape - a hand-drawn polygon approximation never
     looked as clean as the original CSS/SVG-rendered shape."""
     cx, cy = region.center
-    drop_h = max(1, int(region.h * 0.5))
+    drop_h = max(1, int(region.h * 0.42))
     drop_w = max(1, int(drop_h * DROPLET_ASPECT))
     spacing = drop_w
 
