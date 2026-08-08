@@ -16,19 +16,27 @@ TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
 ICON_SIZE = 30
 ICON_THICKEN_PX = 1
+ICON_THICKEN_STRENGTH = 0.5  # 0 = original thin lines, 1 = full 1px dilation
 
 
-def _thicken(icon: Image.Image, amount: int = ICON_THICKEN_PX) -> Image.Image:
+def _thicken(icon: Image.Image, amount: int = ICON_THICKEN_PX,
+             strength: float = ICON_THICKEN_STRENGTH) -> Image.Image:
     """Dilates the icon's alpha channel to make thin strokes (the sun's
     ring, cloud outlines, etc.) read as bolder at the small chart-strip
     size, without filling any enclosed interior - a ring stays a ring,
     just a thicker one. Uses the icon's own dominant color for any newly-
     opaque pixels so the thickened edge doesn't pick up stray/undefined
-    color from fully-transparent source pixels."""
+    color from fully-transparent source pixels.
+
+    A full 1px dilation (strength=1) was a bit heavier than wanted, and
+    MaxFilter only supports whole-pixel steps, so `strength` blends
+    between the original and dilated alpha to land in between."""
     color = next((p[:3] for p in icon.getdata() if p[3] > 16), None)
     if color is None:
         return icon
-    thickened_alpha = icon.split()[3].filter(ImageFilter.MaxFilter(amount * 2 + 1))
+    original_alpha = icon.split()[3]
+    dilated_alpha = original_alpha.filter(ImageFilter.MaxFilter(amount * 2 + 1))
+    thickened_alpha = Image.blend(original_alpha, dilated_alpha, strength)
     thickened = Image.new("RGBA", icon.size, (*color, 0))
     thickened.putalpha(thickened_alpha)
     return thickened
