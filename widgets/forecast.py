@@ -2,15 +2,14 @@ from PIL import ImageDraw
 
 from widgets.icons import thicken_icon
 
-CARD_BORDER = (90, 156, 90)
-CARD_FILL = (227, 241, 227)
+CARD_BORDER = (0, 0, 0)
 
 
 def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
     draw = ImageDraw.Draw(image)
     draw.rounded_rectangle(
         [region.x, region.y, region.right - 1, region.bottom - 1],
-        radius=8, outline=CARD_BORDER, width=2, fill=CARD_FILL,
+        radius=8, outline=CARD_BORDER, width=2,
     )
 
     icon_size = int(min(region.w * 0.85, region.h * 0.45))
