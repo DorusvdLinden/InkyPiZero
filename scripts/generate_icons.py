@@ -100,17 +100,20 @@ def _solid_fill(icon: Image.Image, color: tuple[int, int, int]) -> Image.Image:
 
 
 def _composite_icon(spec: dict, canvas_size: int = 300) -> Image.Image:
-    """Composites `back` (sun/moon) behind `front` (cloud), both solid-
-    filled so the cloud's opaque white interior actually occludes the part
-    of the sun/moon it overlaps, rather than the sun/moon showing through a
-    hollow cloud outline - see mock_display_output/sun_cloud_composite_v5.png."""
+    """Composites `back` (sun/moon) behind `front` (cloud). The cloud is
+    solid-filled so its opaque white interior actually occludes the part of
+    the sun/moon it overlaps, rather than the sun/moon showing through a
+    hollow cloud outline - see mock_display_output/sun_cloud_composite_v5.png.
+    The sun/moon itself stays a hollow outline, matching the standalone
+    01d/01n icons elsewhere - only the occluded portion disappears, behind
+    the cloud's solid fill."""
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
 
     back_svg, back_role, back_scale, back_dx, back_dy = spec["back"]
     back_color = getattr(PALETTE, back_role)
-    back_solid = _solid_fill(_render_svg(back_svg, _hex(back_color)), back_color)
-    back_size = int(back_solid.width * back_scale)
-    back_resized = back_solid.resize((back_size, back_size), Image.LANCZOS)
+    back_render = _render_svg(back_svg, _hex(back_color))
+    back_size = int(back_render.width * back_scale)
+    back_resized = back_render.resize((back_size, back_size), Image.LANCZOS)
     canvas.paste(back_resized, (back_dx, back_dy), back_resized)
 
     front_svg, front_role, front_scale, front_dx, front_dy = spec["front"]
