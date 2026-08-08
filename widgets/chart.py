@@ -13,8 +13,8 @@ FILL_YELLOW = (252, 204, 5)
 LEFT_MARGIN = 34
 RIGHT_MARGIN = 42
 TOP_MARGIN = 12
-BOTTOM_MARGIN = 34
-ICON_SIZE = 24
+BOTTOM_MARGIN = 44
+ICON_SIZE = 30
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
