@@ -181,7 +181,13 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_bold, fill=text_color, anchor="lm")
     draw.text((plot_x1 + 6, y_rain(0)), f"0 {unit_label_rain}", font=font_bold, fill=text_color, anchor="lm")
 
-    _vertical_text(image, (region.x + 4, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
+    # mirrors Regen's flat 2mm (~10px) gap off its axis, but on the left
+    # axis - measured to the label's near (right) edge, since that's the
+    # edge closest to the axis line.
+    unit_temp_bbox = font_bold.getbbox(unit_label_temp)
+    unit_temp_rotated_w = (unit_temp_bbox[3] - unit_temp_bbox[1]) + 2
+    unit_temp_x = plot_x0 - 10 - unit_temp_rotated_w
+    _vertical_text(image, (unit_temp_x, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
     # "Regen" is centered on the decimal point of the rain-axis-max label
     # (e.g. the "." in "4.5 mm") when that label has one, so the two read
     # as visually aligned rather than the label just trailing off to the
