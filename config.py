@@ -16,7 +16,7 @@ class DisplayConfig:
     forecast_days: int = 7
     graph_icon_step: int = 2
     show_moon_phase: bool = False
-    background_color: str = "#fff8e5"
+    background_color: str = "#ffffff"
     text_color: str = "#000000"
     inky_saturation: float = 0.5
     refresh_interval_seconds: int = 600
