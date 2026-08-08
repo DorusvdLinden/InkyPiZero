@@ -1,5 +1,5 @@
 import os
-from PIL import Image, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 # width / height of the source humidity_drop_filled.png / humidity_drop_empty.png
 # assets (cropped from a pi4-app render - see pi_weather_display/TODO.md)
@@ -15,6 +15,55 @@ MOON_ICON_KEYS = {
     "fullmoon", "waninggibbous", "lastquarter", "waningcrescent",
 }
 MOON_FILL_FRACTION = 0.625
+
+# humidity_drop_empty is deliberately a hollow outline (its whole purpose is
+# to look "not filled" next to humidity_drop_filled) - never solidify it.
+# visibility's hollow "white of the eye" between the outline and pupil is a
+# real design element too (confirmed against the original InkyPi icon set),
+# not a stray gap - filling it turns a recognizable eye into a blue blob.
+# sunrise/sunset are a ring that's genuinely disconnected from a separate
+# chevron shape below it (not a hairline crack) - no erosion radius closes
+# that gap without also distorting unrelated icons; left as an outline.
+NO_FILL_KEYS = {"humidity_drop_empty", "visibility", "sunrise", "sunset"}
+
+
+def _fill_holes(icon: Image.Image, close_radius: int = 1) -> Image.Image:
+    """Several weather-icons glyphs (the ring-style sun, the thin moon-
+    crescent outline) are drawn as an outline with a transparent interior
+    rather than a solid shape - against the original Flaticon-sourced icon
+    set this project used to ship (see docs/attribution.md), which reads
+    noticeably denser/bolder at the same pixel size. Flood-fills any
+    transparent area enclosed by the icon's own opaque pixels with the
+    icon's own color, leaving true (edge-connected) background transparent
+    and the original antialiased edges untouched.
+
+    The outside-reachability test (only) runs on a slightly eroded copy of
+    the transparent mask, so a hairline gap from antialiasing doesn't leak
+    the flood fill into what should read as an enclosed hole. Not every
+    outline shape has a cleanly closeable gap this way, though - see
+    NO_FILL_KEYS for icons where a bigger, genuinely disconnected opening
+    (not a hairline crack) made this the wrong tool."""
+    w, h = icon.size
+    color = next((p[:3] for p in icon.getdata() if p[3] > 16), None)
+    if color is None:
+        return icon
+
+    is_transparent = icon.split()[3].point(lambda a: 255 if a <= 16 else 0)
+    closed = is_transparent
+    for _ in range(close_radius):
+        closed = closed.filter(ImageFilter.MinFilter(3))
+
+    padded = Image.new("L", (w + 2, h + 2), 255)
+    padded.paste(closed, (1, 1))
+    ImageDraw.floodfill(padded, (0, 0), 128)
+    flooded = padded.crop((1, 1, w + 1, h + 1))
+    reached_bg = flooded.point(lambda v: 255 if v == 128 else 0)
+    hole_mask = ImageChops.subtract(is_transparent, reached_bg)
+
+    filled = icon.copy()
+    patch = Image.new("RGBA", (w, h), (*color, 255))
+    filled.paste(patch, (0, 0), hole_mask)
+    return filled
 
 
 def _pad_to_fraction(img: Image.Image, fraction: float) -> Image.Image:
@@ -49,6 +98,14 @@ class AssetStore:
             # bigger/smaller or off-center than others.
             bbox = raw.getbbox()
             img = raw.crop(bbox) if bbox else raw
+            if key not in NO_FILL_KEYS:
+                # Solidify at source resolution, before any resize - LANCZOS
+                # downsampling a thin ring stroke (e.g. the sun's circle) to
+                # icon-strip sizes can break it into sub-threshold-alpha
+                # fragments, which then reads as several hairline gaps to
+                # the flood fill and defeats it, so fill first while the
+                # stroke is still solid at full size.
+                img = _fill_holes(img)
             if key in MOON_ICON_KEYS:
                 img = _pad_to_fraction(img, MOON_FILL_FRACTION)
             self._icon_cache[key] = img

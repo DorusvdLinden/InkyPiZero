@@ -14,7 +14,7 @@ LEFT_MARGIN = 34
 RIGHT_MARGIN = 42
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 34
-ICON_SIZE = 20
+ICON_SIZE = 24
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
