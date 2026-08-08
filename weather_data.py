@@ -493,7 +493,7 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     scale = ""
     if current_aqi is not None:
         current_aqi = round(current_aqi, 1)
-        scale = ["Goed", "Redelijk", "Matig", "Slecht", "Zeer slecht", "Extreem slecht"][min(int(current_aqi // 20), 5)]
+        scale = ["Goed", "Redelijk", "Matig", "Slecht", "Zeer slecht", "Extreem"][min(int(current_aqi // 20), 5)]
     else:
         current_aqi = "N/A"
     data_points.append({
