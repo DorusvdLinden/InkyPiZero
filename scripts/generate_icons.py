@@ -135,6 +135,13 @@ def _composite_icon(spec: dict, canvas_size: int = 300, base_size: int = 256) ->
     front_svg, front_role, front_scale, front_dx, front_dy = spec["front"]
     front_outline_color = getattr(PALETTE, front_role)
     front_outline = _render_svg(front_svg, _hex(front_outline_color), size=int(base_size * front_scale))
+    # Same extra boldness as the back layer - the cloud's flat-ish bottom
+    # edge is long and nearly straight, which is exactly the shape Floyd-
+    # Steinberg's error diffusion "worms"/gaps on worst (a periodic
+    # dash-like break in an otherwise solid line) even at a near-exact
+    # palette match. Thickening first so _solid_fill's silhouette is
+    # derived from the already-bolder outline.
+    front_outline = thicken_icon(front_outline, amount=1, strength=1.0)
     front_fill = _solid_fill(front_outline, PALETTE.cloud_interior)
     front_combined = Image.alpha_composite(front_fill, front_outline)
     canvas.paste(front_combined, (front_dx, front_dy), front_combined)
