@@ -72,7 +72,7 @@ class WeatherCanvas:
             self._draw_data_point_icon(image, icon_box, dp)
 
             text_x = cell.x + icon_w + 8
-            font_label = self.assets.font("normal", 13)
+            font_label = self.assets.font("normal", 18)
             font_value = self.assets.font("bold", 18)
             label_y = cell.y + int(cell.h * 0.28)
             value_y = cell.y + int(cell.h * 0.68)
