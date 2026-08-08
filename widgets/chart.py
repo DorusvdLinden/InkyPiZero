@@ -89,10 +89,14 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         color = ORANGE if (t1 + t2) >= 0 else BLUE
         draw.line([(x1, y1), (x2, y2)], fill=color, width=4, joint="curve")
 
-    # actual min/max labels (no reference line - just the value at its height)
+    # dashed actual min/max lines
     for value, label_dy, color in [(actual_max, -14, ORANGE if actual_max >= 0 else BLUE),
                                     (actual_min, 4, ORANGE if actual_min >= 0 else BLUE)]:
         y = y_temp(value)
+        x = plot_x0
+        while x < plot_x1:
+            draw.line([(x, y), (min(x + 5, plot_x1), y)], fill=color, width=2)
+            x += 9
         label = f"{value}°" if unit_label_temp != "K" else str(value)
         draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
 
