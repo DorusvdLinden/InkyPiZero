@@ -90,8 +90,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         draw.line([(x1, y1), (x2, y2)], fill=color, width=4, joint="curve")
 
     # dashed actual min/max lines
-    for value, label_dy, color in [(actual_max, -14, ORANGE if actual_max >= 0 else BLUE),
-                                    (actual_min, 4, ORANGE if actual_min >= 0 else BLUE)]:
+    for value, label_dy, color in [(actual_max, 14, ORANGE if actual_max >= 0 else BLUE),
+                                    (actual_min, 14, ORANGE if actual_min >= 0 else BLUE)]:
         y = y_temp(value)
         x = plot_x0
         while x < plot_x1:
