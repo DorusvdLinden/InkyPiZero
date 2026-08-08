@@ -83,10 +83,8 @@ def map_weather_code_to_icon(weather_code: int, is_day: int) -> str:
     icon = "01d"
     if weather_code in [0]:
         icon = "01d"
-    elif weather_code in [1]:
+    elif weather_code in [1, 2]:
         icon = "022d"
-    elif weather_code in [2]:
-        icon = "02d"
     elif weather_code in [3]:
         icon = "04d"
     elif weather_code in [51, 61, 80]:
