@@ -30,7 +30,7 @@ UNITS = {
 }
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language=nl&zoom=14"
-OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
 OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=european_aqi,uv_index,uv_index_clear_sky&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = {
     "standard": "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm",
@@ -77,6 +77,13 @@ def get_moon_phase_icon_key(phase_name: str, lat: float) -> str:
         }
         phase_name = mirror.get(phase_name, phase_name)
     return phase_name
+
+
+# WMO weather codes that mean "snow" / "hail" is actually falling, used to
+# pick which physical quantity (and axis label) the chart's precipitation
+# bars represent - see get_precip_label().
+SNOW_CODES = {71, 73, 75, 77, 85, 86}
+HAIL_CODES = {96, 99}  # 95 is a plain thunderstorm, no hail
 
 
 def map_weather_code_to_icon(weather_code: int, is_day: int) -> str:
@@ -284,6 +291,7 @@ class WeatherSnapshot:
     sun_events: list = field(default_factory=list)      # list[SunEvent]
     daily: list = field(default_factory=list)           # list[DayForecast]
     last_refresh_time: str = ""
+    precip_label: str = "Droog"  # chart's rotated axis label - "Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" / "Droog"
 
 
 def get_nearest_location_name(lat: float, long: float) -> str:
@@ -377,12 +385,35 @@ def _get_sun_events(start_epoch, end_epoch, sun_epoch_pairs) -> list[SunEvent]:
     return events
 
 
-def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tuple[list[HourPoint], list[SunEvent]]:
+def _classify_precip(codes, precipitation, snowfall, units) -> tuple[list[float], str]:
+    """Picks which quantity the chart's precipitation bars should plot for
+    this hourly window, and the matching Dutch axis label - snowfall (cm)
+    for a snowy window, total precipitation (mm) for a rainy or hail-bearing
+    one (Open-Meteo has no separate hail-depth variable), or an all-zero
+    series labeled "Droog" when nothing falls at all."""
+    has_hail = any(code in HAIL_CODES for code in codes)
+    has_snow = any(code in SNOW_CODES for code in codes)
+    total_precip = sum(precipitation) if precipitation else 0
+
+    rain_unit = "in" if units == "imperial" else "mm"
+    snow_unit = "in" if units == "imperial" else "cm"
+
+    if has_hail:
+        return precipitation, f"Hagel [{rain_unit}]"
+    if has_snow:
+        return snowfall, f"Sneeuw [{snow_unit}]"
+    if total_precip > 0:
+        return precipitation, f"Regen [{rain_unit}]"
+    return precipitation, "Droog"
+
+
+def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tuple[list[HourPoint], list[SunEvent], str]:
     times = hourly_data.get("time", [])
     temperatures = hourly_data.get("temperature_2m", [])
     if units == "standard":
         temperatures = [t + 273.15 for t in temperatures]
     rain = hourly_data.get("precipitation", [])
+    snowfall = hourly_data.get("snowfall", [])
     codes = hourly_data.get("weather_code", [])
 
     sun_map = {}
@@ -407,11 +438,16 @@ def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tup
     sliced_times = times[start_index:]
     sliced_temperatures = temperatures[start_index:]
     sliced_rain = rain[start_index:]
+    sliced_snowfall = snowfall[start_index:]
     sliced_codes = codes[start_index:]
+
+    count = min(24, len(sliced_times))
+    precip_values, precip_label = _classify_precip(
+        sliced_codes[:count], sliced_rain[:count], sliced_snowfall[:count], units)
 
     hourly = []
     prev_date = None
-    for i in range(min(24, len(sliced_times))):
+    for i in range(count):
         dt = datetime.fromisoformat(sliced_times[i]).astimezone(tz)
         sunrise, sunset = sun_map.get(dt.date(), (None, None))
         is_day = 1 if sunrise and sunset and sunrise <= dt < sunset else 0
@@ -423,19 +459,17 @@ def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tup
         hourly.append(HourPoint(
             time_label=format_time(dt, time_format, hour_only=True),
             temperature=int(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0,
-            rain=sliced_rain[i] if i < len(sliced_rain) else 0,
+            rain=precip_values[i] if i < len(precip_values) else 0,
             icon_key=map_weather_code_to_icon(code, is_day),
             is_day_start=is_day_start,
         ))
-
-    count = min(24, len(sliced_times))
     sun_events = []
     if count:
         start_dt = datetime.fromisoformat(sliced_times[0]).astimezone(tz)
         end_dt = datetime.fromisoformat(sliced_times[count - 1]).astimezone(tz)
         sun_epoch_pairs = [(sr.timestamp(), ss.timestamp()) for sr, ss in sun_map.values()]
         sun_events = _get_sun_events(start_dt.timestamp(), end_dt.timestamp(), sun_epoch_pairs)
-    return hourly, sun_events
+    return hourly, sun_events, precip_label
 
 
 def _value_at_current_hour(times, values, tz, current_time):
@@ -546,7 +580,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
 
     daily_forecast = _parse_forecast(daily, config.units, tz, config.latitude)
     data_points = _parse_data_points(weather_data, aqi_data, config.units, tz)
-    hourly, sun_events = _parse_hourly(
+    hourly, sun_events, precip_label = _parse_hourly(
         weather_data.get("hourly", {}), config.units, tz, config.time_format,
         daily.get("sunrise", []), daily.get("sunset", []),
     )
@@ -569,4 +603,5 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         sun_events=sun_events,
         daily=daily_forecast[1:config.forecast_days + 1],
         last_refresh_time=last_refresh_time,
+        precip_label=precip_label,
     )
