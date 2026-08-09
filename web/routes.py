@@ -170,3 +170,18 @@ def wifi_remove(profile):
     except RuntimeError as e:
         flash(f"Verwijderen mislukt: {e}", "error")
     return redirect(url_for("web.wifi"))
+
+
+@bp.route("/shutdown", methods=["GET", "POST"])
+def shutdown():
+    if request.method == "GET" or request.form.get("confirmed") != "yes":
+        return render_template("shutdown_confirm.html")
+
+    # Deferred so the confirmation page's response actually reaches the
+    # browser before poweroff fires - button_listener.blank_and_shutdown()
+    # itself blanks the physical display then calls `poweroff` directly,
+    # the same unauthenticated action button A already performs.
+    import threading
+    from button_listener import blank_and_shutdown
+    threading.Timer(1.5, blank_and_shutdown).start()
+    return render_template("shutdown_confirm.html", shutting_down=True)

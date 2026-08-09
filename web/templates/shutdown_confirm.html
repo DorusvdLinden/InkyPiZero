@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}InkyPiZero - Uitschakelen{% endblock %}
+{% block content %}
+  {% if shutting_down %}
+    <h2>Wordt uitgeschakeld...</h2>
+    <p>Het scherm wordt leeggemaakt en de Pi schakelt zichzelf uit. Dit
+       apparaat is hierna niet meer bereikbaar totdat je het handmatig weer
+       inschakelt.</p>
+  {% else %}
+    <h2>Weet je het zeker?</h2>
+    <p>Hiermee wordt het scherm leeggemaakt en de Raspberry Pi volledig
+       uitgeschakeld - net als bij het indrukken van knop A op de
+       achterkant van het scherm.</p>
+    <form method="post">
+      <input type="hidden" name="confirmed" value="yes">
+      <button type="submit" class="danger">Ja, uitschakelen</button>
+      <a class="button" href="{{ url_for('web.index') }}">Annuleren</a>
+    </form>
+  {% endif %}
+{% endblock %}
