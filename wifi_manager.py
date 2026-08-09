@@ -15,6 +15,7 @@ hazard."""
 import logging
 import secrets
 import subprocess
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -142,14 +143,21 @@ def ensure_ap_mode() -> tuple[str, str]:
     """Creates the AP profile if needed and activates it. Returns (ssid,
     password) for display on the e-paper setup screen.
 
-    Uses a longer timeout than most nmcli calls: bringing up shared/AP mode
-    means NetworkManager also has to stand up its own internal DHCP/NAT for
-    the interface, not just associate - confirmed empirically on a real Pi
-    Zero W taking noticeably longer than the default 15s (still mid
-    "connecting (configuring)" at that point), which previously made this
-    raise before the AP had actually finished coming up."""
+    Uses a longer timeout than most nmcli calls and one retry: bringing up
+    shared/AP mode means NetworkManager also has to stand up its own
+    internal DHCP/NAT for the interface, not just associate, and on a real
+    Pi Zero W the WiFi chip switching mode (especially right after having
+    just been in station mode) can be slow enough to time out once or fail
+    with a transient "supplicant took too long to authenticate" error on
+    the first attempt - confirmed empirically. A short pause before retrying
+    gives the hardware a moment to settle."""
     ssid, password = _ensure_ap_profile_exists()
-    _nmcli("connection", "up", AP_PROFILE_NAME, timeout=45)
+    try:
+        _nmcli("connection", "up", AP_PROFILE_NAME, timeout=45)
+    except RuntimeError as e:
+        logger.warning("First AP activation attempt failed (%s), retrying once", e)
+        time.sleep(5)
+        _nmcli("connection", "up", AP_PROFILE_NAME, timeout=45)
     return ssid, password
 
 
