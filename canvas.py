@@ -80,7 +80,9 @@ class WeatherCanvas:
 
         degree = "°" if data.temp_unit != "K" else ""
         draw.text((text_cx, temp_y + 34), f"Gevoelstemp. {data.feels_like}{degree}", font=font_small, fill=self.text_color, anchor="mm")
-        draw.text((text_cx, temp_y + 56), f"{data.forecast_high}{degree} / {data.forecast_low}{degree}", font=font_small, fill=self.text_color, anchor="mm")
+        draw.text((text_cx, temp_y + 56),
+                   f"{data.last_night_low}{degree} / {data.day_high}{degree} / {data.next_night_low}{degree}",
+                   font=font_small, fill=self.text_color, anchor="mm")
 
     def _draw_data_points(self, image, draw, data: WeatherSnapshot):
         if self.screen_mode == "compact":

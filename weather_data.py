@@ -284,8 +284,9 @@ class WeatherSnapshot:
     current_temp: int
     feels_like: int
     temp_unit: str
-    forecast_high: int
-    forecast_low: int
+    last_night_low: int
+    day_high: int
+    next_night_low: int
     data_points: list = field(default_factory=list)   # list[dict], same shape as weather.py produced
     hourly: list = field(default_factory=list)          # list[HourPoint]
     sun_events: list = field(default_factory=list)      # list[SunEvent]
@@ -383,6 +384,52 @@ def _get_sun_events(start_epoch, end_epoch, sun_epoch_pairs) -> list[SunEvent]:
                 seen.add(epoch)
                 events.append(SunEvent(position=(epoch - start_epoch) / 3600, icon_key=icon_key))
     return events
+
+
+def _night_day_temps(hourly_data, daily_data, units, tz, current_time) -> tuple[int | None, int | None]:
+    """(last_night_low, next_night_low) for the current-conditions header -
+    the minimum hourly temperature between local midnight and today's
+    sunrise ("last night"), and between today's sunset and tomorrow's
+    sunrise ("next night"). "Last night" is approximated as starting at
+    local midnight rather than yesterday's actual sunset, since the hourly
+    forecast doesn't include hours before today without requesting extra
+    past-days data - the coldest point of a night is almost always in the
+    hours just before dawn anyway, so the omitted pre-midnight evening
+    hours essentially never change the minimum. Returns (None, None) if the
+    daily sunrise/sunset arrays are missing (caller should fall back to the
+    day's calendar min/max)."""
+    times = hourly_data.get("time", [])
+    temperatures = hourly_data.get("temperature_2m", [])
+    if units == "standard":
+        temperatures = [t + 273.15 for t in temperatures]
+
+    sunrises = daily_data.get("sunrise", [])
+    sunsets = daily_data.get("sunset", [])
+    if not sunrises or not sunsets:
+        return None, None
+
+    midnight_today = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    sunrise_today = datetime.fromisoformat(sunrises[0]).astimezone(tz)
+    sunset_today = datetime.fromisoformat(sunsets[0]).astimezone(tz)
+    sunrise_tomorrow = (
+        datetime.fromisoformat(sunrises[1]).astimezone(tz) if len(sunrises) > 1
+        else sunrise_today + timedelta(days=1)
+    )
+
+    def _min_in_window(start, end):
+        values = []
+        for time_str, temp in zip(times, temperatures):
+            try:
+                dt_hourly = datetime.fromisoformat(time_str).astimezone(tz)
+            except ValueError:
+                continue
+            if start <= dt_hourly < end:
+                values.append(temp)
+        return round(min(values)) if values else None
+
+    last_night_low = _min_in_window(midnight_today, sunrise_today)
+    next_night_low = _min_in_window(sunset_today, sunrise_tomorrow)
+    return last_night_low, next_night_low
 
 
 def _classify_precip(codes, precipitation, snowfall, units) -> tuple[list[float], str]:
@@ -589,6 +636,14 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     now = datetime.now(tz)
     last_refresh_time = now.strftime("%H:%M") if config.time_format == "24h" else now.strftime("%I:%M %p")
 
+    day_high = daily_forecast[0].high if daily_forecast else 0
+    day_low = daily_forecast[0].low if daily_forecast else 0
+    last_night_low, next_night_low = _night_day_temps(weather_data.get("hourly", {}), daily, config.units, tz, now)
+    if last_night_low is None:
+        last_night_low = day_low
+    if next_night_low is None:
+        next_night_low = day_low
+
     return WeatherSnapshot(
         current_date=format_date_nl(dt),
         location=location,
@@ -596,8 +651,9 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         current_temp=round(current.get("temperature", 0) + temperature_conversion),
         feels_like=round(current.get("apparent_temperature", current.get("temperature", 0)) + temperature_conversion),
         temp_unit=UNITS[config.units]["temperature"],
-        forecast_high=daily_forecast[0].high if daily_forecast else 0,
-        forecast_low=daily_forecast[0].low if daily_forecast else 0,
+        last_night_low=last_night_low,
+        day_high=day_high,
+        next_night_low=next_night_low,
         data_points=data_points,
         hourly=hourly,
         sun_events=sun_events,
