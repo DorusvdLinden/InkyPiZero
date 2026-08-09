@@ -36,11 +36,18 @@ import time
 logger = logging.getLogger(__name__)
 
 WIFI_INTERFACE = "wlan0"
-AP_SSID_PREFIX = "InkyPiZero-Setup-"
+AP_SSID_PREFIX = "InkyPiZero-"
 AP_IPV4_ADDRESS = "192.168.4.1/24"
 AP_IP = AP_IPV4_ADDRESS.split("/")[0]
 AP_SETUP_URL = f"http://{AP_IP}"
 AP_DHCP_RANGE = ("192.168.4.10", "192.168.4.100")
+
+# Lowercase letters + digits only, excluding characters that are easy to
+# misread/mistype on a phone keyboard (0/o, 1/l/i) - still randomly
+# generated and unique per device, just quick to type accurately while
+# looking back and forth between the e-paper screen and a phone.
+AP_PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"
+AP_PASSWORD_LENGTH = 10
 
 HOSTAPD_CONF_PATH = "/etc/hostapd/pi-weather-ap.conf"
 HOSTAPD_SERVICE = "pi-weather-hostapd.service"
@@ -158,7 +165,7 @@ def _get_or_create_ap_credentials() -> tuple[str, str]:
         with open(AP_CREDENTIALS_PATH) as f:
             password = json.load(f)["password"]
     except (OSError, json.JSONDecodeError, KeyError):
-        password = secrets.token_urlsafe(9)  # ~12 url-safe chars
+        password = "".join(secrets.choice(AP_PASSWORD_CHARS) for _ in range(AP_PASSWORD_LENGTH))
         os.makedirs(os.path.dirname(AP_CREDENTIALS_PATH), exist_ok=True)
         with open(AP_CREDENTIALS_PATH, "w") as f:
             json.dump({"password": password}, f)

@@ -44,7 +44,7 @@ journalctl -u pi-weather-web.service -f
 ```
 
 If no known network is reachable, the device hosts its own setup AP
-(`InkyPiZero-Setup-XXXX`) and shows its SSID/password/URL directly on the
+(`InkyPiZero-XXXX`) and shows its SSID/password/URL directly on the
 e-paper display - see [settings.md](./settings.md#via-the-web-ui-web_apppy-always-on)
 and [networking.md](./networking.md) for the full design. Check which mode
 it's actually in:
