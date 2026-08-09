@@ -13,10 +13,27 @@ def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
     return tuple(int(hex_str[i:i + 2], 16) for i in (0, 2, 4))
 
 
+def _data_point_value_text(dp: dict) -> str:
+    value_parts = [dp["direction"]] if dp.get("direction") else []
+    value_parts.append(str(dp["measurement"]))
+    value_text = " ".join(value_parts)
+    if dp.get("unit"):
+        value_text += f" {dp['unit']}"
+    return value_text
+
+
+# "compact" screen mode (button D) drops these two - see Ideas.md "third
+# option display" - keeping wind/humidity/uv/aqi.
+COMPACT_KINDS = {"wind", "humidity", "uv", "aqi"}
+
+
 class WeatherCanvas:
-    def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig):
+    def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig,
+                 screen_mode: str = "original", compact_style: str = "icon_left"):
         self.assets = assets
         self.config = config
+        self.screen_mode = screen_mode
+        self.compact_style = compact_style
         self.bg = _hex_to_rgb(config.background_color)
         self.text_color = _hex_to_rgb(config.text_color)
 
@@ -80,6 +97,9 @@ class WeatherCanvas:
         draw.text((text_cx, temp_y + 56), f"{data.forecast_high}{degree} / {data.forecast_low}{degree}", font=font_small, fill=self.text_color, anchor="mm")
 
     def _draw_data_points(self, image, draw, data: WeatherSnapshot):
+        if self.screen_mode == "compact":
+            self._draw_data_points_compact(image, draw, data)
+            return
         for i, dp in enumerate(data.data_points):
             cell = layout.data_point_cell(i)
             icon_w = int(cell.w * layout.DATA_POINT_ICON_FRACTION)
@@ -92,13 +112,56 @@ class WeatherCanvas:
             label_y = cell.y + int(cell.h * 0.28)
             value_y = cell.y + int(cell.h * 0.68)
             draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
+            draw.text((text_x, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="lm")
 
-            value_parts = [dp["direction"]] if dp.get("direction") else []
-            value_parts.append(str(dp["measurement"]))
-            value_text = " ".join(value_parts)
-            if dp.get("unit"):
-                value_text += f" {dp['unit']}"
-            draw.text((text_x, value_y), value_text, font=font_value, fill=self.text_color, anchor="lm")
+    def _draw_data_points_compact(self, image, draw, data: WeatherSnapshot):
+        """"compact" screen mode (button D, see Ideas.md) - 4 details
+        (wind/humidity/uv/aqi) instead of 6, bigger fonts in the reclaimed
+        space. Three interchangeable arrangements to compare -
+        self.compact_style picks which:
+          - "icon_left": same icon-then-stacked-text arrangement as the
+            original 6-detail grid, just in 2x2 cells with bigger fonts.
+          - "icon_above": icon centered above centered label/value text,
+            in the same 2x2 cells - a more "card"-like look.
+          - "icon_above_row": same icon-above-text arrangement, but as a
+            single row of 4 cells spanning the full width instead of 2x2."""
+        points = [dp for dp in data.data_points if dp["kind"] in COMPACT_KINDS]
+        if self.compact_style == "icon_above_row":
+            cells = [layout.data_point_cell_1x4(i) for i in range(len(points))]
+        else:
+            cells = [layout.data_point_cell_2x2(i) for i in range(len(points))]
+
+        for dp, cell in zip(points, cells):
+            if self.compact_style == "icon_left":
+                self._draw_compact_cell_icon_left(image, draw, cell, dp)
+            else:
+                self._draw_compact_cell_icon_above(image, draw, cell, dp)
+
+    def _draw_compact_cell_icon_left(self, image, draw, cell: layout.Region, dp: dict):
+        icon_w = int(cell.w * 0.32)
+        icon_box = layout.Region(cell.x, cell.y, icon_w, cell.h)
+        self._draw_data_point_icon(image, icon_box, dp)
+
+        text_x = cell.x + icon_w + 10
+        font_label = self.assets.font("normal", 22)
+        font_value = self.assets.font("bold", 24)
+        label_y = cell.y + int(cell.h * 0.36)
+        value_y = cell.y + int(cell.h * 0.68)
+        draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
+        draw.text((text_x, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="lm")
+
+    def _draw_compact_cell_icon_above(self, image, draw, cell: layout.Region, dp: dict):
+        cx = cell.x + cell.w // 2
+        icon_size = int(min(cell.w * 0.4, cell.h * 0.45))
+        icon_box = layout.Region(cx - icon_size // 2, cell.y + int(cell.h * 0.06), icon_size, icon_size)
+        self._draw_data_point_icon(image, icon_box, dp)
+
+        font_label = self.assets.font("normal", 16)
+        font_value = self.assets.font("bold", 20)
+        label_y = cell.y + int(cell.h * 0.68)
+        value_y = cell.y + int(cell.h * 0.88)
+        draw.text((cx, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="mm")
+        draw.text((cx, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="mm")
 
     def _draw_data_point_icon(self, image, box: layout.Region, dp: dict):
         kind = dp["kind"]

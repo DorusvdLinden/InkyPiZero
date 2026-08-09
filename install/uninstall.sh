@@ -11,8 +11,8 @@ APPNAME="pi-weather-display"
 INSTALL_PATH="/usr/local/$APPNAME"
 SERVICE_FILE="/etc/systemd/system/$APPNAME.service"
 TIMER_FILE="/etc/systemd/system/$APPNAME.timer"
-SHUTDOWN_APPNAME="pi-weather-shutdown"
-SHUTDOWN_SERVICE_FILE="/etc/systemd/system/$SHUTDOWN_APPNAME.service"
+BUTTONS_APPNAME="pi-weather-buttons"
+BUTTONS_SERVICE_FILE="/etc/systemd/system/$BUTTONS_APPNAME.service"
 
 echo_success() {
   echo -e "$1 [\e[32m\xE2\x9C\x94\e[0m]"
@@ -45,10 +45,10 @@ confirm_uninstall() {
 disable_timer() {
   echo "Disabling $APPNAME timer and service."
   systemctl disable --now "$APPNAME.timer" 2>/dev/null || true
-  systemctl disable --now "$SHUTDOWN_APPNAME.service" 2>/dev/null || true
-  rm -f "$SERVICE_FILE" "$TIMER_FILE" "$SHUTDOWN_SERVICE_FILE"
+  systemctl disable --now "$BUTTONS_APPNAME.service" 2>/dev/null || true
+  rm -f "$SERVICE_FILE" "$TIMER_FILE" "$BUTTONS_SERVICE_FILE"
   systemctl daemon-reload
-  echo_success "\tTimer, service, and shutdown-button listener removed."
+  echo_success "\tTimer, service, and button listener removed."
 }
 
 remove_files() {
