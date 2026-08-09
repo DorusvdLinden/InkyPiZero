@@ -37,10 +37,65 @@ reading config alone:
    the specific profiles it created at image-build/first-boot time; it does
    not scan, mirror, or manage anything created afterward.
 
-**Conclusion**: `nmcli`-created profiles (both the AP profile and any
-station networks added via the web UI) are safe from netplan interference.
-No self-healing/idempotent-recreation workaround is needed in
-`wifi_manager.py` on this account.
+**Conclusion**: `nmcli`-created station-network profiles added via the web
+UI are safe from netplan interference. No self-healing/idempotent-recreation
+workaround is needed in `wifi_manager.py` on this account.
+
+## AP hosting: hostapd, not NetworkManager's native hotspot
+
+NetworkManager can host its own WiFi AP directly (a connection profile with
+`802-11-wireless.mode ap`), and that was the first approach tried here. It
+does not work reliably on this hardware - confirmed via three separate live
+tests against the deployed Pi Zero W, all failing the same way:
+
+```
+NetworkManager[601]: Activation: (wifi) Hotspot network creation took too long, failing activation
+NetworkManager[601]: device (wlan0): state change: config -> failed (reason 'supplicant-timeout')
+```
+
+This is NetworkManager's own hotspot implementation failing internally, not
+a timeout-tuning problem - a 45s timeout plus one retry both hit the same
+error. The kernel/driver itself correctly advertises AP capability
+(`iw list` lists `AP` under "Supported interface modes" for this chip), so
+the hardware isn't the limitation: NetworkManager's hotspot mode drives
+WPA-PSK AP mode through `wpa_supplicant`'s own (fairly limited) AP support
+rather than a purpose-built AP daemon, and that combination is a known weak
+spot on some Broadcom chips including this one (Pi Zero W).
+
+**Fix: hostapd**, the standard, purpose-built AP daemon for exactly this on
+Raspberry Pi hardware. `wifi_manager.py`'s `ensure_ap_mode()` now:
+
+1. Writes `/etc/hostapd/pi-weather-ap.conf` and a dedicated
+   `/etc/dnsmasq-pi-weather-ap.conf` (DHCP for the AP's own subnet only -
+   entirely separate from any system-wide dnsmasq, which doesn't exist as a
+   persistent service on this image anyway).
+2. Hands `wlan0` from NetworkManager to hostapd
+   (`nmcli device set wlan0 managed no`), assigns the static AP address
+   directly (`ip addr add 192.168.4.1/24 dev wlan0`).
+3. Starts two on-demand, never-boot-enabled systemd units,
+   `pi-weather-hostapd.service` and `pi-weather-ap-dnsmasq.service` -
+   started/stopped only by `wifi_manager.py` itself, never by systemd at
+   boot.
+
+`connect()` reverses this (stop hostapd/dnsmasq, hand `wlan0` back to
+NetworkManager as `managed yes`) before bringing up a station network, since
+a single WiFi radio can only be AP or station at once.
+
+**Verified live end-to-end** on the deployed Pi: hostapd came up in ~14s
+(vs. NetworkManager's native mode never successfully completing even at
+45s+), the e-paper setup screen genuinely rendered
+(`setup_screen.render_setup_screen()` → `InkyDriver.show()`, confirmed via
+`journalctl`: "Displaying image to Inky display"), and reconnecting back to
+the real station network worked cleanly - `pi-weather-display.timer` and
+`pi-weather-buttons.service` were completely undisturbed throughout every
+test, confirming the render pipeline really is independent of WiFi state as
+designed.
+
+The distro's own `hostapd.service` unit ships **masked** by default on this
+image (confirmed via `systemctl status hostapd`), so there's no risk of it
+fighting the custom-named `pi-weather-hostapd.service` for the radio -
+`install.sh` also explicitly disables it as a defensive measure in case a
+future OS image ships it unmasked.
 
 ## Security posture - explicit, not accidental
 
