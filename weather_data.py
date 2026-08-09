@@ -250,6 +250,7 @@ class HourPoint:
     temperature: int
     rain: float
     icon_key: str
+    is_day_start: bool = False  # True at the first hour of a new calendar date
 
 
 @dataclass
@@ -409,16 +410,22 @@ def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tup
     sliced_codes = codes[start_index:]
 
     hourly = []
+    prev_date = None
     for i in range(min(24, len(sliced_times))):
         dt = datetime.fromisoformat(sliced_times[i]).astimezone(tz)
         sunrise, sunset = sun_map.get(dt.date(), (None, None))
         is_day = 1 if sunrise and sunset and sunrise <= dt < sunset else 0
         code = sliced_codes[i] if i < len(sliced_codes) else 0
+        # False for the first hour (index 0) - the chart starts "today", no
+        # boundary to mark there.
+        is_day_start = prev_date is not None and dt.date() != prev_date
+        prev_date = dt.date()
         hourly.append(HourPoint(
             time_label=format_time(dt, time_format, hour_only=True),
             temperature=int(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0,
             rain=sliced_rain[i] if i < len(sliced_rain) else 0,
             icon_key=map_weather_code_to_icon(code, is_day),
+            is_day_start=is_day_start,
         ))
 
     count = min(24, len(sliced_times))
@@ -479,7 +486,7 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     uv_beams = get_uv_beam_points(uv_index_raw)
     uv_index = round(uv_index_raw) if uv_index_raw is not None else "N/A"
     data_points.append({
-        "kind": "uv", "label": "UV-index", "measurement": uv_index, "unit": uv_rating,
+        "kind": "uv", "label": "UV-index 1-12", "measurement": uv_index, "unit": uv_rating,
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
@@ -504,14 +511,16 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     aqi_times = aqi_data.get("hourly", {}).get("time", [])
     aqi_values = aqi_data.get("hourly", {}).get("european_aqi", [])
     current_aqi = _value_at_current_hour(aqi_times, aqi_values, tz, current_time)
-    scale = ""
     if current_aqi is not None:
         current_aqi = round(current_aqi, 1)
         scale = ["Goed", "Redelijk", "Matig", "Slecht", "Zeer slecht", "Extreem"][min(int(current_aqi // 20), 5)]
     else:
         current_aqi = "N/A"
+        scale = "N/A"
     data_points.append({
-        "kind": "aqi", "label": "Luchtkwaliteit", "measurement": current_aqi, "unit": scale,
+        # measurement is the text description only (no number) - the
+        # numeric AQI still drives aqi_rotation, just isn't displayed
+        "kind": "aqi", "label": "Luchtkwaliteit", "measurement": scale,
         "aqi_rotation": get_european_aqi_rotation(current_aqi),
     })
 
