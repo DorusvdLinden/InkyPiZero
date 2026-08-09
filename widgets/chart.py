@@ -128,11 +128,11 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.line([(plot_x1, plot_y0), (plot_x1, plot_y1)], fill=text_color, width=2)
     draw.line([(plot_x0, plot_y1), (plot_x1, plot_y1)], fill=text_color, width=2)
 
-    rain_max_label = f"{rain_axis_max:g} {unit_label_rain}"
+    rain_max_label = f"{rain_axis_max:g}"
     draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}°", font=font_bold, fill=text_color, anchor="rm")
     draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}°", font=font_bold, fill=text_color, anchor="rm")
     draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_bold, fill=text_color, anchor="lm")
-    draw.text((plot_x1 + 6, y_rain(0)), f"0 {unit_label_rain}", font=font_bold, fill=text_color, anchor="lm")
+    draw.text((plot_x1 + 6, y_rain(0)), "0", font=font_bold, fill=text_color, anchor="lm")
 
     # mirrors Regen's flat 2mm (~10px) gap off its axis, but on the left
     # axis - measured to the label's near (right) edge, since that's the
@@ -141,19 +141,20 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     unit_temp_rotated_w = (unit_temp_bbox[3] - unit_temp_bbox[1]) + 2
     unit_temp_x = plot_x0 - 10 - unit_temp_rotated_w
     _vertical_text(image, (unit_temp_x, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
-    # "Regen" is centered on the decimal point of the rain-axis-max label
-    # (e.g. the "." in "4.5 mm") when that label has one, so the two read
-    # as visually aligned rather than the label just trailing off to the
-    # right of it. Whole-number labels ("1 mm"/"0 mm") have no "." to
-    # align to, so fall back to a flat 2mm (~10px) gap off the axis line.
-    regen_bbox = font_bold.getbbox("Regen")
+    # "Regen [mm]" is centered on the decimal point of the rain-axis-max
+    # number (e.g. the "." in "4.5") when it has one, so the two read as
+    # visually aligned rather than the label just trailing off to the
+    # right of it. Whole numbers ("1"/"0") have no "." to align to, so
+    # fall back to a flat 2mm (~10px) gap off the axis line.
+    regen_label = f"Regen [{unit_label_rain}]"
+    regen_bbox = font_bold.getbbox(regen_label)
     regen_rotated_w = (regen_bbox[3] - regen_bbox[1]) + 2
     dot_offset = _decimal_point_center_x(rain_max_label, font_bold)
     if dot_offset is not None:
         regen_x = plot_x1 + 6 + dot_offset - regen_rotated_w / 2
     else:
         regen_x = plot_x1 + 10
-    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), "Regen", font_bold, text_color)
+    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), regen_label, font_bold, text_color)
 
     # x-axis hour labels - same cadence as the icon strip below, so each
     # icon sits directly under its hour's label instead of drifting out of
