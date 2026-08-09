@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}InkyPiZero - Overzicht{% endblock %}
+{% block content %}
+  <h2>Status</h2>
+  <table class="status-table">
+    <tr><th>Wifi</th><td>{{ mode }}</td></tr>
+    <tr><th>Schermmodus</th><td>{{ screen_mode }}</td></tr>
+  </table>
+
+  <p>
+    <a class="button" href="/wifi">Wifi-netwerken beheren</a>
+    <a class="button" href="{{ url_for('web.settings') }}">Instellingen</a>
+  </p>
+{% endblock %}

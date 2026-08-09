@@ -28,7 +28,14 @@ MIN_PSK_LENGTH = 8  # WPA2 minimum
 
 
 def _nmcli(*args: str, timeout: int = 15) -> str:
-    result = subprocess.run(["nmcli", *args], capture_output=True, text=True, timeout=timeout)
+    """Raises RuntimeError uniformly for every failure mode (nonzero exit,
+    timeout, or `nmcli` not even being installed - e.g. on a local dev
+    machine without NetworkManager) so every caller only needs to catch one
+    exception type."""
+    try:
+        result = subprocess.run(["nmcli", *args], capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise RuntimeError(f"nmcli {' '.join(args)} could not run: {e}") from e
     if result.returncode != 0:
         raise RuntimeError(f"nmcli {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
@@ -141,11 +148,17 @@ def ensure_ap_mode() -> tuple[str, str]:
 
 def list_networks() -> list[dict]:
     """Saved station networks (excludes the AP profile and non-WiFi
-    profiles like ethernet/loopback), each as {"name": str, "active": bool}."""
+    profiles like ethernet/loopback), each as {"name": str, "active": bool}.
+    Returns an empty list rather than raising if nmcli itself is
+    unavailable (e.g. local dev without NetworkManager)."""
     active_name = _wlan0_state().get("GENERAL.CONNECTION", "")
+    try:
+        connections = _list_connections()
+    except RuntimeError:
+        return []
     return [
         {"name": c["name"], "active": c["name"] == active_name}
-        for c in _list_connections()
+        for c in connections
         if c["type"] == "802-11-wireless" and c["name"] != AP_PROFILE_NAME
     ]
 
