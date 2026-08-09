@@ -11,7 +11,7 @@
     <h1>InkyPiZero</h1>
     <nav>
       <a href="{{ url_for('web.index') }}">Overzicht</a>
-      <a href="/wifi">Wifi</a> {# becomes url_for('web.wifi') once that route lands in Phase 5 #}
+      <a href="{{ url_for('web.wifi') }}">Wifi</a>
       <a href="{{ url_for('web.settings') }}">Instellingen</a>
     </nav>
   </header>

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}InkyPiZero - Netwerk verwijderen{% endblock %}
+{% block content %}
+  <h2>Weet je het zeker?</h2>
+  <p>
+    <strong>{{ profile }}</strong> is het netwerk waarmee je nu verbonden bent.
+    Als je dit verwijdert, verlies je mogelijk direct de verbinding met dit apparaat.
+  </p>
+  <form method="post" action="{{ url_for('web.wifi_remove', profile=profile) }}">
+    <input type="hidden" name="confirmed" value="yes">
+    <button type="submit" class="danger">Ja, verwijderen</button>
+    <a class="button" href="{{ url_for('web.wifi') }}">Annuleren</a>
+  </form>
+{% endblock %}

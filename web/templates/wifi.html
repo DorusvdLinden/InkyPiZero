@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}InkyPiZero - Wifi{% endblock %}
+{% block content %}
+  <h2>Wifi-netwerken</h2>
+  <p>Huidige modus: <strong>{{ mode }}</strong></p>
+
+  {% if networks %}
+    <ul class="network-list">
+      {% for network in networks %}
+        <li>
+          <span class="{{ 'active' if network.active }}">
+            {{ network.name }}{% if network.active %} (verbonden){% endif %}
+          </span>
+          <span>
+            <form method="post" action="{{ url_for('web.wifi_edit', profile=network.name) }}" class="inline-form">
+              <input type="password" name="password" placeholder="nieuw wachtwoord" minlength="8">
+              <button type="submit">Bewerken</button>
+            </form>
+            <form method="post" action="{{ url_for('web.wifi_remove', profile=network.name) }}" class="inline-form"
+                  onsubmit="return confirm('Netwerk {{ network.name }} verwijderen?')">
+              <button type="submit" class="danger">Verwijderen</button>
+            </form>
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Nog geen netwerken opgeslagen.</p>
+  {% endif %}
+
+  <h3>Netwerk toevoegen</h3>
+  <form method="post" action="{{ url_for('web.wifi_add') }}" class="settings-form">
+    <label>SSID
+      <input type="text" name="ssid" required>
+    </label>
+    <label>Wachtwoord (leeg laten voor een open netwerk)
+      <input type="password" name="password" minlength="8">
+    </label>
+    <button type="submit">Toevoegen{% if mode == "ap" %} en verbinden{% endif %}</button>
+  </form>
+{% endblock %}

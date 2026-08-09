@@ -144,3 +144,15 @@ button.danger, .button.danger {
 .network-list .active {
   font-weight: 600;
 }
+
+.inline-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0 8px;
+}
+
+.inline-form input[type="password"] {
+  padding: 4px 6px;
+  width: 140px;
+}

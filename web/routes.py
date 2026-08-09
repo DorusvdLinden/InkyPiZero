@@ -91,3 +91,82 @@ def settings():
 
     config = settings_store.load_config()
     return render_template("settings.html", config=config)
+
+
+@bp.route("/wifi")
+def wifi():
+    return render_template(
+        "wifi.html",
+        mode=wifi_manager.current_mode(),
+        networks=wifi_manager.list_networks(),
+    )
+
+
+@bp.route("/wifi/add", methods=["POST"])
+def wifi_add():
+    ssid = request.form.get("ssid", "").strip()
+    password = request.form.get("password", "")
+    if not ssid:
+        flash("SSID mag niet leeg zijn.", "error")
+        return redirect(url_for("web.wifi"))
+
+    try:
+        wifi_manager.add_network(ssid, password or None)
+    except (ValueError, RuntimeError) as e:
+        flash(f"Netwerk toevoegen mislukt: {e}", "error")
+        return redirect(url_for("web.wifi"))
+
+    # "Continue button resets networking and retries" - only meaningful if
+    # we were stranded in AP mode to begin with; an already-connected user
+    # adding a second network for later shouldn't get disconnected for it.
+    if wifi_manager.current_mode() == "ap":
+        if wifi_manager.connect(ssid):
+            flash(f"Verbonden met {ssid}.", "success")
+        else:
+            wifi_manager.ensure_ap_mode()
+            flash(f"Verbinden met {ssid} is mislukt - controleer het wachtwoord en probeer opnieuw. "
+                  f"Het netwerk is wel opgeslagen; je kan het hieronder bewerken.", "error")
+    else:
+        flash(f"Netwerk {ssid} opgeslagen.", "success")
+    return redirect(url_for("web.wifi"))
+
+
+@bp.route("/wifi/<profile>/edit", methods=["POST"])
+def wifi_edit(profile):
+    password = request.form.get("password", "")
+    try:
+        wifi_manager.edit_network(profile, password)
+    except (ValueError, RuntimeError) as e:
+        flash(f"Bijwerken mislukt: {e}", "error")
+        return redirect(url_for("web.wifi"))
+
+    is_active = any(n["name"] == profile and n["active"] for n in wifi_manager.list_networks())
+    if is_active:
+        # re-authenticate immediately with the new password rather than
+        # waiting for the router to eventually reject the stale one
+        if wifi_manager.connect(profile):
+            flash(f"{profile} bijgewerkt en opnieuw verbonden.", "success")
+        else:
+            flash(f"{profile} bijgewerkt, maar opnieuw verbinden is mislukt.", "error")
+    else:
+        flash(f"{profile} bijgewerkt.", "success")
+    return redirect(url_for("web.wifi"))
+
+
+@bp.route("/wifi/<profile>/remove", methods=["POST"])
+def wifi_remove(profile):
+    is_active = any(n["name"] == profile and n["active"] for n in wifi_manager.list_networks())
+
+    # Extra confirmation step only for the network you're currently
+    # browsing over - individual removal is otherwise explicit-but-direct,
+    # per the "never auto-delete, but don't make removal a chore either"
+    # requirement this feature was built around.
+    if is_active and request.form.get("confirmed") != "yes":
+        return render_template("wifi_confirm_remove.html", profile=profile)
+
+    try:
+        wifi_manager.remove_network(profile)
+        flash(f"{profile} verwijderd.", "success")
+    except RuntimeError as e:
+        flash(f"Verwijderen mislukt: {e}", "error")
+    return redirect(url_for("web.wifi"))
