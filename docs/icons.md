@@ -94,6 +94,23 @@ separately-colored layers, built by `_composite_icon()`:
 Everything else in `assets/icons/` is a plain single-color render (one
 weather-icons SVG + one flat `PALETTE` color, no compositing).
 
+### Regenerating icons
+
+Not run automatically - only needed after changing a color or picking a
+different source icon:
+
+1. `git clone https://github.com/erikflowers/weather-icons.git` next to this
+   repo (or edit `SVG_DIR` in `scripts/generate_icons.py` to point wherever
+   you cloned it)
+2. `pip install resvg-py` (dev-only tool, not an app dependency - pure-Rust
+   SVG renderer, no system Cairo needed, unlike `cairosvg` which doesn't
+   work out of the box on Windows)
+3. `python scripts/generate_icons.py`
+4. Regenerate the gallery image at the top of this doc too:
+   `python scripts/icon_overview.py`, then copy
+   `mock_display_output/icon_overviews/full_icon_set_white_bg.png` over
+   `docs/images/icon_overview.png` and commit it.
+
 ## `AssetStore.icon(key, size)` (`widgets/icons.py`)
 
 - Two-level cache (base cropped image per `key`; final resized image per
