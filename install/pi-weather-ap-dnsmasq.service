@@ -1,0 +1,15 @@
+[Unit]
+Description=Pi Weather Display setup-AP DHCP server (dnsmasq)
+# Dedicated instance, entirely separate from any system-wide dnsmasq -
+# only ever started/stopped on demand by wifi_manager.py alongside
+# pi-weather-hostapd.service, never enabled at boot.
+After=network.target pi-weather-hostapd.service
+BindsTo=pi-weather-hostapd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/dnsmasq-pi-weather-ap.conf --pid-file=/run/pi-weather-ap-dnsmasq.pid
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal

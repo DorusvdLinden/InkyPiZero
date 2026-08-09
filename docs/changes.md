@@ -240,7 +240,7 @@ rule), `1bafb51` (chart label fonts 12→14px, rain axis label becomes "Regen
 **Active**, except the **"Regen [mm]" label** from `1bafb51`, **outdated -
 superseded by entry 20**.
 
-### 20. Dynamic precipitation axis label (rain/hail/snow/dry) — most recent
+### 20. Dynamic precipitation axis label (rain/hail/snow/dry)
 `1e91559` (branch `precip-label`), merged to main at `903fdc6`
 
 The hardcoded "Regen [mm]" label (entries 11, 19) is replaced with real
@@ -254,6 +254,50 @@ all-zero 24h window shows "Droog" with no unit.
 both live data (14-location test) and deterministic synthetic fixtures for
 all four branches (`scripts/test_precip_scenarios.py`, since live weather
 can't reliably guarantee a hailstorm on any given test run).
+
+### 21. WiFi provisioning + always-on settings web UI — most recent
+Branch `wifi-setup-webui`
+
+The project's first departure from "no web UI, no long-running service
+besides the button listener" (entry 1): a new always-on Flask service
+(`pi-weather-web.service`, `web_app.py` + `web/`) runs completely
+independently of the render timer, exposing every `config.py` field as a
+form (persisted to `/var/lib/pi-weather-display/settings.json` via new
+`settings_store.py`, overlaid on `DisplayConfig`'s dataclass defaults - the
+only change to existing code is `main.py`'s `DisplayConfig()` ->
+`settings_store.load_config()`), WiFi network management (add/edit/remove,
+`wifi_manager.py`), and a `/shutdown` route reusing
+`button_listener.blank_and_shutdown()`.
+
+WiFi provisioning went through a real mid-flight architecture change: the
+first approach (NetworkManager's own native hotspot mode) reproducibly
+failed on the deployed Pi Zero W across three separate live tests, all with
+the same NetworkManager-internal "Hotspot network creation took too long" /
+supplicant-timeout error - confirmed to be NetworkManager's own AP
+implementation (which drives WPA-PSK AP mode through `wpa_supplicant`
+rather than a dedicated AP daemon), not a hardware limitation (the driver
+correctly advertises AP-mode support). Switched to **hostapd** + a
+dedicated dnsmasq instance instead (two new on-demand, never-boot-enabled
+units, `pi-weather-hostapd.service`/`pi-weather-ap-dnsmasq.service`,
+started/stopped only by `wifi_manager.py`) - the standard, purpose-built
+approach for exactly this on Raspberry Pi hardware. Verified live
+end-to-end afterward: AP up in ~14s, the e-paper setup screen
+(`setup_screen.py`) genuinely rendered, clean reconnect back to the station
+network, with the render timer and button listener completely undisturbed
+throughout every test. See [networking.md](./networking.md) for the full
+design and evidence.
+
+Also confirmed empirically (not assumed) that netplan, also present on this
+image, doesn't interfere with `nmcli`-managed profiles - it only tracks the
+specific connections it created at image-build time.
+
+**Active** - current architecture. Known deferred scope, tracked in
+`TODO.md`: no SSID rename (remove + re-add instead), no periodic
+runtime reconnect-check (the connectivity check only runs at
+`pi-weather-web.service` startup, not continuously), no real captive-portal
+DNS redirect on the setup AP, no authentication anywhere (matches button
+A's existing unauthenticated-shutdown precedent; trusted-LAN-only by
+design).
 
 ---
 

@@ -49,6 +49,14 @@ reference docs this list feeds into.
 - [ ] **`config.py`'s `refresh_interval_seconds` is dead**: not read anywhere in the codebase. The actual render cadence is `install/pi-weather-display.timer`'s hardcoded `OnUnitActiveSec` (10min), a completely separate value. Changing `refresh_interval_seconds` currently does nothing, which will mislead anyone who edits it expecting an effect. Either wire it into the installer (template the timer file from it) or remove the field. Found while writing `docs/settings.md`.
 - [ ] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far.
 
+## WiFi & web UI
+
+- [ ] **No SSID rename**: `wifi_manager.edit_network()` can only update a saved network's password/priority - the con-name and SSID are set together at creation, so a changed SSID needs remove + re-add rather than an in-place rename. Documented in the `/wifi` page copy and `docs/networking.md`, not fixed.
+- [ ] **No periodic reconnect check**: `web_app.py`'s connectivity check (activate the setup AP if nothing's reachable) only runs once, at `pi-weather-web.service` startup - if a previously-good station connection drops later at runtime (router reboot, moved out of range), the device stays disconnected until the service is manually restarted rather than automatically falling back to the setup AP. Deliberately out of v1 scope - see the plan's Phase 8.
+- [ ] **No real captive-portal DNS redirect** on the setup AP - joining it and opening any URL doesn't auto-redirect to the setup page like commercial IoT devices do; the user has to know/read the exact URL (`http://192.168.4.1`) shown on the e-paper display and type it manually. `dnsmasq-base` (already a dependency) could serve wildcard DNS for this later.
+- [ ] **No authentication anywhere in the web UI** - settings edits, WiFi credential changes, and shutdown are all reachable by anyone who can reach the device's IP or join its setup AP. Deliberate, matches button A's existing unauthenticated physical shutdown and the project's trusted-LAN-only threat model - documented explicitly in `docs/networking.md`, not an oversight, but would need revisiting if this device is ever exposed beyond a home LAN.
+- [ ] No QR code on the setup screen (would encode `WIFI:S:<ssid>;T:WPA;P:<password>;;` for one-tap phone connect) - would need a new `qrcode` dependency and more rendering work, scoped out of v1.
+
 ## Screen modes
 
 - [ ] **`compact_style` was never decided on**: "compact" screen mode has three interchangeable sub-layouts (`icon_left`/`icon_above`/`icon_above_row`) built for comparison, but `icon_left` has just been the de facto wired default since day one with no follow-up commit formally choosing it. Either commit to `icon_left` and remove the other two mockups, or expose the choice as a real setting. Found while writing `docs/changes.md`.

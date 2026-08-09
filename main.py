@@ -11,6 +11,7 @@ from weather_data import fetch_snapshot
 from canvas import WeatherCanvas
 from widgets.icons import AssetStore
 import display_mode
+import settings_store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ def main():
                          default="icon_left", help="Which 'compact' mode mockup style to use (for local testing).")
     args = parser.parse_args()
 
-    config = DisplayConfig()
+    config = settings_store.load_config()
     image = render(config, screen_mode=args.screen_mode, compact_style=args.compact_style)
 
     if args.mock_output:

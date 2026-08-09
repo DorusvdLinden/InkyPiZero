@@ -19,12 +19,16 @@ Pi Zero W) that can't comfortably run a headless browser.
 **Features**:
 - Current conditions, an hourly temperature/rain chart, and a multi-day
   forecast, all hand-drawn with Pillow
-- No web UI, no plugins, no playlist scheduling - configuration is a single
-  Python file
-- Runs as a `systemd` timer (e.g. every 10 minutes), not a persistent service
+- No plugins, no playlist scheduling - the *rendering* is a periodic
+  `systemd` timer job (e.g. every 10 minutes), not a persistent service
+- A small always-on web UI (settings, WiFi management, shutdown) runs
+  independently of that render timer - see [settings.md](./docs/settings.md)
+- If it can't reach a known WiFi network, the device hosts its own setup AP
+  and shows the connect details directly on the e-paper display - see
+  [networking.md](./docs/networking.md)
 - Weather data from [Open-Meteo](https://open-meteo.com/) - no API key needed
 - Press button A on the back of the Inky Impression to blank the screen and
-  safely shut the Pi down
+  safely shut the Pi down (also available from the web UI)
 
 ## Hardware
 
@@ -50,10 +54,16 @@ upstream project this was forked from).
     cd InkyPiZero
     sudo bash install/install.sh
     ```
-3. **Edit `config.py`** to set your location (`latitude`/`longitude`) and
-   preferences - there's no web UI, so this is done directly in the source
-   file.
+3. **Set your location**: either edit `config.py` directly
+   (`latitude`/`longitude`) before installing, or set it afterward from the
+   web UI at `http://<device IP>:8080/settings` - see
+   [settings.md](./docs/settings.md) for every option and how the two
+   relate.
 4. Reboot if the installer enabled SPI for the first time.
+5. **First-time WiFi**: if the device can't reach a network you've already
+   set up (e.g. Raspberry Pi Imager), it hosts its own setup AP and shows
+   the connect details on the e-paper display - see
+   [networking.md](./docs/networking.md).
 
 The installer sets up its own minimal Python virtual environment and a
 `pi-weather-display.timer` systemd unit that renders and updates the display
@@ -66,6 +76,7 @@ systemctl status pi-weather-display.timer     # confirm the timer is active
 journalctl -u pi-weather-display.service      # view render logs
 sudo systemctl start pi-weather-display.service  # force an immediate render
 systemctl status pi-weather-buttons.service   # confirm the button listener is active
+systemctl status pi-weather-web.service       # confirm the web UI is active
 ```
 
 To update: `git pull` then rerun `sudo bash install/install.sh` (safe to
@@ -91,8 +102,9 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   hardware
 - `assets/` - the icon PNGs and Jost font files it actually uses (see
   [attribution.md](./docs/attribution.md))
-- `config.py` - a plain dataclass (location, units, screen mode, etc.) -
-  edited directly in source, since there's no web UI - see
+- `config.py` - a plain dataclass (location, units, screen mode, etc.) of
+  hard-coded defaults; `settings_store.py` overlays a saved
+  `settings.json` on top of it (written by the web UI) - see
   [settings.md](./docs/settings.md) for every option
 - `main.py` - fetch -> render -> display, no scheduling loop of its own
   (that's the systemd timer's job)
@@ -104,6 +116,17 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 - `display_mode.py` - persists which screen layout (B/C/D button choice) is
   currently selected, since `main.py` is a one-shot timer job with no
   memory between renders
+- `web_app.py` + `web/` - a small always-on Flask service
+  (`pi-weather-web.service`) for settings/WiFi management/shutdown,
+  completely independent of the render timer - see
+  [settings.md](./docs/settings.md)
+- `wifi_manager.py` - WiFi provisioning: hosts a setup AP (via hostapd, not
+  NetworkManager's own hotspot mode - see [networking.md](./docs/networking.md))
+  when no known network is reachable, and manages saved network credentials
+  the rest of the time via `nmcli`
+- `setup_screen.py` - renders the setup AP's SSID/password/URL directly to
+  the e-paper display, since that's the one channel guaranteed available
+  regardless of network state
 - `TODO.md` - known bugs and rough edges
 
 Chosen over an ESP32-S3/embedded-C rewrite because it reuses Pimoroni's
@@ -113,8 +136,10 @@ whole visual layout in C.
 
 ## Documentation
 
-- [settings.md](./docs/settings.md) - every option/setting, via the physical
-  buttons and via `config.py`/CLI flags
+- [settings.md](./docs/settings.md) - every option/setting: physical
+  buttons, the web UI, `config.py`, and CLI flags
+- [networking.md](./docs/networking.md) - WiFi provisioning/setup-AP design
+  and the NetworkManager/hostapd decisions behind it
 - [icons.md](./docs/icons.md) - the full icon catalog, with images
 - [changes.md](./docs/changes.md) - numbered log of the project's larger
   changes, each tagged active/outdated/rejected

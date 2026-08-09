@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}InkyPiZero - Instellingen{% endblock %}
+{% block content %}
+  <h2>Instellingen</h2>
+  <form method="post" class="settings-form">
+    <fieldset>
+      <legend>Locatie</legend>
+      <label>Breedtegraad (latitude)
+        <input type="number" step="any" name="latitude" value="{{ config.latitude }}" required>
+      </label>
+      <label>Lengtegraad (longitude)
+        <input type="number" step="any" name="longitude" value="{{ config.longitude }}" required>
+      </label>
+      <label>Tijdzone
+        <input type="text" name="timezone" value="{{ config.timezone }}" required>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Weergave</legend>
+      <label>Eenheden
+        <select name="units">
+          {% for value, label in [("metric", "Metrisch"), ("imperial", "Imperial"), ("standard", "Standaard (Kelvin)")] %}
+            <option value="{{ value }}" {{ "selected" if config.units == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Tijdnotatie
+        <select name="time_format">
+          {% for value, label in [("24h", "24-uurs"), ("12h", "12-uurs")] %}
+            <option value="{{ value }}" {{ "selected" if config.time_format == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Aantal dagen vooruit (forecast_days)
+        <input type="number" min="1" step="1" name="forecast_days" value="{{ config.forecast_days }}" required>
+      </label>
+      <label>Icoon-interval grafiek (graph_icon_step, in uren)
+        <input type="number" min="1" step="1" name="graph_icon_step" value="{{ config.graph_icon_step }}" required>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="show_moon_phase" {{ "checked" if config.show_moon_phase }}>
+        Maanfase tonen op weerkaarten
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Kleuren &amp; paneel</legend>
+      <label>Achtergrondkleur
+        <input type="color" name="background_color" value="{{ config.background_color }}">
+      </label>
+      <label>Tekstkleur
+        <input type="color" name="text_color" value="{{ config.text_color }}">
+      </label>
+      <label>Paneelverzadiging (inky_saturation, 0.0-1.0)
+        <input type="number" min="0" max="1" step="0.05" name="inky_saturation" value="{{ config.inky_saturation }}" required>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Overig</legend>
+      <label>Ververssnelheid in seconden (refresh_interval_seconds)
+        <input type="number" min="1" step="1" name="refresh_interval_seconds" value="{{ config.refresh_interval_seconds }}" required>
+      </label>
+      <p class="hint">Heeft momenteel geen effect - de daadwerkelijke ververscyclus wordt bepaald
+        door de geïnstalleerde systemd-timer (<code>install/pi-weather-display.timer</code>), niet door dit veld.</p>
+    </fieldset>
+
+    <button type="submit">Opslaan</button>
+  </form>
+{% endblock %}

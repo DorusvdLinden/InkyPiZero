@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from PIL import Image
+
 
 @dataclass(frozen=True)
 class Region:
@@ -78,3 +80,19 @@ def forecast_card(index: int, count: int) -> Region:
     card_w = (FORECAST_ROW.w - gap * (count - 1)) // count
     x = FORECAST_ROW.x + index * (card_w + gap)
     return Region(x, FORECAST_ROW.y, card_w, FORECAST_ROW.h)
+
+
+def inset_with_margin(image: Image.Image, background: tuple[int, int, int]) -> Image.Image:
+    """Scales a full-bleed CANVAS_SIZE render down slightly and pastes it
+    centered on a fresh canvas, leaving a MARGIN_PX border on all four sides
+    - simpler and lower-risk than re-deriving every layout region's pixel
+    budget to natively leave a gap, and at a 2mm margin the resulting
+    ~1-2% non-uniform scale is not perceptible. Shared by every full-screen
+    renderer (the weather canvas, the WiFi setup screen), not just one."""
+    margin = MARGIN_PX
+    canvas_w, canvas_h = CANVAS_SIZE
+    inner_size = (canvas_w - 2 * margin, canvas_h - 2 * margin)
+    scaled = image.resize(inner_size, Image.LANCZOS)
+    framed = Image.new("RGB", CANVAS_SIZE, background)
+    framed.paste(scaled, (margin, margin))
+    return framed

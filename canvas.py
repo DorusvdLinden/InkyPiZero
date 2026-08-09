@@ -46,21 +46,7 @@ class WeatherCanvas:
         self._draw_data_points(image, draw, data)
         self._draw_chart(image, data)
         self._draw_forecast_row(image, data)
-        return self._inset_with_margin(image)
-
-    def _inset_with_margin(self, image: Image.Image) -> Image.Image:
-        """Scales the full-bleed render down slightly and pastes it centered
-        on a fresh canvas, leaving a MARGIN_PX border on all four sides -
-        simpler and lower-risk than re-deriving every layout region's pixel
-        budget to natively leave a gap, and at a 2mm margin the resulting
-        ~1-2% non-uniform scale is not perceptible."""
-        margin = layout.MARGIN_PX
-        canvas_w, canvas_h = layout.CANVAS_SIZE
-        inner_size = (canvas_w - 2 * margin, canvas_h - 2 * margin)
-        scaled = image.resize(inner_size, Image.LANCZOS)
-        framed = Image.new("RGB", layout.CANVAS_SIZE, self.bg)
-        framed.paste(scaled, (margin, margin))
-        return framed
+        return layout.inset_with_margin(image, self.bg)
 
     def _draw_header(self, draw, data: WeatherSnapshot):
         font_date = self.assets.font("bold", 22)

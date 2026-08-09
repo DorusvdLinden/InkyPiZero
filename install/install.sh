@@ -2,11 +2,12 @@
 
 # =============================================================================
 # Script Name: install.sh
-# Description: Installs Pi Weather Display - a lightweight, single-purpose
-#              E-Ink weather renderer (no Flask, no Chromium, no plugins)
-#              intended for weaker hardware like a Pi Zero W. Renders
-#              natively with Pillow and runs periodically via a systemd
-#              timer instead of a long-running service.
+# Description: Installs Pi Weather Display - a lightweight E-Ink weather
+#              renderer (no Chromium, no plugins) intended for weaker
+#              hardware like a Pi Zero W. Renders natively with Pillow and
+#              runs periodically via a systemd timer instead of a
+#              long-running service - a small always-on Flask process only
+#              handles WiFi setup/settings, not rendering itself.
 #
 # Usage: sudo bash install/install.sh
 # =============================================================================
@@ -41,6 +42,15 @@ TIMER_FILE_TARGET="/etc/systemd/system/$APPNAME.timer"
 BUTTONS_APPNAME="pi-weather-buttons"
 BUTTONS_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$BUTTONS_APPNAME.service"
 BUTTONS_SERVICE_FILE_TARGET="/etc/systemd/system/$BUTTONS_APPNAME.service"
+WEB_APPNAME="pi-weather-web"
+WEB_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$WEB_APPNAME.service"
+WEB_SERVICE_FILE_TARGET="/etc/systemd/system/$WEB_APPNAME.service"
+HOSTAPD_APPNAME="pi-weather-hostapd"
+HOSTAPD_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$HOSTAPD_APPNAME.service"
+HOSTAPD_SERVICE_FILE_TARGET="/etc/systemd/system/$HOSTAPD_APPNAME.service"
+AP_DNSMASQ_APPNAME="pi-weather-ap-dnsmasq"
+AP_DNSMASQ_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$AP_DNSMASQ_APPNAME.service"
+AP_DNSMASQ_SERVICE_FILE_TARGET="/etc/systemd/system/$AP_DNSMASQ_APPNAME.service"
 
 echo_success() {
   echo -e "$1 [\e[32m\xE2\x9C\x94\e[0m]"
@@ -111,17 +121,28 @@ install_app() {
 
 install_service() {
   echo "Installing $APPNAME systemd service and timer."
-  if [ ! -f "$SERVICE_FILE_SOURCE" ] || [ ! -f "$TIMER_FILE_SOURCE" ] || [ ! -f "$BUTTONS_SERVICE_FILE_SOURCE" ]; then
+  if [ ! -f "$SERVICE_FILE_SOURCE" ] || [ ! -f "$TIMER_FILE_SOURCE" ] || [ ! -f "$BUTTONS_SERVICE_FILE_SOURCE" ] || \
+     [ ! -f "$WEB_SERVICE_FILE_SOURCE" ] || [ ! -f "$HOSTAPD_SERVICE_FILE_SOURCE" ] || [ ! -f "$AP_DNSMASQ_SERVICE_FILE_SOURCE" ]; then
     echo_error "ERROR: Service/timer files not found in $SCRIPT_DIR!"
     exit 1
   fi
   cp "$SERVICE_FILE_SOURCE" "$SERVICE_FILE_TARGET"
   cp "$TIMER_FILE_SOURCE" "$TIMER_FILE_TARGET"
   cp "$BUTTONS_SERVICE_FILE_SOURCE" "$BUTTONS_SERVICE_FILE_TARGET"
+  cp "$WEB_SERVICE_FILE_SOURCE" "$WEB_SERVICE_FILE_TARGET"
+  # hostapd + the AP-mode dnsmasq are installed but NOT enabled/started -
+  # wifi_manager.py starts/stops them on demand only when actually hosting
+  # the setup AP, never at boot.
+  cp "$HOSTAPD_SERVICE_FILE_SOURCE" "$HOSTAPD_SERVICE_FILE_TARGET"
+  cp "$AP_DNSMASQ_SERVICE_FILE_SOURCE" "$AP_DNSMASQ_SERVICE_FILE_TARGET"
   systemctl daemon-reload
   systemctl enable --now "$APPNAME.timer"
   systemctl enable --now "$BUTTONS_APPNAME.service"
-  echo_success "\tService, timer, and button listener installed and started."
+  systemctl enable --now "$WEB_APPNAME.service"
+  # The distro's own hostapd.service/package may enable itself on install -
+  # make sure it never fights our custom-named unit for the same radio.
+  systemctl disable --now hostapd 2>/dev/null || true
+  echo_success "\tService, timer, button listener, and web UI installed and started."
 }
 
 check_permissions
@@ -138,3 +159,4 @@ echo_header "[-] Check status with: systemctl status $APPNAME.timer"
 echo_header "[-] View logs with: journalctl -u $APPNAME.service"
 echo_header "[-] Force an immediate render with: systemctl start $APPNAME.service"
 echo_header "[-] Press button A on the back of the display to blank the screen and shut down."
+echo_header "[-] Settings/wifi web UI: http://<this device's IP>:8080 (or the setup AP shown on the panel if no known network is reachable)"

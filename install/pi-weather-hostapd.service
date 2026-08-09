@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Weather Display setup-AP WiFi radio (hostapd)
+# Custom-named unit, intentionally separate from the distro's own
+# hostapd.service - only ever started/stopped on demand by wifi_manager.py
+# when hosting the setup AP, never enabled at boot. NetworkManager's own
+# native hotspot mode (wpa_supplicant-based) proved unreliable on this
+# hardware - see docs/networking.md.
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/hostapd /etc/hostapd/pi-weather-ap.conf
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal

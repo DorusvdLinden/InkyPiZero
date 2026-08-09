@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi Weather Display web UI (WiFi setup + settings)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/local/pi-weather-display/app
+ExecStart=/usr/local/pi-weather-display/venv/bin/python /usr/local/pi-weather-display/app/web_app.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

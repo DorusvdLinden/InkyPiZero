@@ -35,6 +35,38 @@ Check the currently-persisted mode directly:
 cat /var/lib/pi-weather-display/screen_mode
 ```
 
+## Can't reach the web UI, or the device won't reconnect to WiFi
+
+Check the web UI service is up (should show `Active: active (running)`):
+```bash
+systemctl status pi-weather-web.service
+journalctl -u pi-weather-web.service -f
+```
+
+If no known network is reachable, the device hosts its own setup AP
+(`InkyPiZero-XXXX`) and shows its SSID/password/URL directly on the
+e-paper display - see [settings.md](./settings.md#via-the-web-ui-web_apppy-always-on)
+and [networking.md](./networking.md) for the full design. Check which mode
+it's actually in:
+```bash
+nmcli -t -f GENERAL.STATE,GENERAL.CONNECTION device show wlan0
+systemctl is-active pi-weather-hostapd.service pi-weather-ap-dnsmasq.service
+```
+`pi-weather-hostapd`/`pi-weather-ap-dnsmasq` active means it's currently
+hosting the setup AP; check their own logs
+(`journalctl -u pi-weather-hostapd.service -n 50`) if the AP itself doesn't
+seem to be broadcasting.
+
+If the device is stuck in AP mode when it shouldn't be (e.g. its known
+network really is in range and working), the two most likely causes are a
+wrong/changed password for a saved network (fix via the setup AP's own
+`/wifi` page, or `nmcli connection show`/`nmcli connection modify` directly
+over a serial/keyboard-monitor connection if the device is unreachable any
+other way) or the network being temporarily down when the device last
+checked (`pi-weather-web.service`'s connectivity check only runs once at
+service start, not continuously - restart it once the network's back:
+`sudo systemctl restart pi-weather-web.service`).
+
 ## Debugging
 
 View the latest logs:
@@ -98,7 +130,8 @@ Some color inaccuracies are expected due to the physical limitations of
 e-ink displays, especially on multi-color panels with a limited color
 palette and dithering.
 
-There's no Settings page here - image/saturation adjustments are made
+Image/saturation adjustments can be made via the web UI's
+[`/settings` page](./settings.md#via-the-web-ui-web_apppy-always-on) or
 directly in `config.py` (see [settings.md](./settings.md) for every option).
 The `inky_saturation` field controls the saturation of the palette the image
 is dithered to by the `inky` library; try `0` first, which tends to improve
