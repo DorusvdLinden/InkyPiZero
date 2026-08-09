@@ -9,7 +9,7 @@ import os
 
 STATE_PATH = "/var/lib/pi-weather-display/screen_mode"
 
-DEFAULT_MODE = "original"
+DEFAULT_MODE = "gridlines"
 VALID_MODES = {"original", "gridlines"}
 
 
