@@ -479,7 +479,7 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     uv_beams = get_uv_beam_points(uv_index_raw)
     uv_index = round(uv_index_raw) if uv_index_raw is not None else "N/A"
     data_points.append({
-        "kind": "uv", "label": "UV-index", "measurement": uv_index, "unit": uv_rating,
+        "kind": "uv", "label": "UV-index 1-12", "measurement": uv_index, "unit": uv_rating,
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
@@ -504,14 +504,16 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     aqi_times = aqi_data.get("hourly", {}).get("time", [])
     aqi_values = aqi_data.get("hourly", {}).get("european_aqi", [])
     current_aqi = _value_at_current_hour(aqi_times, aqi_values, tz, current_time)
-    scale = ""
     if current_aqi is not None:
         current_aqi = round(current_aqi, 1)
         scale = ["Goed", "Redelijk", "Matig", "Slecht", "Zeer slecht", "Extreem"][min(int(current_aqi // 20), 5)]
     else:
         current_aqi = "N/A"
+        scale = "N/A"
     data_points.append({
-        "kind": "aqi", "label": "Luchtkwaliteit", "measurement": current_aqi, "unit": scale,
+        # measurement is the text description only (no number) - the
+        # numeric AQI still drives aqi_rotation, just isn't displayed
+        "kind": "aqi", "label": "Luchtkwaliteit", "measurement": scale,
         "aqi_rotation": get_european_aqi_rotation(current_aqi),
     })
 
