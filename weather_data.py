@@ -250,6 +250,7 @@ class HourPoint:
     temperature: int
     rain: float
     icon_key: str
+    is_day_start: bool = False  # True at the first hour of a new calendar date
 
 
 @dataclass
@@ -409,16 +410,22 @@ def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tup
     sliced_codes = codes[start_index:]
 
     hourly = []
+    prev_date = None
     for i in range(min(24, len(sliced_times))):
         dt = datetime.fromisoformat(sliced_times[i]).astimezone(tz)
         sunrise, sunset = sun_map.get(dt.date(), (None, None))
         is_day = 1 if sunrise and sunset and sunrise <= dt < sunset else 0
         code = sliced_codes[i] if i < len(sliced_codes) else 0
+        # False for the first hour (index 0) - the chart starts "today", no
+        # boundary to mark there.
+        is_day_start = prev_date is not None and dt.date() != prev_date
+        prev_date = dt.date()
         hourly.append(HourPoint(
             time_label=format_time(dt, time_format, hour_only=True),
             temperature=int(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0,
             rain=sliced_rain[i] if i < len(sliced_rain) else 0,
             icon_key=map_weather_code_to_icon(code, is_day),
+            is_day_start=is_day_start,
         ))
 
     count = min(24, len(sliced_times))

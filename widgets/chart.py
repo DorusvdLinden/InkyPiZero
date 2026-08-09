@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from widgets.icons import thicken_icon
 from widgets.palette import PALETTE
 
-LEFT_MARGIN = 34
+LEFT_MARGIN = 46  # fits a wide axis label with its unit suffix ("-36°C")
 RIGHT_MARGIN = 42
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
@@ -128,19 +128,29 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.line([(plot_x1, plot_y0), (plot_x1, plot_y1)], fill=text_color, width=2)
     draw.line([(plot_x0, plot_y1), (plot_x1, plot_y1)], fill=text_color, width=2)
 
+    # vertical dotted line marking the day boundary, at the edge between
+    # the last hour of one date and the first hour of the next (not
+    # centered on either hour's own column)
+    for i, hour in enumerate(hourly):
+        if hour.is_day_start:
+            date_x = plot_x0 + band * i
+            y = plot_y0
+            while y < plot_y1:
+                draw.line([(date_x, y), (date_x, min(y + 5, plot_y1))], fill=text_color, width=2)
+                y += 9
+            break
+
+    # unit folded directly into the axis-extreme labels ("28°C") instead of
+    # a separate always-present vertical "C" label off to the side - one
+    # less element competing for space, and the chart reclaims that whole
+    # column (see LEFT_MARGIN).
+    temp_unit_suffix = unit_label_temp if unit_label_temp == "K" else f"°{unit_label_temp}"
     rain_max_label = f"{rain_axis_max:g}"
-    draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}°", font=font_bold, fill=text_color, anchor="rm")
-    draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}°", font=font_bold, fill=text_color, anchor="rm")
+    draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_bold, fill=text_color, anchor="rm")
+    draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_bold, fill=text_color, anchor="rm")
     draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_bold, fill=text_color, anchor="lm")
     draw.text((plot_x1 + 6, y_rain(0)), "0", font=font_bold, fill=text_color, anchor="lm")
 
-    # mirrors Regen's flat 2mm (~10px) gap off its axis, but on the left
-    # axis - measured to the label's near (right) edge, since that's the
-    # edge closest to the axis line.
-    unit_temp_bbox = font_bold.getbbox(unit_label_temp)
-    unit_temp_rotated_w = (unit_temp_bbox[3] - unit_temp_bbox[1]) + 2
-    unit_temp_x = plot_x0 - 10 - unit_temp_rotated_w
-    _vertical_text(image, (unit_temp_x, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
     # "Regen [mm]" is centered on the decimal point of the rain-axis-max
     # number (e.g. the "." in "4.5") when it has one, so the two read as
     # visually aligned rather than the label just trailing off to the
@@ -156,10 +166,11 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         regen_x = plot_x1 + 10
     _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), regen_label, font_bold, text_color)
 
-    # x-axis hour labels - same cadence as the icon strip below, so each
-    # icon sits directly under its hour's label instead of drifting out of
-    # sync with a differently-stepped label grid
+    # x-axis hour labels + tick marks - same cadence as the icon strip
+    # below, so each icon sits directly under its hour's label instead of
+    # drifting out of sync with a differently-stepped label grid
     for i in range(0, n, graph_icon_step):
+        draw.line([(xs[i], plot_y1), (xs[i], plot_y1 + 4)], fill=text_color, width=2)
         draw.text((xs[i], plot_y1 + 6), hourly[i].time_label, font=font_small, fill=text_color, anchor="ma")
 
     # hourly/sun-event icon strip, at a fixed row below the plot (matches the
