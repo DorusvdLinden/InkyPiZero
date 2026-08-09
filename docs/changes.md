@@ -257,10 +257,12 @@ can't reliably guarantee a hailstorm on any given test run).
 
 ---
 
-## Leftover branches worth pruning
+## Pruned branches
 
-- `real-icons` (local) - fully merged (entry 2) via PR #1, zero commits
-  ahead of `main`. Safe to delete, purely historical.
-- `display-opt` (local + remote) - zero commits ahead of `main`; its content
-  was merged then explicitly reverted in `main`'s own history (entry 9).
-  Stale, safe to delete.
+- `real-icons` (was local-only) - fully merged (entry 2) via PR #1, zero
+  commits ahead of `main`, purely historical. Deleted 2026-08-09.
+- `display-opt` (was local + remote) - zero commits ahead of `main`; its
+  content was merged then explicitly reverted in `main`'s own history
+  (entry 9). Deleted 2026-08-09, locally and on origin.
+
+`main` is now the only branch, locally and on origin.
