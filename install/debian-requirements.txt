@@ -5,3 +5,5 @@ libjpeg-dev
 libfreetype6-dev
 zlib1g-dev
 libopenblas0
+hostapd
+dnsmasq-base
