@@ -190,3 +190,5 @@ Only drawn on forecast cards, gated by `config.show_moon_phase` (default
   thunderstorm-with-hail (WMO 96/99) shares `11d` with plain thunderstorm
   (95). The chart's precipitation *axis label* does distinguish hail (see
   [changes.md](./changes.md)), but the hourly icon strip does not.
+  erikflowers/weather-icons has `wi-hail`/`wi-day-hail`/`wi-night-alt-hail`
+  source SVGs available to close this gap - see `TODO.md`.
