@@ -31,8 +31,29 @@ python main.py --mock-output output.png
 - **Test different locations/conditions** - edit the `DisplayConfig`
   defaults in `config.py` (or construct one with different
   `latitude`/`longitude` in a throwaway script) and rerun
+- **Try a different screen mode/layout locally** - `--screen-mode
+  {original,gridlines,compact}` and `--compact-style
+  {icon_left,icon_above,icon_above_row}` override the button-persisted
+  choice for one render, e.g. `python main.py --mock-output output.png
+  --screen-mode compact`. See [settings.md](./settings.md) for every
+  option, and what the physical buttons do.
 - **Debug data parsing** - `weather_data.fetch_snapshot()` hits the live
   Open-Meteo API directly; add a `print()`/breakpoint and rerun
+
+## Regression testing
+
+- `python scripts/test_locations.py` - renders 14 diverse real locations
+  (hot/cold/rain/snow/night/zero-crossing temps/etc.) in all three screen
+  modes via the real fetch -> render pipeline. Run after any change to
+  `widgets/`, `canvas.py`, `layout.py`, or `weather_data.py`.
+- `python scripts/test_precip_scenarios.py` - covers the chart's
+  precipitation axis label (rain/hail/snow/dry) via crafted fixtures,
+  since live weather can't reliably guarantee all four (a hailstorm
+  especially) on any given run.
+
+Both save their renders to `mock_display_output/` for visual review - see
+[icons.md](./icons.md) and [changes.md](./changes.md) for the rest of the
+project's reference docs.
 
 ## Development Tips
 
