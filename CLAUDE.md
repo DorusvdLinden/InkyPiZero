@@ -24,16 +24,35 @@ automatically, without being asked each time.
 
 - **Always test the 14 locations**: `python scripts/test_locations.py` renders 14
   diverse real locations (hot/cold/rain/snow/night/zero-crossing temps/etc.) via the
-  real fetch -> render pipeline, saving each to
+  real fetch -> render pipeline, in **all three screen modes**
+  (original/gridlines/compact), saving each to
   `mock_display_output/location_consistency_test/`. Run this after every change to the
   rendering pipeline (`widgets/`, `canvas.py`, `layout.py`, `weather_data.py`) to check
   for regressions before considering the change done. Do this automatically, without
   being asked each time.
+- **Always test the precipitation scenarios**: `python scripts/test_precip_scenarios.py`
+  covers the chart's precipitation axis label (rain/hail/snow/dry) via crafted
+  Open-Meteo fixtures rather than live weather, since live data can't reliably
+  guarantee all four on any given run (a hailstorm especially). Saves to
+  `mock_display_output/precip_scenario_test/`. Run this after any change to
+  `weather_data.py`'s precipitation classification or `widgets/chart.py`'s axis-label
+  rendering, alongside the 14-location test above.
 
 ## Bugs / ideas tracking
 
 - `TODO.md` tracks known bugs and polish items. Add to it when something rough turns up;
   check items off (don't delete them) once fixed.
+- `docs/settings.md`, `docs/icons.md`, and `docs/changes.md` are maintained
+  documentation, not one-off snapshots - **update them whenever the change you're making
+  touches what they cover**, do this automatically without being asked:
+  - `docs/settings.md` - any new/renamed/removed option or changed default, whether
+    exposed via the physical buttons or via `config.py`/CLI flags.
+  - `docs/icons.md` - any new icon, changed call-site size, or changed weather-code
+    mapping.
+  - `docs/changes.md` - append a new numbered entry for each major change (not minor
+    tweaks/fixes); when a change supersedes an earlier one, go back and mark the
+    earlier entry outdated (pointing at the new entry number) rather than leaving it
+    looking current.
 
 ## Install procedure
 
