@@ -112,8 +112,14 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
             y = y_temp(v)
             _dotted_horizontal(draw, y, plot_x0, plot_x1, PALETTE.chart_zero_line)
             if v != min_temp and v != max_temp:
+                # shifted left by the pixel width of the axis-extreme labels'
+                # unit suffix ("C"/"F"/"K", not present here) so the numbers
+                # themselves line up in a column - a space character isn't
+                # the same width as the letter it's standing in for, so
+                # padding with literal spaces would leave them misaligned.
                 label = f"{v}°" if unit_label_temp != "K" else str(v)
-                draw.text((plot_x0 - 6, y), label, font=font_bold, fill=PALETTE.chart_zero_line, anchor="rm")
+                unit_w = font_bold.getbbox(unit_label_temp)[2]
+                draw.text((plot_x0 - 6 - unit_w, y), label, font=font_bold, fill=PALETTE.chart_zero_line, anchor="rm")
             v += 10
     else:
         # dashed actual min/max lines - skip whichever one exactly coincides
