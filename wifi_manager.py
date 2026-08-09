@@ -140,9 +140,16 @@ def ap_credentials() -> tuple[str, str]:
 
 def ensure_ap_mode() -> tuple[str, str]:
     """Creates the AP profile if needed and activates it. Returns (ssid,
-    password) for display on the e-paper setup screen."""
+    password) for display on the e-paper setup screen.
+
+    Uses a longer timeout than most nmcli calls: bringing up shared/AP mode
+    means NetworkManager also has to stand up its own internal DHCP/NAT for
+    the interface, not just associate - confirmed empirically on a real Pi
+    Zero W taking noticeably longer than the default 15s (still mid
+    "connecting (configuring)" at that point), which previously made this
+    raise before the AP had actually finished coming up."""
     ssid, password = _ensure_ap_profile_exists()
-    _nmcli("connection", "up", AP_PROFILE_NAME)
+    _nmcli("connection", "up", AP_PROFILE_NAME, timeout=45)
     return ssid, password
 
 
