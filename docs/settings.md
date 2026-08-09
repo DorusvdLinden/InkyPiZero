@@ -1,9 +1,11 @@
 # Settings & Options
 
 Reference for every user-facing option in InkyPiZero: what it does, where it
-lives, and how to change it. There's no web UI (see [README.md](../README.md))
-so "GUI" here means the four physical buttons on the back of the Inky
-Impression - everything else is a source-code edit.
+lives, and how to change it. There are three ways to change settings, in
+increasing order of how much they cover: the four physical buttons (screen
+mode only), the always-on web UI (every `config.py` field, plus WiFi/
+shutdown), and editing `config.py` directly in source (everything, but
+requires a `git pull` on the device to take effect).
 
 Keep this file up to date whenever a setting is added, renamed, removed, or
 its default changes - see the standing rule in [CLAUDE.md](../CLAUDE.md).
@@ -43,11 +45,43 @@ runs, so this is how the choice survives across renders).
 If the state file is missing or contains something outside `VALID_MODES`,
 `get_mode()` falls back to `DEFAULT_MODE`.
 
+## Via the web UI (`web_app.py`, always-on)
+
+A small always-on Flask service (`pi-weather-web.service`), reachable at
+`http://<device IP>:8080`, running completely independently of the render
+timer - see [networking.md](./networking.md) for the network-mode
+architecture underneath it. No authentication anywhere (matches button A's
+existing unauthenticated-shutdown precedent) - trusted-LAN-only by design.
+
+| Page | What it does |
+|---|---|
+| `/` | Status overview (current WiFi mode, current screen mode) + links |
+| `/settings` | Every `config.py`/`DisplayConfig` field below, as a form |
+| `/wifi` | Add/edit/remove saved WiFi networks (never auto-removes existing ones) |
+| `/shutdown` | Same action as physical button A, with a confirmation step |
+
+Settings saved here are written to
+`/var/lib/pi-weather-display/settings.json` (`settings_store.py`) rather
+than editing `config.py` itself - `main.py` loads this file as an overlay
+on top of `config.py`'s dataclass defaults (`settings_store.load_config()`),
+so a missing file or an individual invalid field just falls back to the
+matching default instead of ever breaking a render. Saving triggers an
+immediate re-render, the same `systemctl start pi-weather-display.service`
+precedent the physical buttons already use.
+
+If no known WiFi network is reachable, the device instead hosts its own
+setup AP and shows the SSID/password/URL directly on the e-paper display -
+see [networking.md](./networking.md) for the full AP-hosting design
+(hostapd-based, not NetworkManager's native hotspot - that was tried first
+and reproducibly failed on this hardware).
+
 ## Via code (`config.py` - `DisplayConfig`)
 
-No config file or environment variables - `config.py`'s `DisplayConfig`
-dataclass is edited directly in source (installer prints a reminder to do
-this on first setup). All fields:
+`config.py`'s `DisplayConfig` dataclass defaults are the fallback for
+anything not overridden by a saved `settings.json` (see above) - edited
+directly in source for a change that should apply device-wide with no web
+UI involved (installer prints a reminder to do this on first setup). All
+fields:
 
 | Field | Default | Effect |
 |---|---|---|
