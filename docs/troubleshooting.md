@@ -14,6 +14,27 @@ Check the most recent run of the render itself:
 systemctl status pi-weather-display.service
 ```
 
+## Buttons not switching screen mode
+
+Unlike the render timer, the button listener is a persistent service, so it
+should show `Active: active (running)`, not "waiting":
+```bash
+systemctl status pi-weather-buttons.service
+```
+
+View its logs (button presses are logged as they happen):
+```bash
+journalctl -u pi-weather-buttons.service -f
+```
+
+If the service is running but a specific button (B/C/D) doesn't do
+anything, note that only button A's GPIO pin has been individually
+hardware-confirmed on the reference board - see the `TODO.md` entry on this.
+Check the currently-persisted mode directly:
+```bash
+cat /var/lib/pi-weather-display/screen_mode
+```
+
 ## Debugging
 
 View the latest logs:
@@ -79,9 +100,9 @@ palette and dithering.
 
 There's no Settings page here - image/saturation adjustments are made
 directly in `config.py` (see [settings.md](./settings.md) for every option).
-The `inky_saturation` field
-controls the saturation of the palette the image is dithered to by the
-`inky` library; try `0` first, which tends to improve image quality. See
+The `inky_saturation` field controls the saturation of the palette the image
+is dithered to by the `inky` library; try `0` first, which tends to improve
+image quality. See
 [this response](https://github.com/pimoroni/inky/issues/225#issuecomment-3213935144)
 from the Pimoroni team for more details.
 

@@ -19,7 +19,8 @@
         - Set username & password
             - Do not use the default username and password on a Raspberry PI as this poses a security risk
         - Configure wireless LAN to your network
-            - The InkyPi web server will only be accessible to devices on this network
+            - This is also the network you'll SSH in over - there's no web
+              server to reach (see the main [README](../README.md))
         - Set local settings to your Time zone
     - Service:
         - Enable SSH:
@@ -33,3 +34,48 @@
 </p>
 
 4. Click Yes to apply OS customization options and confirm
+
+## Installing InkyPiZero
+
+5. SSH into the Pi using the hostname/credentials set above:
+    ```bash
+    ssh <username>@<hostname>.local
+    ```
+6. Clone the repository and run the installer:
+    ```bash
+    git clone https://github.com/DorusvdLinden/InkyPiZero.git
+    cd InkyPiZero
+    sudo bash install/install.sh
+    ```
+    This creates its own Python virtual environment
+    (`/usr/local/pi-weather-display/venv`), enables the SPI/I2C interfaces
+    the Inky display needs, and installs two systemd units: a
+    `pi-weather-display.timer` that renders and pushes to the display every
+    10 minutes, and a persistent `pi-weather-buttons.service` that listens
+    for the four physical buttons on the back of the panel.
+7. Reboot if the installer enabled SPI/I2C for the first time (only needed
+   on a fresh install, not on reinstalls/updates).
+
+## Configuring your location and settings
+
+There's no web UI - **edit `config.py`** directly (before or after
+installing) to set your location (`latitude`/`longitude`) and every other
+preference. See [settings.md](./settings.md) for the full reference of every
+option, both the ones edited in `config.py`/passed as CLI flags and the ones
+controlled live via the four physical buttons on the back of the display.
+
+Changes to `config.py` take effect on the next render - no service restart
+needed, or force one immediately:
+```bash
+sudo systemctl start pi-weather-display.service
+```
+
+## Verifying the install
+
+```bash
+systemctl status pi-weather-display.timer     # confirm the render timer is active
+journalctl -u pi-weather-display.service      # view render logs
+systemctl status pi-weather-buttons.service   # confirm the button listener is active
+```
+
+If something looks wrong, see [troubleshooting.md](./troubleshooting.md).
