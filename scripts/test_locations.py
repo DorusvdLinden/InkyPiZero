@@ -1,11 +1,14 @@
 """Consistency test across diverse locations/weather/times - not part of the
-app. Renders each location with the real fetch->render pipeline and saves to
-mock_display_output/location_consistency_test/ with a descriptive name,
-catching (not silencing) any exception per-location so one bad location
-doesn't stop the rest.
+app. Fetches each location once via the real fetch->render pipeline, then
+renders it in all three screen modes (original/gridlines/compact) and saves
+each to mock_display_output/location_consistency_test/ with a descriptive
+name, catching (not silencing) any exception per-location so one bad
+location doesn't stop the rest.
 
 Run after any change to the rendering pipeline (widgets/, canvas.py,
-layout.py, weather_data.py) to check for regressions - see CLAUDE.md.
+layout.py, weather_data.py) to check for regressions - see CLAUDE.md. See
+also test_precip_scenarios.py, which covers the precipitation-label
+rain/hail/snow/dry cases that live weather can't reliably guarantee.
 """
 
 import os
@@ -17,8 +20,14 @@ sys.path.insert(0, REPO_DIR)
 os.chdir(REPO_DIR)
 
 from config import DisplayConfig
-from main import render
+from weather_data import fetch_snapshot
+from canvas import WeatherCanvas
+from widgets.icons import AssetStore
 from display.mock_driver import MockDriver
+import display_mode
+
+ICON_DIR = os.path.join(REPO_DIR, "assets", "icons")
+FONT_DIR = os.path.join(REPO_DIR, "assets", "fonts")
 
 # name, lat, lon, timezone, units, notes
 LOCATIONS = [
@@ -38,16 +47,22 @@ LOCATIONS = [
     ("bariloche_argentina", -41.1335, -71.3103, "America/Argentina/Buenos_Aires", "metric", "hourly temps cross zero (both + and -)"),
 ]
 
+SCREEN_MODES = sorted(display_mode.VALID_MODES)
+
 OUT_DIR = os.path.join(REPO_DIR, "mock_display_output", "location_consistency_test")
 os.makedirs(OUT_DIR, exist_ok=True)
+
+assets = AssetStore(ICON_DIR, FONT_DIR)
 
 results = []
 for name, lat, lon, tz, units, notes in LOCATIONS:
     config = DisplayConfig(latitude=lat, longitude=lon, timezone=tz, units=units)
-    out_path = os.path.join(OUT_DIR, f"{name}.png")
     try:
-        image = render(config)
-        MockDriver(out_path).show(image)
+        data = fetch_snapshot(config)
+        for mode in SCREEN_MODES:
+            image = WeatherCanvas(assets, config, mode).render(data)
+            out_path = os.path.join(OUT_DIR, f"{name}_{mode}.png")
+            MockDriver(out_path).show(image)
         results.append((name, "OK", notes))
         print(f"OK    {name:28s} {notes}")
     except Exception as e:
