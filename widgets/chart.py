@@ -128,12 +128,13 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.line([(plot_x1, plot_y0), (plot_x1, plot_y1)], fill=text_color, width=2)
     draw.line([(plot_x0, plot_y1), (plot_x1, plot_y1)], fill=text_color, width=2)
 
-    # vertical dotted line marking the day boundary, at the edge between
-    # the last hour of one date and the first hour of the next (not
-    # centered on either hour's own column)
+    # vertical dotted line marking the day boundary, aligned with the new
+    # day's own hour (00:00's tick/label position, i.e. xs[i]) rather than
+    # the geometric edge between the two hours' columns, so it visibly
+    # lines up with whichever tick/label is actually on screen for it.
     for i, hour in enumerate(hourly):
         if hour.is_day_start:
-            date_x = plot_x0 + band * i
+            date_x = xs[i]
             y = plot_y0
             while y < plot_y1:
                 draw.line([(date_x, y), (date_x, min(y + 5, plot_y1))], fill=text_color, width=2)
