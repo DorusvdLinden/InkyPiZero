@@ -49,7 +49,7 @@ def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
 
 
 def render_chart(image: Image.Image, region, hourly, sun_events, text_color, icon_lookup,
-                  graph_icon_step, font_small, font_bold, unit_label_temp, unit_label_rain,
+                  graph_icon_step, font_small, font_bold, unit_label_temp, precip_label,
                   show_temp_gridlines: bool = False):
     draw = ImageDraw.Draw(image)
     n = len(hourly)
@@ -178,20 +178,21 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_bold, fill=text_color, anchor="lm")
     draw.text((plot_x1 + 6, y_rain(0)), "0", font=font_bold, fill=text_color, anchor="lm")
 
-    # "Regen [mm]" is centered on the decimal point of the rain-axis-max
+    # The precipitation label ("Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" /
+    # "Droog" - picked in weather_data.py based on the hourly window's actual
+    # weather codes) is centered on the decimal point of the rain-axis-max
     # number (e.g. the "." in "4.5") when it has one, so the two read as
     # visually aligned rather than the label just trailing off to the
     # right of it. Whole numbers ("1"/"0") have no "." to align to, so
     # fall back to a flat 2mm (~10px) gap off the axis line.
-    regen_label = f"Regen [{unit_label_rain}]"
-    regen_bbox = font_bold.getbbox(regen_label)
+    regen_bbox = font_bold.getbbox(precip_label)
     regen_rotated_w = (regen_bbox[3] - regen_bbox[1]) + 2
     dot_offset = _decimal_point_center_x(rain_max_label, font_bold)
     if dot_offset is not None:
         regen_x = plot_x1 + 6 + dot_offset - regen_rotated_w / 2
     else:
         regen_x = plot_x1 + 10
-    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), regen_label, font_bold, text_color)
+    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), precip_label, font_bold, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip
     # below, so each icon sits directly under its hour's label instead of
