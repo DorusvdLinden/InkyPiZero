@@ -97,11 +97,11 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 - `main.py` - fetch -> render -> display, no scheduling loop of its own
   (that's the systemd timer's job)
 - `button_listener.py` - listens for the physical buttons: A (GPIO5) blanks
-  the screen + powers off, B/D (GPIO6/24) switch the active screen layout
-  (`display_mode.py`) and trigger an immediate re-render; unlike `main.py`
-  this runs as its own persistent `pi-weather-buttons.service`, since a
-  button press can happen anytime
-- `display_mode.py` - persists which screen layout (B/D button choice) is
+  the screen + powers off, B/C/D (GPIO6/16/24) switch the active screen
+  layout (`display_mode.py`) and trigger an immediate re-render; unlike
+  `main.py` this runs as its own persistent `pi-weather-buttons.service`,
+  since a button press can happen anytime
+- `display_mode.py` - persists which screen layout (B/C/D button choice) is
   currently selected, since `main.py` is a one-shot timer job with no
   memory between renders
 - `TODO.md` - known bugs and rough edges

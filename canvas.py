@@ -201,6 +201,7 @@ class WeatherCanvas:
             lambda key, size: self.assets.icon(key, size), self.config.graph_icon_step,
             self.assets.font("normal", 13), self.assets.font("bold", 14),
             temp_unit_label, rain_unit_label,
+            show_temp_gridlines=(self.screen_mode == "gridlines"),
         )
 
     def _draw_forecast_row(self, image, data: WeatherSnapshot):

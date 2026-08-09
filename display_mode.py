@@ -1,4 +1,4 @@
-"""Tracks which screen layout is currently selected via the physical B/D
+"""Tracks which screen layout is currently selected via the physical B/C/D
 buttons on the back of the Inky Impression - persisted to a small state
 file since main.py runs as a one-shot timer job, not a long-running
 process, so it can't just hold the choice in memory between renders.
@@ -9,8 +9,8 @@ import os
 
 STATE_PATH = "/var/lib/pi-weather-display/screen_mode"
 
-DEFAULT_MODE = "original"
-VALID_MODES = {"original", "compact"}
+DEFAULT_MODE = "gridlines"
+VALID_MODES = {"original", "gridlines", "compact"}
 
 
 def get_mode() -> str:

@@ -2,9 +2,11 @@
 Impression and responds accordingly:
   - Button A blanks the display and shuts the Pi down.
   - Button B switches to the "original" screen layout.
+  - Button C switches to the "gridlines" screen layout (10deg reference
+    grid instead of the day's actual min/max lines) - the default.
   - Button D switches to the "compact" screen layout (4 details instead
     of 6 - see Ideas.md "third option display").
-Both B/D trigger an immediate re-render so the new layout shows right
+B/C/D all trigger an immediate re-render so the new layout shows right
 away, rather than waiting for the next scheduled timer tick.
 
 Unlike main.py, this needs to run continuously in the background rather
@@ -14,8 +16,8 @@ separate from the periodic render timer.
 
 GPIO pin numbers follow Pimoroni's standard 4-button layout for the Inky
 Impression (A=5, B=6, C=16, D=24) - A was confirmed via a live probe during
-initial install; B/D are the same standard mapping but not yet confirmed on
-this specific board."""
+initial install; B/C/D are the same standard mapping but not yet confirmed
+on this specific board."""
 
 import logging
 from datetime import timedelta
@@ -33,7 +35,7 @@ from display.inky_driver import InkyDriver
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-BUTTON_GPIO = {"A": 5, "B": 6, "D": 24}
+BUTTON_GPIO = {"A": 5, "B": 6, "C": 16, "D": 24}
 DEBOUNCE_MS = 50
 
 
@@ -76,6 +78,8 @@ def main():
                 return
             elif label == "B":
                 switch_mode("original")
+            elif label == "C":
+                switch_mode("gridlines")
             elif label == "D":
                 switch_mode("compact")
 
