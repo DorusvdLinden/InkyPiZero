@@ -5,11 +5,15 @@ automatically, without being asked each time.
 
 ## Dev environment
 
-- No dev server, no web UI. Test locally by rendering to a file:
-  `python main.py --mock-output <path>` (Windows: `.\venv\Scripts\python.exe main.py
-  --mock-output <path>`).
+- The renderer itself has no dev server - `main.py` is a one-shot script. Test locally by
+  rendering to a file: `python main.py --mock-output <path>` (Windows:
+  `.\venv\Scripts\python.exe main.py --mock-output <path>`).
 - This runs the real fetch -> render pipeline against live Open-Meteo data; no mocking of
   the interesting logic, only the final display step is swapped out.
+- The settings/WiFi-management web UI (`web_app.py`) is a separate, persistent Flask app -
+  test it locally with `python web_app.py` (works cross-platform; `wifi_manager.py`'s
+  `nmcli`/`hostapd`/`systemctl` calls degrade gracefully with a logged warning on machines
+  without NetworkManager, e.g. Windows dev). See [docs/networking.md](./docs/networking.md).
 
 ## Visual/icon mockups
 

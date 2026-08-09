@@ -13,14 +13,16 @@
 3. Click Next and choose Edit Settings on the Use OS customization? screen
     - General:
         - Set hostname: enter your desired hostname
-            -  This will be used to ssh into the device on your network
-               (there's no web UI to access - see the main
-               [README](../README.md)).
+            -  This will be used to SSH into the device to install
+               InkyPiZero (see below) - there's no web UI to reach until
+               after that's done.
         - Set username & password
             - Do not use the default username and password on a Raspberry PI as this poses a security risk
         - Configure wireless LAN to your network
-            - This is also the network you'll SSH in over - there's no web
-              server to reach (see the main [README](../README.md))
+            - This is also the network you'll SSH in over, and that the
+              always-on settings web UI will be reachable on once installed
+              (see [Configuring your location and settings](#configuring-your-location-and-settings)
+              below)
         - Set local settings to your Time zone
     - Service:
         - Enable SSH:
@@ -49,23 +51,34 @@
     ```
     This creates its own Python virtual environment
     (`/usr/local/pi-weather-display/venv`), enables the SPI/I2C interfaces
-    the Inky display needs, and installs two systemd units: a
+    the Inky display needs, and installs several systemd units: a
     `pi-weather-display.timer` that renders and pushes to the display every
-    10 minutes, and a persistent `pi-weather-buttons.service` that listens
-    for the four physical buttons on the back of the panel.
+    10 minutes, a persistent `pi-weather-buttons.service` that listens for
+    the four physical buttons on the back of the panel, and a persistent
+    `pi-weather-web.service` serving the settings/WiFi-management web UI
+    (`hostapd`/`pi-weather-ap-dnsmasq` are also installed but only run
+    on-demand, when hosting a WiFi setup AP - see
+    [networking.md](./networking.md)).
 7. Reboot if the installer enabled SPI/I2C for the first time (only needed
    on a fresh install, not on reinstalls/updates).
 
 ## Configuring your location and settings
 
-There's no web UI - **edit `config.py`** directly (before or after
-installing) to set your location (`latitude`/`longitude`) and every other
-preference. See [settings.md](./settings.md) for the full reference of every
-option, both the ones edited in `config.py`/passed as CLI flags and the ones
-controlled live via the four physical buttons on the back of the display.
+Once installed, set your location (`latitude`/`longitude`) and every other
+preference from the always-on web UI at `http://<device IP>:8080/settings`
+- reachable on the same WiFi network configured above. Alternatively, edit
+`config.py` directly in the git checkout (before or after installing) for a
+change that should apply with no web UI involved. See
+[settings.md](./settings.md) for the full reference of every option and how
+the physical buttons/web UI/`config.py`/CLI flags relate.
 
-Changes to `config.py` take effect on the next render - no service restart
-needed, or force one immediately:
+If the device can't reach a known WiFi network at all (e.g. you skipped
+setting one up via Raspberry Pi Imager), it hosts its own setup AP instead
+and shows the connect details directly on the e-paper display - see
+[networking.md](./networking.md).
+
+Changes take effect on the next render - no service restart needed, or
+force one immediately:
 ```bash
 sudo systemctl start pi-weather-display.service
 ```
@@ -76,6 +89,7 @@ sudo systemctl start pi-weather-display.service
 systemctl status pi-weather-display.timer     # confirm the render timer is active
 journalctl -u pi-weather-display.service      # view render logs
 systemctl status pi-weather-buttons.service   # confirm the button listener is active
+systemctl status pi-weather-web.service       # confirm the settings/WiFi web UI is active
 ```
 
 If something looks wrong, see [troubleshooting.md](./troubleshooting.md).
