@@ -38,9 +38,9 @@ SERVICE_FILE_SOURCE="$SCRIPT_DIR/$APPNAME.service"
 SERVICE_FILE_TARGET="/etc/systemd/system/$APPNAME.service"
 TIMER_FILE_SOURCE="$SCRIPT_DIR/$APPNAME.timer"
 TIMER_FILE_TARGET="/etc/systemd/system/$APPNAME.timer"
-SHUTDOWN_APPNAME="pi-weather-shutdown"
-SHUTDOWN_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$SHUTDOWN_APPNAME.service"
-SHUTDOWN_SERVICE_FILE_TARGET="/etc/systemd/system/$SHUTDOWN_APPNAME.service"
+BUTTONS_APPNAME="pi-weather-buttons"
+BUTTONS_SERVICE_FILE_SOURCE="$SCRIPT_DIR/$BUTTONS_APPNAME.service"
+BUTTONS_SERVICE_FILE_TARGET="/etc/systemd/system/$BUTTONS_APPNAME.service"
 
 echo_success() {
   echo -e "$1 [\e[32m\xE2\x9C\x94\e[0m]"
@@ -111,17 +111,17 @@ install_app() {
 
 install_service() {
   echo "Installing $APPNAME systemd service and timer."
-  if [ ! -f "$SERVICE_FILE_SOURCE" ] || [ ! -f "$TIMER_FILE_SOURCE" ] || [ ! -f "$SHUTDOWN_SERVICE_FILE_SOURCE" ]; then
+  if [ ! -f "$SERVICE_FILE_SOURCE" ] || [ ! -f "$TIMER_FILE_SOURCE" ] || [ ! -f "$BUTTONS_SERVICE_FILE_SOURCE" ]; then
     echo_error "ERROR: Service/timer files not found in $SCRIPT_DIR!"
     exit 1
   fi
   cp "$SERVICE_FILE_SOURCE" "$SERVICE_FILE_TARGET"
   cp "$TIMER_FILE_SOURCE" "$TIMER_FILE_TARGET"
-  cp "$SHUTDOWN_SERVICE_FILE_SOURCE" "$SHUTDOWN_SERVICE_FILE_TARGET"
+  cp "$BUTTONS_SERVICE_FILE_SOURCE" "$BUTTONS_SERVICE_FILE_TARGET"
   systemctl daemon-reload
   systemctl enable --now "$APPNAME.timer"
-  systemctl enable --now "$SHUTDOWN_APPNAME.service"
-  echo_success "\tService, timer, and shutdown-button listener installed and started."
+  systemctl enable --now "$BUTTONS_APPNAME.service"
+  echo_success "\tService, timer, and button listener installed and started."
 }
 
 check_permissions

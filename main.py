@@ -10,6 +10,7 @@ from config import DisplayConfig
 from weather_data import fetch_snapshot
 from canvas import WeatherCanvas
 from widgets.icons import AssetStore
+import display_mode
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -19,21 +20,25 @@ ICON_DIR = os.path.join(BASE_DIR, "assets", "icons")
 FONT_DIR = os.path.join(BASE_DIR, "assets", "fonts")
 
 
-def render(config: DisplayConfig):
+def render(config: DisplayConfig, screen_mode: str | None = None):
     assets = AssetStore(ICON_DIR, FONT_DIR)
     logger.info("Fetching weather data")
     data = fetch_snapshot(config)
     logger.info("Rendering canvas")
-    return WeatherCanvas(assets, config).render(data)
+    if screen_mode is None:
+        screen_mode = display_mode.get_mode()
+    return WeatherCanvas(assets, config, screen_mode).render(data)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Render and display the current weather snapshot.")
     parser.add_argument("--mock-output", help="Save the render to this file instead of driving a real Inky display.")
+    parser.add_argument("--screen-mode", choices=sorted(display_mode.VALID_MODES),
+                         help="Override the button-selected screen mode (for local testing).")
     args = parser.parse_args()
 
     config = DisplayConfig()
-    image = render(config)
+    image = render(config, screen_mode=args.screen_mode)
 
     if args.mock_output:
         from display.mock_driver import MockDriver

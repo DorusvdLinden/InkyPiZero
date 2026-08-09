@@ -66,7 +66,7 @@ Useful commands after installing:
 systemctl status pi-weather-display.timer     # confirm the timer is active
 journalctl -u pi-weather-display.service      # view render logs
 sudo systemctl start pi-weather-display.service  # force an immediate render
-systemctl status pi-weather-shutdown.service  # confirm the button listener is active
+systemctl status pi-weather-buttons.service   # confirm the button listener is active
 ```
 
 To update: `git pull` then rerun `sudo bash install/install.sh` (safe to
@@ -96,9 +96,14 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   edited directly in source, since there's no web UI
 - `main.py` - fetch -> render -> display, no scheduling loop of its own
   (that's the systemd timer's job)
-- `shutdown_button.py` - listens for button A (GPIO5) and blanks the screen +
-  powers off; unlike `main.py` this runs as its own persistent
-  `pi-weather-shutdown.service`, since a button press can happen anytime
+- `button_listener.py` - listens for the physical buttons: A (GPIO5) blanks
+  the screen + powers off, B/C (GPIO6/16) switch the active screen layout
+  (`display_mode.py`) and trigger an immediate re-render; unlike `main.py`
+  this runs as its own persistent `pi-weather-buttons.service`, since a
+  button press can happen anytime
+- `display_mode.py` - persists which screen layout (B/C button choice) is
+  currently selected, since `main.py` is a one-shot timer job with no
+  memory between renders
 - `TODO.md` - known bugs and rough edges
 
 Chosen over an ESP32-S3/embedded-C rewrite because it reuses Pimoroni's

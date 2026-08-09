@@ -41,8 +41,16 @@ def _vertical_text(draw_target: Image.Image, position, text, font, color):
     draw_target.paste(rotated, (int(x), int(y - rotated.height // 2)), rotated)
 
 
+def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
+    x = plot_x0
+    while x < plot_x1:
+        draw.line([(x, y), (min(x + 5, plot_x1), y)], fill=color, width=width)
+        x += 9
+
+
 def render_chart(image: Image.Image, region, hourly, sun_events, text_color, icon_lookup,
-                  graph_icon_step, font_small, font_bold, unit_label_temp, unit_label_rain):
+                  graph_icon_step, font_small, font_bold, unit_label_temp, unit_label_rain,
+                  show_temp_gridlines: bool = False):
     draw = ImageDraw.Draw(image)
     n = len(hourly)
     if n == 0:
@@ -90,38 +98,45 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         color = PALETTE.chart_warm if (t1 + t2) >= 0 else PALETTE.chart_cool
         draw.line([(x1, y1), (x2, y2)], fill=color, width=5, joint="curve")
 
-    # dashed actual min/max lines - skip whichever one exactly coincides
-    # with its axis extreme (min_temp/max_temp clamp to 0, so e.g. the min
-    # line sits exactly on the bottom axis whenever the actual low is
-    # <=0deg) - the axis's own value label already shows that number, so a
-    # second dashed line+label right on top of it is pure redundancy.
-    dashed_lines = []
-    if actual_max != max_temp:
-        dashed_lines.append((actual_max, PALETTE.chart_warm if actual_max >= 0 else PALETTE.chart_cool))
-    if actual_min != min_temp:
-        dashed_lines.append((actual_min, PALETTE.chart_warm if actual_min >= 0 else PALETTE.chart_cool))
-    for value, color in dashed_lines:
-        y = y_temp(value)
-        x = plot_x0
-        while x < plot_x1:
-            draw.line([(x, y), (min(x + 5, plot_x1), y)], fill=color, width=2)
-            x += 9
-        label_dy = 14 if (plot_y1 - y) > 20 else -14
-        label = f"{value}°" if unit_label_temp != "K" else str(value)
-        draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
+    if show_temp_gridlines:
+        # "Screen B" alternate: a uniform reference grid every 10deg across
+        # the whole visible range, instead of calling out the day's actual
+        # min/max - no per-line text labels (would get crowded with 3-6
+        # lines depending on the day's range), the y-axis extremes already
+        # convey the scale.
+        grid_start = math.ceil(min_temp / 10) * 10
+        grid_end = math.floor(max_temp / 10) * 10
+        v = grid_start
+        while v <= grid_end:
+            _dotted_horizontal(draw, y_temp(v), plot_x0, plot_x1, PALETTE.chart_zero_line)
+            v += 10
+    else:
+        # dashed actual min/max lines - skip whichever one exactly coincides
+        # with its axis extreme (min_temp/max_temp clamp to 0, so e.g. the min
+        # line sits exactly on the bottom axis whenever the actual low is
+        # <=0deg) - the axis's own value label already shows that number, so a
+        # second dashed line+label right on top of it is pure redundancy.
+        dashed_lines = []
+        if actual_max != max_temp:
+            dashed_lines.append((actual_max, PALETTE.chart_warm if actual_max >= 0 else PALETTE.chart_cool))
+        if actual_min != min_temp:
+            dashed_lines.append((actual_min, PALETTE.chart_warm if actual_min >= 0 else PALETTE.chart_cool))
+        for value, color in dashed_lines:
+            y = y_temp(value)
+            _dotted_horizontal(draw, y, plot_x0, plot_x1, color)
+            label_dy = 14 if (plot_y1 - y) > 20 else -14
+            label = f"{value}°" if unit_label_temp != "K" else str(value)
+            draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
 
-    # black dashed 0deg reference line, only shown when the day actually
-    # dips below freezing (min_temp < 0 means actual_min < 0 too, since
-    # min_temp = min(actual_min, 0)) - without this there'd be no marker
-    # at all for where freezing sits once the axis itself is clamped to
-    # the actual (negative) low instead of 0.
-    if min_temp < 0:
-        x = plot_x0
-        while x < plot_x1:
-            draw.line([(x, y_zero), (min(x + 5, plot_x1), y_zero)], fill=PALETTE.chart_zero_line, width=2)
-            x += 9
-        label_dy = 14 if (plot_y1 - y_zero) > 20 else -14
-        draw.text((plot_x0 + plot_w / 2, y_zero + label_dy), "0°", font=font_bold, fill=PALETTE.chart_zero_line, anchor="mm")
+        # black dashed 0deg reference line, only shown when the day actually
+        # dips below freezing (min_temp < 0 means actual_min < 0 too, since
+        # min_temp = min(actual_min, 0)) - without this there'd be no marker
+        # at all for where freezing sits once the axis itself is clamped to
+        # the actual (negative) low instead of 0.
+        if min_temp < 0:
+            _dotted_horizontal(draw, y_zero, plot_x0, plot_x1, PALETTE.chart_zero_line)
+            label_dy = 14 if (plot_y1 - y_zero) > 20 else -14
+            draw.text((plot_x0 + plot_w / 2, y_zero + label_dy), "0°", font=font_bold, fill=PALETTE.chart_zero_line, anchor="mm")
 
     # axes
     draw.line([(plot_x0, plot_y0), (plot_x0, plot_y1)], fill=text_color, width=2)

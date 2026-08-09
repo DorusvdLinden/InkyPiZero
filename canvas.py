@@ -14,9 +14,10 @@ def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
 
 
 class WeatherCanvas:
-    def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig):
+    def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig, screen_mode: str = "original"):
         self.assets = assets
         self.config = config
+        self.screen_mode = screen_mode
         self.bg = _hex_to_rgb(config.background_color)
         self.text_color = _hex_to_rgb(config.text_color)
 
@@ -138,6 +139,7 @@ class WeatherCanvas:
             lambda key, size: self.assets.icon(key, size), self.config.graph_icon_step,
             self.assets.font("normal", 12), self.assets.font("bold", 12),
             temp_unit_label, rain_unit_label,
+            show_temp_gridlines=(self.screen_mode == "gridlines"),
         )
 
     def _draw_forecast_row(self, image, data: WeatherSnapshot):
