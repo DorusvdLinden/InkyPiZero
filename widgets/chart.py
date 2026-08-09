@@ -9,7 +9,10 @@ from PIL import Image, ImageDraw
 from widgets.icons import thicken_icon
 from widgets.palette import PALETTE
 
-LEFT_MARGIN = 34
+LEFT_MARGIN = 56  # fits a wide axis label ("-36°") plus the "C" label
+# beyond it in gridlines mode - was 34, too tight even for "original"
+# mode's own min_temp label at very negative temps (e.g. McMurdo), just
+# never visibly clipped since nothing else sat that close to the edge.
 RIGHT_MARGIN = 42
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
@@ -101,14 +104,19 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     if show_temp_gridlines:
         # "Screen B" alternate: a uniform reference grid every 10deg across
         # the whole visible range, instead of calling out the day's actual
-        # min/max - no per-line text labels (would get crowded with 3-6
-        # lines depending on the day's range), the y-axis extremes already
-        # convey the scale.
+        # min/max. Each line gets its value labeled at the left axis
+        # (before the line, matching the axis-extreme labels' own
+        # position/style) - skipped when a line exactly coincides with
+        # min_temp/max_temp, since those are already labeled there.
         grid_start = math.ceil(min_temp / 10) * 10
         grid_end = math.floor(max_temp / 10) * 10
         v = grid_start
         while v <= grid_end:
-            _dotted_horizontal(draw, y_temp(v), plot_x0, plot_x1, PALETTE.chart_zero_line)
+            y = y_temp(v)
+            _dotted_horizontal(draw, y, plot_x0, plot_x1, PALETTE.chart_zero_line)
+            if v != min_temp and v != max_temp:
+                label = f"{v}°" if unit_label_temp != "K" else str(v)
+                draw.text((plot_x0 - 6, y), label, font=font_bold, fill=PALETTE.chart_zero_line, anchor="rm")
             v += 10
     else:
         # dashed actual min/max lines - skip whichever one exactly coincides
@@ -151,10 +159,22 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
 
     # mirrors Regen's flat 2mm (~10px) gap off its axis, but on the left
     # axis - measured to the label's near (right) edge, since that's the
-    # edge closest to the axis line.
+    # edge closest to the axis line. A flat gap is only safe because the
+    # axis-extreme labels it needs to clear sit at the plot's top/bottom,
+    # nowhere near this label's own vertical-center position - gridlines
+    # mode adds labels spanning the *whole* range instead, including
+    # right at the center, so it needs to actually clear the widest one.
     unit_temp_bbox = font_bold.getbbox(unit_label_temp)
     unit_temp_rotated_w = (unit_temp_bbox[3] - unit_temp_bbox[1]) + 2
-    unit_temp_x = plot_x0 - 10 - unit_temp_rotated_w
+    if show_temp_gridlines:
+        grid_label_w = max(
+            (font_bold.getbbox(f"{v}°" if unit_label_temp != "K" else str(v))[2]
+             for v in range(grid_start, grid_end + 1, 10)),
+            default=0,
+        )
+        unit_temp_x = plot_x0 - 6 - grid_label_w - 10 - unit_temp_rotated_w
+    else:
+        unit_temp_x = plot_x0 - 10 - unit_temp_rotated_w
     _vertical_text(image, (unit_temp_x, (plot_y0 + plot_y1) // 2), unit_label_temp, font_bold, text_color)
     # "Regen [mm]" is centered on the decimal point of the rain-axis-max
     # number (e.g. the "." in "4.5") when it has one, so the two read as
