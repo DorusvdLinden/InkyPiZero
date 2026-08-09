@@ -13,6 +13,8 @@ SERVICE_FILE="/etc/systemd/system/$APPNAME.service"
 TIMER_FILE="/etc/systemd/system/$APPNAME.timer"
 BUTTONS_APPNAME="pi-weather-buttons"
 BUTTONS_SERVICE_FILE="/etc/systemd/system/$BUTTONS_APPNAME.service"
+WEB_APPNAME="pi-weather-web"
+WEB_SERVICE_FILE="/etc/systemd/system/$WEB_APPNAME.service"
 
 echo_success() {
   echo -e "$1 [\e[32m\xE2\x9C\x94\e[0m]"
@@ -46,9 +48,10 @@ disable_timer() {
   echo "Disabling $APPNAME timer and service."
   systemctl disable --now "$APPNAME.timer" 2>/dev/null || true
   systemctl disable --now "$BUTTONS_APPNAME.service" 2>/dev/null || true
-  rm -f "$SERVICE_FILE" "$TIMER_FILE" "$BUTTONS_SERVICE_FILE"
+  systemctl disable --now "$WEB_APPNAME.service" 2>/dev/null || true
+  rm -f "$SERVICE_FILE" "$TIMER_FILE" "$BUTTONS_SERVICE_FILE" "$WEB_SERVICE_FILE"
   systemctl daemon-reload
-  echo_success "\tTimer, service, and button listener removed."
+  echo_success "\tTimer, service, button listener, and web UI removed."
 }
 
 remove_files() {
