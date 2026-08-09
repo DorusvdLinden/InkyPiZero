@@ -35,8 +35,7 @@ Pi Zero W) that can't comfortably run a headless browser.
     - **[7.3 Inch Display](https://collabs.shop/q2jmza)**
     - **[5.7 Inch Display](https://collabs.shop/ns6m6m)**
     - **[4 Inch Display](https://collabs.shop/cpwtbh)**
-- Picture Frame or 3D Stand - see [community.md](./docs/community.md) for
-  community-submitted 3D models, custom builds, and other frame ideas
+- Picture Frame or 3D Stand
 
 **Disclosure:** The links above are affiliate links (carried over from the
 upstream project this was forked from).
@@ -124,8 +123,6 @@ whole visual layout in C.
   flashing steps
 - [troubleshooting.md](./docs/troubleshooting.md) - common issues and fixes
 - [attribution.md](./docs/attribution.md) - font/icon licensing
-- [community.md](./docs/community.md) - community-submitted 3D
-  models/frames
 - [TODO.md](./TODO.md) - known bugs and rough edges
 
 ## License
