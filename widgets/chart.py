@@ -10,7 +10,7 @@ from widgets.icons import thicken_icon
 from widgets.palette import PALETTE
 
 LEFT_MARGIN = 34
-RIGHT_MARGIN = 64
+RIGHT_MARGIN = 42
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
 ICON_SIZE = 30

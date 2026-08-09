@@ -136,7 +136,7 @@ class WeatherCanvas:
         chart_widget.render_chart(
             image, layout.CHART_AREA, data.hourly, data.sun_events, self.text_color,
             lambda key, size: self.assets.icon(key, size), self.config.graph_icon_step,
-            self.assets.font("normal", 12), self.assets.font("bold", 14),
+            self.assets.font("normal", 13), self.assets.font("bold", 14),
             temp_unit_label, rain_unit_label,
         )
 
