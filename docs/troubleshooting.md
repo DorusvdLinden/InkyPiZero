@@ -55,15 +55,15 @@ Manually import and instantiate the correct Inky module in
 `display/inky_driver.py`. For the 7.3 Inky Impression,
 modify the file as follows:
 ```
-@@ -1,6 +1,6 @@
- import logging
--from inky.auto import auto
-+from inky.inky_ac073tc1a import Inky
- 
+@@ -8,8 +8,8 @@
  class InkyDriver:
      def __init__(self, saturation: float = 0.5):
+-        from inky.auto import auto
++        from inky.inky_ac073tc1a import Inky
+         self.saturation = saturation
 -        self.inky_display = auto()
 +        self.inky_display = Inky()
+         self.inky_display.set_border(self.inky_display.BLACK)
 ```
 
 Then restart the timer:
@@ -78,7 +78,8 @@ e-ink displays, especially on multi-color panels with a limited color
 palette and dithering.
 
 There's no Settings page here - image/saturation adjustments are made
-directly in `config.py`. The `inky_saturation` field
+directly in `config.py` (see [settings.md](./settings.md) for every option).
+The `inky_saturation` field
 controls the saturation of the palette the image is dithered to by the
 `inky` library; try `0` first, which tends to improve image quality. See
 [this response](https://github.com/pimoroni/inky/issues/225#issuecomment-3213935144)

@@ -1,4 +1,4 @@
-# InkyPi Detailed Installation
+# InkyPiZero Detailed Installation
 
 ## Flashing Raspberry Pi OS 
 
@@ -13,7 +13,9 @@
 3. Click Next and choose Edit Settings on the Use OS customization? screen
     - General:
         - Set hostname: enter your desired hostname
-            -  This will be used to ssh into the device & access the InkyPi UI on your network.
+            -  This will be used to ssh into the device on your network
+               (there's no web UI to access - see the main
+               [README](../README.md)).
         - Set username & password
             - Do not use the default username and password on a Raspberry PI as this poses a security risk
         - Configure wireless LAN to your network

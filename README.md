@@ -1,6 +1,6 @@
 # InkyPiZero
 
-<img src="./docs/images/inky_clock.jpg" />
+<img src="./docs/images/sittard_render.png" alt="A real InkyPiZero render for Sittard, NL - the default config.py location, as it appears on the physical panel after quantization" />
 
 ## About
 
@@ -92,8 +92,9 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   hardware
 - `assets/` - the icon PNGs and Jost font files it actually uses (see
   [attribution.md](./docs/attribution.md))
-- `config.py` - a plain dataclass (location, units, refresh interval, etc.) -
-  edited directly in source, since there's no web UI
+- `config.py` - a plain dataclass (location, units, screen mode, etc.) -
+  edited directly in source, since there's no web UI - see
+  [settings.md](./docs/settings.md) for every option
 - `main.py` - fetch -> render -> display, no scheduling loop of its own
   (that's the systemd timer's job)
 - `button_listener.py` - listens for the physical buttons: A (GPIO5) blanks
@@ -110,6 +111,22 @@ Chosen over an ESP32-S3/embedded-C rewrite because it reuses Pimoroni's
 existing `inky` Python display driver unchanged, and reuses the weather
 data-fetch/parsing logic almost verbatim, rather than reimplementing the
 whole visual layout in C.
+
+## Documentation
+
+- [settings.md](./docs/settings.md) - every option/setting, via the physical
+  buttons and via `config.py`/CLI flags
+- [icons.md](./docs/icons.md) - the full icon catalog, with images
+- [changes.md](./docs/changes.md) - numbered log of the project's larger
+  changes, each tagged active/outdated/rejected
+- [development.md](./docs/development.md) - local (no-hardware) development
+- [installation.md](./docs/installation.md) - detailed Raspberry Pi OS
+  flashing steps
+- [troubleshooting.md](./docs/troubleshooting.md) - common issues and fixes
+- [attribution.md](./docs/attribution.md) - font/icon licensing
+- [community.md](./docs/community.md) - community-submitted 3D
+  models/frames
+- [TODO.md](./TODO.md) - known bugs and rough edges
 
 ## License
 
