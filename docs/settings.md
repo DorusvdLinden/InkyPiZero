@@ -54,49 +54,200 @@ pollen indicator (see `docs/changes.md` entry 22) was too easy to read as
 "fine" on a day pollennieuws.nl rated unfavorable, when AQI itself was
 actually fine and pollen was the real story, or vice versa - a single
 combined "how bad is the air for you right now" reading is more useful
-than two cards that can disagree.
+than two cards that can disagree. This section documents exactly how each
+input's raw number becomes a tier, and how the two tiers combine into one.
 
-- **AQI** (`european_aqi`, current-hour reading): `aqi_tier_index =
-  min(int(current_aqi // 20), 5)` - Open-Meteo's own 6-tier scale (Goed/
-  Redelijk/Matig/Slecht/Zeer slecht/Extreem), same as before.
-- **Pollen** (`weather_data._classify_pollen`): all 6 Open-Meteo pollen
-  species (alder, birch, grass, mugwort, olive, ragweed - Europe-only,
-  null outside each species' active season), classified using each
-  species' **peak value anywhere in the current calendar day**
-  (`_value_max_today`, not the exact current-hour reading AQI/UV/humidity
-  use - pollen swings hard hour to hour, so a single instant can sit at a
-  local dip while the rest of the day is a genuine "watch out" day;
-  confirmed against pollennieuws.nl). Returns a 0-3 tier index
-  (Laag/Matig/Hoog/Zeer hoog) plus the driving species summarized to one
-  of 3 broad categories for display (`_pollen_category_nl`, confirmed with
-  the user 2026-08-10) - **Boom** (alder/birch/olive), **Gras** (grass),
-  or **Ambrosia** (mugwort/ragweed - named for the more severe of the two
-  weed species, not a literal per-species mapping) - or `None` if every
-  species is null all day.
-- **Combining** (`weather_data._combine_aqi_pollen_tier`): both inputs map
-  onto one new 4-tier scale, `COMBINED_TIERS = ["Goed", "Matig", "Slecht",
-  "Zeer slecht"]` - a fresh scale chosen (not simply reusing AQI's 6 or
-  pollen's 4 outright) so both inputs can reach every tier symmetrically.
-  AQI's 6 tiers fold onto it via `_AQI_TIER_TO_COMBINED = [0, 0, 1, 2, 3,
-  3]`; pollen's 4 tiers already match 1:1. The displayed measurement is
-  `COMBINED_TIERS[max(aqi_combined, pollen_tier_index)]`; when only one
-  input has data, that one drives it alone; when neither does, shows
-  "N/A". The driving pollen category is shown as a second word (e.g.
-  "Zeer slecht Boom") only when pollen's tier is at or above AQI's
-  contribution - when AQI is the sole or bigger driver, no category is
-  named.
-- **Gauge needle** (`weather_data.get_combined_rotation`): reuses
-  `render_aqi_gauge`'s existing 4 color bands unchanged (very_high/high/
-  moderate/low), needle centered in the band matching the combined tier
-  index - driven by the tier index rather than a literal 0-100 AQI value,
-  so the needle position stays honest even when pollen (not AQI) is
-  driving a bad reading.
+#### Input 1: AQI's scale
+
+Open-Meteo's `european_aqi` is already a composite 0-100+ index (it
+folds several pollutants into one number upstream - InkyPiZero doesn't
+compute AQI itself, only buckets the value Open-Meteo returns). Read at
+the **current hour** (`_value_at_current_hour`, same live-instant pattern
+UV/humidity use - unlike pollen, see below). Bucketed into 20-point bands:
+
+```python
+aqi_tier_index = min(int(current_aqi // 20), 5)
+```
+
+| `current_aqi` range | `aqi_tier_index` | AQI's own tier name (NL) |
+|---|---|---|
+| 0-19 | 0 | Goed |
+| 20-39 | 1 | Redelijk |
+| 40-59 | 2 | Matig |
+| 60-79 | 3 | Slecht |
+| 80-99 | 4 | Zeer slecht |
+| 100+ | 5 | Extreem |
+
+`min(..., 5)` clamps anything ≥100 into the last bucket rather than
+indexing out of range - AQI values above 100 are possible but rare.
+`current_aqi is None` (data unavailable) leaves `aqi_tier_index = None`,
+handled explicitly further down rather than defaulting to a fake tier.
+
+#### Input 2: pollen's scale
+
+`weather_data._classify_pollen` checks all 6 Open-Meteo pollen species
+(alder, birch, grass, mugwort, olive, ragweed - Europe-only, null outside
+each species' active season) and returns a single worst-species result.
+Two things about *how* it gets there are worth understanding in detail:
+
+**1. Two separate threshold tables, not one.** Tree pollen and grass/weed
+pollen are shed in very different absolute concentrations, so a single
+grains/m³ scale can't sensibly cover both - these are the commonly cited
+European pollen-count bands (`weather_data.py:277-278`), picked since no
+single authoritative scale exists (noted inline in the code):
+
+| Tier | Tree species (Els/Berk/Olijf) grains/m³ | Grass & weed (Gras/Bijvoet/Ambrosia) grains/m³ |
+|---|---|---|
+| Laag (0) | ≤10 | ≤5 |
+| Matig (1) | ≤100 | ≤20 |
+| Hoog (2) | ≤1000 | ≤50 |
+| Zeer hoog (3) | >1000 | >50 |
+
+`_pollen_tier_index(species, value)` walks a species' threshold tuple in
+order and returns the first tier whose cutoff the value doesn't exceed
+(falling through to index 3 - Zeer hoog - if it exceeds every cutoff).
+
+**2. Each species' *peak value anywhere in the current calendar day***,
+not the current hour (`_value_max_today`) - a deliberate exception to the
+current-hour pattern AQI/UV/humidity use. Pollen swings hard hour to hour
+(Sittard's grass count ranged 4.4-9.8 grains/m³ across one real day), so a
+single instant can sit at a local dip while the rest of the day is a
+genuine "watch out" day - confirmed against pollennieuws.nl's own daily
+framing.
+
+**Picking the worst species**: every species with data today gets a
+`(tier_index, normalized_value)` pair, where `normalized_value = value /
+thresholds[-1]` (the value as a fraction of its *own* group's top
+threshold - 1000 for tree, 50 for grass/weed). The species with the
+highest `(tier_index, normalized_value)` tuple wins - tier first, then
+normalized concentration to break same-tier ties. Normalizing this way is
+what lets a tree species and a grass/weed species be compared fairly for
+tie-breaking despite their raw thresholds differing 20x. This tie-break
+exists because Open-Meteo reports an out-of-season species as a flat
+`0.0` rather than dropping it from the response - without normalized
+comparison, alphabetically/insertion-first species like alder would win
+"worst" over a genuinely active one just by always being *present* (if
+compared by tier alone, a tie at "Laag" would fall to whichever species
+happened to be checked first).
+
+The winning species' tier index (0-3) feeds the combined scale below
+directly - `POLLEN_TIERS` is a deliberate 1:1 index match for
+`COMBINED_TIERS`. Its species also collapses to one of 3 broad categories
+for the on-screen cause label (`_pollen_category_nl`, confirmed with the
+user 2026-08-10): **Boom** (alder/birch/olive), **Gras** (grass), or
+**Ambrosia** (mugwort/ragweed - named for the more severe of the two weed
+species, not a literal per-species mapping).
+
+If every species is null all day (out of season, or a non-European
+location), `_classify_pollen` returns `None`.
+
+#### Combining the two into one 4-tier scale
+
+Rather than reuse either input's native scale outright (AQI's 6, pollen's
+4), both map onto a **fresh 4-tier scale** chosen so both inputs can reach
+every tier symmetrically - confirmed with the user 2026-08-10:
+
+```python
+COMBINED_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
+```
+
+AQI's 6 tiers fold onto it via a fixed lookup table:
+
+| `aqi_tier_index` | AQI tier name | `_AQI_TIER_TO_COMBINED` | Combined tier |
+|---|---|---|---|
+| 0 | Goed | 0 | Goed |
+| 1 | Redelijk | 0 | Goed |
+| 2 | Matig | 1 | Matig |
+| 3 | Slecht | 2 | Slecht |
+| 4 | Zeer slecht | 3 | Zeer slecht |
+| 5 | Extreem | 3 | Zeer slecht |
+
+Pollen's 4 tiers need no lookup table - they already match 1:1:
+
+| `tier_index` (from `_classify_pollen`) | Pollen tier name | Combined tier |
+|---|---|---|
+| 0 | Laag | Goed |
+| 1 | Matig | Matig |
+| 2 | Hoog | Slecht |
+| 3 | Zeer hoog | Zeer slecht |
+
+The final tier is simply the worse of the two mapped values -
+`_combine_aqi_pollen_tier`:
+
+```python
+combined_index = max(aqi_combined, pollen_tier_index)  # whichever inputs are present
+```
+
+- Both present -> worse of the two wins.
+- Only one present -> that one alone decides (the other contributes
+  nothing, doesn't drag the result toward "Goed").
+- Neither present -> `None`, displayed as `"N/A"`.
+
+The driving pollen **category** (Boom/Gras/Ambrosia) is shown as a second
+word (e.g. "Zeer slecht Boom") only when `pollen_tier_index >=
+aqi_combined` - i.e. pollen's contribution is at or above AQI's. When AQI
+alone is the bigger or equal driver, no category is named (matches the
+original AQI-only cell's behavior of never naming a "cause").
+
+#### Gauge needle: reusing the same 4 color bands
+
+`render_aqi_gauge` draws 4 fixed 45°-wide colored arc bands
+(`widgets/gauge.py:151-156`) - unchanged from before pollen existed, this
+is the exact same dial the standalone AQI cell always used:
+
+| Arc angle range | Band | Color | Combined tier it now represents |
+|---|---|---|---|
+| 180°-225° | `aqi_band_very_high` | red | Zeer slecht (3) |
+| 225°-270° | `aqi_band_high` | orange | Slecht (2) |
+| 270°-315° | `aqi_band_moderate` | yellow | Matig (1) |
+| 315°-360° | `aqi_band_low` | green | Goed (0) |
+
+Previously the needle's rotation came from a literal 0-100 AQI value
+(linear across the full arc). Now `get_combined_rotation(combined_index)`
+instead centers the needle in the band matching the **tier index**:
+
+```python
+tier_from_worst = 3 - combined_tier_index
+rotation_deg = get_aqi_rotation_from_fraction((tier_from_worst + 0.5) / 4)
+```
+
+| `combined_index` | Combined tier | Needle rotation | Lands in band |
+|---|---|---|---|
+| 0 | Goed | -22.5° | low/green (center) |
+| 1 | Matig | -67.5° | moderate/yellow (center) |
+| 2 | Slecht | -112.5° | high/orange (center) |
+| 3 | Zeer slecht | -157.5° | very_high/red (center) |
+
+This is deliberate: if the needle still came from a literal AQI number,
+it would point to a "fine" position even when the *displayed text* says
+"Zeer slecht" because pollen (not AQI) is driving the reading - a
+misleading mismatch. Driving the needle from the tier index instead keeps
+icon and text always consistent, whichever input is worse.
+`combined_index is None` (neither input has data) falls back to a neutral
+middle rotation (`fraction_good = 0.5`, needle pointing straight down,
+between the moderate and high bands) rather than defaulting toward either
+extreme.
+
+#### Worked examples
+
+| AQI | Pollen | Combined tier | Cause shown? | Why |
+|---|---|---|---|---|
+| 15 (Goed) | no data | Goed | no | AQI alone decides |
+| 50 (Matig) | no data | Matig | no | AQI alone decides |
+| 90 (Zeer slecht, combined 3) | grass 3 grains/m³ (Laag, combined 0) | Zeer slecht | no | AQI is the bigger driver (3 > 0) |
+| 10 (Goed, combined 0) | birch 2000 grains/m³ (Zeer hoog, combined 3) | Zeer slecht | **Boom** | pollen is the bigger driver (3 > 0) |
+| 30 (Redelijk, combined 0) | grass 3 grains/m³ (Laag, combined 0) | Goed | **Gras** | tied at combined 0 - category still shown since pollen's tier (0) >= AQI's (0) |
+| no data | no data | N/A | no | neither input available |
+
+See `scripts/test_pollen_scenarios.py` for these and more as executable,
+deterministic assertions (every combined tier, tie-breaking, the
+daily-peak-vs-current-hour behavior, and the no-data fallback) - live
+weather can't reliably guarantee a specific AQI+pollen combination on any
+given run.
 
 No standalone pollen icon or cell exists anymore - visibility is shown
 unconditionally again (no more swap), and compact mode is always exactly 4
-cells (no more variable 4-or-5). See `scripts/test_pollen_scenarios.py`
-for deterministic coverage of every combined tier, which input wins ties,
-and the no-data fallback.
+cells (no more variable 4-or-5).
 
 Note Open-Meteo/CAMS only models the 6 pollen species above - Dutch pollen
 services like pollennieuws.nl group mugwort+ragweed (and sometimes other
