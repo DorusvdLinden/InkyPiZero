@@ -18,7 +18,7 @@ def _data_point_value_text(dp: dict) -> str:
     value_parts.append(str(dp["measurement"]))
     value_text = " ".join(value_parts)
     if dp.get("unit"):
-        value_text += f" {dp['unit']}"
+        value_text += f"{dp.get('unit_separator', ' ')}{dp['unit']}"
     return value_text
 
 

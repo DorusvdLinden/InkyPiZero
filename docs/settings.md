@@ -183,11 +183,21 @@ combined_index = max(aqi_combined, pollen_tier_index)  # whichever inputs are pr
   nothing, doesn't drag the result toward "Goed").
 - Neither present -> `None`, displayed as `"N/A"`.
 
-The driving pollen **category** (Boom/Gras/Ambrosia) is shown as a second
-word (e.g. "Zeer slecht Boom") only when `pollen_tier_index >=
-aqi_combined` - i.e. pollen's contribution is at or above AQI's. When AQI
-alone is the bigger or equal driver, no category is named (matches the
-original AQI-only cell's behavior of never naming a "cause").
+The driving pollen **category** (Boom/Gras/Ambrosia) is appended after a
+colon (e.g. "Zeer slecht: Boom") only when **both** of these hold
+(confirmed with the user 2026-08-10):
+- `pollen_tier_index > 0` - pollen is at least Matig, not Laag. Even if
+  pollen ties or beats AQI's contribution, "Laag" isn't worth naming a
+  cause for - the measurement alone ("Goed") already says everything's
+  fine.
+- `pollen_tier_index >= aqi_combined` - pollen's contribution is at or
+  above AQI's.
+
+When either doesn't hold - AQI is the bigger driver, or pollen is
+Laag/absent - no category is named, and the measurement displays alone
+with no trailing colon (`WeatherCanvas._data_point_value_text`'s
+`unit_separator` field controls the `": "` - a per-data-point override,
+every other data point still uses a plain space before its unit).
 
 #### Gauge needle: reusing the same 4 color bands
 
@@ -230,14 +240,15 @@ extreme.
 
 #### Worked examples
 
-| AQI | Pollen | Combined tier | Cause shown? | Why |
-|---|---|---|---|---|
-| 15 (Goed) | no data | Goed | no | AQI alone decides |
-| 50 (Matig) | no data | Matig | no | AQI alone decides |
-| 90 (Zeer slecht, combined 3) | grass 3 grains/m³ (Laag, combined 0) | Zeer slecht | no | AQI is the bigger driver (3 > 0) |
-| 10 (Goed, combined 0) | birch 2000 grains/m³ (Zeer hoog, combined 3) | Zeer slecht | **Boom** | pollen is the bigger driver (3 > 0) |
-| 30 (Redelijk, combined 0) | grass 3 grains/m³ (Laag, combined 0) | Goed | **Gras** | tied at combined 0 - category still shown since pollen's tier (0) >= AQI's (0) |
-| no data | no data | N/A | no | neither input available |
+| AQI | Pollen | Displayed | Why |
+|---|---|---|---|
+| 15 (Goed) | no data | "Goed" | AQI alone decides |
+| 50 (Matig) | no data | "Matig" | AQI alone decides |
+| 90 (Zeer slecht, combined 3) | grass 3 grains/m³ (Laag, combined 0) | "Zeer slecht" | AQI is the bigger driver (3 > 0) |
+| 10 (Goed, combined 0) | birch 2000 grains/m³ (Zeer hoog, combined 3) | "Zeer slecht: Boom" | pollen is the bigger driver (3 > 0) |
+| 45 (Matig, combined 1) | grass 15 grains/m³ (Matig, combined 1) | "Matig: Gras" | tied at combined 1, and pollen is genuinely elevated (tier > 0) |
+| 30 (Redelijk, combined 0) | grass 3 grains/m³ (Laag, combined 0) | "Goed" | tied at combined 0, but pollen is only Laag - no category named |
+| no data | no data | "N/A" | neither input available |
 
 See `scripts/test_pollen_scenarios.py` for these and more as executable,
 deterministic assertions (every combined tier, tie-breaking, the
