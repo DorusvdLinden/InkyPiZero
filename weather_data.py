@@ -265,19 +265,28 @@ def _pollen_tier_index(species: str, value: float) -> int:
 def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
     """Returns {"tier": ..., "species_nl": ...} for the worst-affected
     species with data this hour, or None if every species is null (out of
-    season, or a non-European location - Open-Meteo's pollen coverage)."""
+    season, or a non-European location - Open-Meteo's pollen coverage).
+
+    Off-season species commonly read a flat 0.0 (not null) rather than
+    dropping out of the response entirely, so ties are broken by each
+    species' concentration normalized against its own group's top
+    threshold - not by dict order - or an always-zero out-of-season
+    species (e.g. alder in August) would win "worst" over a genuinely
+    active one on tier alone."""
     times = hourly.get("time", [])
-    worst_index, worst_species = -1, None
+    best = None  # (tier_index, normalized_value, species)
     for species in POLLEN_SPECIES_NL:
         value = _value_at_current_hour(times, hourly.get(species, []), tz, current_time)
         if value is None:
             continue
-        tier_index = _pollen_tier_index(species, value)
-        if tier_index > worst_index:
-            worst_index, worst_species = tier_index, species
-    if worst_species is None:
+        thresholds = POLLEN_TREE_THRESHOLDS if species in POLLEN_TREE_SPECIES else POLLEN_GRASS_WEED_THRESHOLDS
+        candidate = (_pollen_tier_index(species, value), value / thresholds[-1])
+        if best is None or candidate > best[:2]:
+            best = (*candidate, species)
+    if best is None:
         return None
-    return {"tier": POLLEN_TIERS[worst_index], "species_nl": POLLEN_SPECIES_NL[worst_species]}
+    tier_index, _, species = best
+    return {"tier": POLLEN_TIERS[tier_index], "species_nl": POLLEN_SPECIES_NL[species]}
 
 
 def get_pollen_color(tier: str) -> str:

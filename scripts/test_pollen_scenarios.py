@@ -61,6 +61,11 @@ SCENARIOS = {
     "zeer_hoog": lambda: _make_payload({"birch_pollen": 2000}),
     # tie-break: worst tier across species should win, not the first one seen
     "mixed_worst_wins": lambda: _make_payload({"grass_pollen": 3, "birch_pollen": 2000}),
+    # regression for a real bug: Open-Meteo reports an off-season species as
+    # a flat 0.0 (not null), and it's first in POLLEN_SPECIES_NL's dict
+    # order - a same-tier ("Laag") tie must not let that 0.0 species win
+    # over a genuinely active one just by iteration order.
+    "zero_species_tie": lambda: _make_payload({"alder_pollen": 0.0, "grass_pollen": 4.9}),
 }
 
 EXPECTED = {
@@ -70,6 +75,7 @@ EXPECTED = {
     "hoog": ("Hoog", "Ambrosia"),
     "zeer_hoog": ("Zeer hoog", "Berk"),
     "mixed_worst_wins": ("Zeer hoog", "Berk"),
+    "zero_species_tie": ("Laag", "Gras"),
 }
 
 
