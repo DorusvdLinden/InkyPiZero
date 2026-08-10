@@ -38,37 +38,65 @@ runs, so this is how the choice survives across renders).
 
 | Mode | `VALID_MODES` value | Chart style | Data-point grid |
 |---|---|---|---|
-| Original | `"original"` | Dashed lines at the day's actual min/max (+ a 0°C line if it goes below freezing) | 2x3 grid, always 6 cells: wind/humidity/pressure/UV/AQI, plus a 5th "swap" cell - pollen when available, else visibility |
+| Original | `"original"` | Dashed lines at the day's actual min/max (+ a 0°C line if it goes below freezing) | 2x3 grid, 6 cells: wind/humidity/pressure/UV/visibility/**Kwaliteit & Pollen** (combined AQI+pollen) |
 | Gridlines | `"gridlines"` (**default**, `DEFAULT_MODE`) | Fixed dotted reference grid every 10°C across the visible range | 2x3 grid, same 6 cells as Original |
-| Compact | `"compact"` | Same gridlines style as above | Only wind/humidity/UV/AQI (`canvas.COMPACT_KINDS`) normally - 4 cells (2x2, or 1x4, see `compact_style`); grows to 5 cells (3-over-2, or 1x5) whenever pollen data is available |
+| Compact | `"compact"` | Same gridlines style as above | Only wind/humidity/UV/**Kwaliteit & Pollen** (`canvas.COMPACT_KINDS`) - 4 cells (2x2, or 1x4, see `compact_style`) |
 
 If the state file is missing or contains something outside `VALID_MODES`,
 `get_mode()` falls back to `DEFAULT_MODE`.
 
-### Pollen (Hooikoorts)
+### Kwaliteit & Pollen (combined air quality + pollen)
 
-Open-Meteo's air-quality endpoint (the same one already used for UV/AQI)
-also serves hourly pollen concentrations, but only for **European
-locations** and only during each species' **active season** - null
-otherwise. `weather_data._classify_pollen` checks all 6 species (alder,
-birch, grass, mugwort, olive, ragweed) using each species' **peak value
-anywhere in the current calendar day** (`_value_max_today`, not the exact
-current-hour reading UV/AQI/humidity use) and returns the worst tier
-(Laag/Matig/Hoog/Zeer hoog) plus the species driving it, or `None` if
-every species is null all day. Deliberately today's peak, not the instant
-value - pollen swings hard hour to hour, so a single reading can sit at a
-local dip while the rest of the day is a genuine "watch out" day; confirmed
-against pollennieuws.nl's own daily trend framing. When `None`, the app
-falls back to showing visibility instead - this is why pollen isn't a
-guaranteed 7th data point: most non-European renders, and any European one
-outside the season, simply won't have it. See
-`scripts/test_pollen_scenarios.py` for deterministic coverage of every
-tier, the daily-peak-vs-current-hour behavior, and the fallback.
+One data point (`kind: "aqi"` internally, unchanged) shows the **worst of**
+European AQI and pollen severity, using the AQI gauge icon in both screen
+families. Confirmed with the user 2026-08-10 after finding the separate
+pollen indicator (see `docs/changes.md` entry 22) was too easy to read as
+"fine" on a day pollennieuws.nl rated unfavorable, when AQI itself was
+actually fine and pollen was the real story, or vice versa - a single
+combined "how bad is the air for you right now" reading is more useful
+than two cards that can disagree.
 
-Note Open-Meteo/CAMS only models these 6 species - Dutch pollen services
-like pollennieuws.nl group mugwort+ragweed (and sometimes other weeds not
-modeled here, e.g. nettle/sorrel/plantain) under a broader "Kruiden"
-category, so this app's herb/weed reading can understate what a
+- **AQI** (`european_aqi`, current-hour reading): `aqi_tier_index =
+  min(int(current_aqi // 20), 5)` - Open-Meteo's own 6-tier scale (Goed/
+  Redelijk/Matig/Slecht/Zeer slecht/Extreem), same as before.
+- **Pollen** (`weather_data._classify_pollen`): all 6 Open-Meteo pollen
+  species (alder, birch, grass, mugwort, olive, ragweed - Europe-only,
+  null outside each species' active season), classified using each
+  species' **peak value anywhere in the current calendar day**
+  (`_value_max_today`, not the exact current-hour reading AQI/UV/humidity
+  use - pollen swings hard hour to hour, so a single instant can sit at a
+  local dip while the rest of the day is a genuine "watch out" day;
+  confirmed against pollennieuws.nl). Returns a 0-3 tier index
+  (Laag/Matig/Hoog/Zeer hoog) plus the driving species, or `None` if every
+  species is null all day.
+- **Combining** (`weather_data._combine_aqi_pollen_tier`): both inputs map
+  onto one new 4-tier scale, `COMBINED_TIERS = ["Goed", "Matig", "Slecht",
+  "Zeer slecht"]` - a fresh scale chosen (not simply reusing AQI's 6 or
+  pollen's 4 outright) so both inputs can reach every tier symmetrically.
+  AQI's 6 tiers fold onto it via `_AQI_TIER_TO_COMBINED = [0, 0, 1, 2, 3,
+  3]`; pollen's 4 tiers already match 1:1. The displayed measurement is
+  `COMBINED_TIERS[max(aqi_combined, pollen_tier_index)]`; when only one
+  input has data, that one drives it alone; when neither does, shows
+  "N/A". The driving pollen species is shown as a second word (e.g. "Zeer
+  slecht Berk") only when pollen's tier is at or above AQI's contribution
+  - when AQI is the sole or bigger driver, no species is named.
+- **Gauge needle** (`weather_data.get_combined_rotation`): reuses
+  `render_aqi_gauge`'s existing 4 color bands unchanged (very_high/high/
+  moderate/low), needle centered in the band matching the combined tier
+  index - driven by the tier index rather than a literal 0-100 AQI value,
+  so the needle position stays honest even when pollen (not AQI) is
+  driving a bad reading.
+
+No standalone pollen icon or cell exists anymore - visibility is shown
+unconditionally again (no more swap), and compact mode is always exactly 4
+cells (no more variable 4-or-5). See `scripts/test_pollen_scenarios.py`
+for deterministic coverage of every combined tier, which input wins ties,
+and the no-data fallback.
+
+Note Open-Meteo/CAMS only models the 6 pollen species above - Dutch pollen
+services like pollennieuws.nl group mugwort+ragweed (and sometimes other
+weeds not modeled here, e.g. nettle/sorrel/plantain) under a broader
+"Kruiden" category, so this app's pollen contribution can understate what a
 Netherlands-focused service reports even when both are working correctly -
 a real, permanent data-source gap (see `TODO.md`), not a bug.
 

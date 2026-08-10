@@ -42,12 +42,13 @@ automatically, without being asked each time.
   `weather_data.py`'s precipitation classification or `widgets/chart.py`'s axis-label
   rendering, alongside the 14-location test above.
 - **Always test the pollen scenarios**: `python scripts/test_pollen_scenarios.py`
-  covers the pollen/hay-fever data point's tiers (Laag/Matig/Hoog/Zeer hoog) and the
-  visibility fallback via crafted Open-Meteo air-quality fixtures rather than live
-  weather, since live data can't reliably guarantee season/hemisphere coverage on any
-  given run. Saves to `mock_display_output/pollen_scenario_test/`. Run this after any
-  change to `weather_data.py`'s pollen classification or to `canvas.py`'s/`layout.py`'s
-  compact-grid code, alongside the two tests above.
+  covers the combined "Kwaliteit & Pollen" data point (worst of European AQI and
+  pollen, on the combined Goed/Matig/Slecht/Zeer slecht scale - see `docs/settings.md`)
+  via crafted Open-Meteo air-quality fixtures rather than live weather, since live data
+  can't reliably guarantee season/hemisphere coverage or a specific AQI+pollen
+  combination on any given run. Saves to `mock_display_output/pollen_scenario_test/`.
+  Run this after any change to `weather_data.py`'s pollen/AQI classification or to
+  `canvas.py`'s/`layout.py`'s compact-grid code, alongside the two tests above.
 
 ## Documentation maintenance
 

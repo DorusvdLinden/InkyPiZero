@@ -179,12 +179,37 @@ def get_aqi_rotation_from_fraction(fraction_good: float) -> float:
     return -180 + (180 * fraction_good)
 
 
-def get_european_aqi_rotation(aqi) -> float:
-    try:
-        aqi = float(aqi)
-    except (TypeError, ValueError):
+# Combined "Kwaliteit & Pollen" data point: worst of European AQI (6 tiers)
+# and pollen (4 tiers, see _classify_pollen) on one new 4-tier scale, chosen
+# so both inputs can reach every tier symmetrically (unlike reusing either
+# side's native scale outright) - confirmed with the user 2026-08-10.
+COMBINED_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
+# AQI's 6-tier index (Goed/Redelijk/Matig/Slecht/Zeer slecht/Extreem, i.e.
+# min(current_aqi // 20, 5)) folded onto COMBINED_TIERS's 4:
+_AQI_TIER_TO_COMBINED = [0, 0, 1, 2, 3, 3]
+
+
+def _combine_aqi_pollen_tier(aqi_tier_index: int | None, pollen_tier_index: int | None) -> int | None:
+    """pollen_tier_index is already 0-3 (POLLEN_TIERS is a 1:1 match for
+    COMBINED_TIERS). Returns None only when neither input has data."""
+    candidates = []
+    if aqi_tier_index is not None:
+        candidates.append(_AQI_TIER_TO_COMBINED[aqi_tier_index])
+    if pollen_tier_index is not None:
+        candidates.append(pollen_tier_index)
+    return max(candidates) if candidates else None
+
+
+def get_combined_rotation(combined_tier_index: int | None) -> float:
+    """Reuses render_aqi_gauge's 4 existing color bands (very_high/high/
+    moderate/low) unchanged - the needle centers in the band matching
+    combined_tier_index (0=Goed/low band .. 3=Zeer slecht/very_high band),
+    same math get_aqi_rotation_from_fraction always used, just driven by a
+    tier index instead of a literal 0-100 AQI value."""
+    if combined_tier_index is None:
         return get_aqi_rotation_from_fraction(0.5)
-    return get_aqi_rotation_from_fraction(1 - min(aqi, 100) / 100)
+    tier_from_worst = 3 - combined_tier_index
+    return get_aqi_rotation_from_fraction((tier_from_worst + 0.5) / 4)
 
 
 def get_uv_fraction(uv_index) -> float:
@@ -263,10 +288,12 @@ def _pollen_tier_index(species: str, value: float) -> int:
 
 
 def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
-    """Returns {"tier": ..., "species_nl": ...} for the worst-affected
-    species using each species' peak value anywhere in the current
-    calendar day, or None if every species is null all day (out of season,
-    or a non-European location - Open-Meteo's pollen coverage).
+    """Returns {"tier_index": ..., "tier": ..., "species_nl": ...} for the
+    worst-affected species using each species' peak value anywhere in the
+    current calendar day, or None if every species is null all day (out of
+    season, or a non-European location - Open-Meteo's pollen coverage).
+    tier_index (0-3) is a direct 1:1 match for COMBINED_TIERS, feeding the
+    "Kwaliteit & Pollen" data point's worst-of-both-inputs comparison.
 
     Deliberately today's peak rather than the current-hour reading (unlike
     UV/AQI/humidity, which do use the live instant value) - pollen swings
@@ -294,20 +321,7 @@ def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
     if best is None:
         return None
     tier_index, _, species = best
-    return {"tier": POLLEN_TIERS[tier_index], "species_nl": POLLEN_SPECIES_NL[species]}
-
-
-def get_pollen_color(tier: str) -> str:
-    """Reuses the UV widget's tier colors (widgets/palette.py) - same
-    abstract low/moderate/high/very-high severity progression, no separate
-    palette roles needed. Pollen has no "extreme" tier."""
-    color = {
-        "Laag": PALETTE.uv_low,
-        "Matig": PALETTE.uv_moderate,
-        "Hoog": PALETTE.uv_high,
-        "Zeer hoog": PALETTE.uv_very_high,
-    }.get(tier, PALETTE.uv_low)
-    return "#{:02x}{:02x}{:02x}".format(*color)
+    return {"tier_index": tier_index, "tier": POLLEN_TIERS[tier_index], "species_nl": POLLEN_SPECIES_NL[species]}
 
 
 def get_uv_beam_points(uv_index, beam_count=10, cx=60, cy=60, core_r=24, min_len=10, max_len=32, half_width=5):
@@ -664,45 +678,43 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
-    pollen = _classify_pollen(aqi_data.get("hourly", {}), tz, current_time)
-    if pollen is not None:
-        data_points.append({
-            "kind": "pollen", "label": "Hooikoorts", "measurement": pollen["tier"], "unit": pollen["species_nl"],
-            "pollen_color": get_pollen_color(pollen["tier"]),
-        })
+    if units == "imperial":
+        visibility_conversion, visibility_max = 1 / 5280.0, 6.2
     else:
-        if units == "imperial":
-            visibility_conversion, visibility_max = 1 / 5280.0, 6.2
-        else:
-            visibility_conversion, visibility_max = 0.001, 10.0
-        raw_visibility = _value_at_current_hour(hourly_data.get("time", []), hourly_data.get("visibility", []), tz, current_time)
-        at_max_visibility = False
-        if raw_visibility is not None:
-            current_visibility = raw_visibility * visibility_conversion
-            at_max_visibility = current_visibility >= visibility_max
-            visibility_str = f"{current_visibility:.1f}"
-            if at_max_visibility:
-                visibility_str = "≥" + visibility_str
-        else:
-            visibility_str = "N/A"
-        data_points.append({
-            "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": UNITS[units]["distance"],
-        })
+        visibility_conversion, visibility_max = 0.001, 10.0
+    raw_visibility = _value_at_current_hour(hourly_data.get("time", []), hourly_data.get("visibility", []), tz, current_time)
+    at_max_visibility = False
+    if raw_visibility is not None:
+        current_visibility = raw_visibility * visibility_conversion
+        at_max_visibility = current_visibility >= visibility_max
+        visibility_str = f"{current_visibility:.1f}"
+        if at_max_visibility:
+            visibility_str = "≥" + visibility_str
+    else:
+        visibility_str = "N/A"
+    data_points.append({
+        "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": UNITS[units]["distance"],
+    })
 
     aqi_times = aqi_data.get("hourly", {}).get("time", [])
     aqi_values = aqi_data.get("hourly", {}).get("european_aqi", [])
     current_aqi = _value_at_current_hour(aqi_times, aqi_values, tz, current_time)
-    if current_aqi is not None:
-        current_aqi = round(current_aqi, 1)
-        scale = ["Goed", "Redelijk", "Matig", "Slecht", "Zeer slecht", "Extreem"][min(int(current_aqi // 20), 5)]
-    else:
-        current_aqi = "N/A"
-        scale = "N/A"
+    aqi_tier_index = min(int(current_aqi // 20), 5) if current_aqi is not None else None
+
+    pollen = _classify_pollen(aqi_data.get("hourly", {}), tz, current_time)
+    pollen_tier_index = pollen["tier_index"] if pollen is not None else None
+
+    combined_index = _combine_aqi_pollen_tier(aqi_tier_index, pollen_tier_index)
+    cause_species = ""
+    if pollen is not None and combined_index is not None:
+        aqi_combined = _AQI_TIER_TO_COMBINED[aqi_tier_index] if aqi_tier_index is not None else -1
+        if pollen_tier_index >= aqi_combined:
+            cause_species = pollen["species_nl"]
     data_points.append({
-        # measurement is the text description only (no number) - the
-        # numeric AQI still drives aqi_rotation, just isn't displayed
-        "kind": "aqi", "label": "Luchtkwaliteit", "measurement": scale,
-        "aqi_rotation": get_european_aqi_rotation(current_aqi),
+        "kind": "aqi", "label": "Kwaliteit & Pollen",
+        "measurement": COMBINED_TIERS[combined_index] if combined_index is not None else "N/A",
+        "unit": cause_species,
+        "aqi_rotation": get_combined_rotation(combined_index),
     })
 
     return data_points

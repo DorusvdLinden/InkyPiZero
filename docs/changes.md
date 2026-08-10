@@ -301,62 +301,75 @@ design).
 
 ---
 
-### 22. Pollen / hay fever (Hooikoorts) data point — most recent
+### 22. Pollen data merged into AQI as one combined "Kwaliteit & Pollen" reading — most recent
 Branch `pollen-hayfever-detail`
 
-Adds a pollen data point, sourced from the same Open-Meteo air-quality
-endpoint already used for UV/AQI (6 hourly species: alder, birch, grass,
-mugwort, olive, ragweed - Europe-only, null outside each species' active
-season). `weather_data._classify_pollen` picks the worst tier
-(Laag/Matig/Hoog/Zeer hoog) across all species using each species' **peak
-value anywhere in the current calendar day** (`_value_max_today`), plus the
-species driving it; `get_pollen_color` reuses `PALETTE.uv_low/
-uv_moderate/uv_high/uv_very_high` rather than adding new palette roles (no
-"extreme" tier for pollen, unlike UV's 5).
+Started as a standalone pollen/hay-fever (Hooikoorts) data point, sourced
+from the same Open-Meteo air-quality endpoint already used for UV/AQI (6
+hourly species: alder, birch, grass, mugwort, olive, ragweed - Europe-only,
+null outside each species' active season), with its own flower icon and a
+6th-cell swap with visibility. Comparing live output against
+pollennieuws.nl surfaced two real correctness bugs in that version, fixed
+along the way and still load-bearing in the final design: (1) same-tier
+ties were broken by dict iteration order, so an always-0.0 off-season
+species (alder, in August) beat a genuinely active one (grass) just by
+being listed first in `POLLEN_SPECIES_NL` - fixed by breaking ties on
+concentration normalized against each species' own threshold group
+instead; (2) classification originally used the exact current-hour
+reading (matching UV/AQI/humidity's pattern), but pollen swings hard hour
+to hour - Sittard's grass count ranged 4.4-9.8 grains/m3 across one day,
+and the exact hour checked happened to sit at a local dip. Switched to
+each species' **peak value anywhere in the current calendar day**
+(`weather_data._value_max_today`), a deliberate exception to the
+current-hour pattern AQI/UV/humidity still use.
 
-Went through two real correctness fixes after comparing live output against
-pollennieuws.nl: (1) ties within the same tier were broken by dict
-iteration order, so an always-0.0 off-season species (alder, in August)
-beat a genuinely active one (grass) just by being listed first in
-`POLLEN_SPECIES_NL` - fixed by breaking ties on concentration normalized
-against each species' own threshold group instead; (2) classification
-originally used the exact current-hour reading (matching UV/AQI/humidity's
-pattern), but pollen swings hard hour to hour - Sittard's grass count
-ranged 4.4-9.8 grains/m3 across one day, and the exact hour checked
-happened to sit at a local dip, showing "Laag" on a day pollennieuws.nl
-rated "ongunstig" (unfavorable). Switched to today's peak per species,
-a deliberate exception to the current-hour pattern the other gauges use.
+**Then changed direction**: rather than keep pollen as a separate,
+frequently-absent 6th/7th cell, it's merged into the existing AQI data
+point - one combined reading, using the AQI gauge icon, labelled
+"Kwaliteit & Pollen", showing the **worse of** AQI and pollen. This
+removes the earlier version's visibility-swap mechanic and compact mode's
+variable 4-or-5-cell layout entirely - visibility is unconditional again,
+and compact mode is always exactly 4 cells, matching the app's original
+(pre-pollen) shape.
 
-Since pollen data is frequently absent, it isn't a naive 7th data point
-(the 2x3 grid's `_draw_data_points` has no cap - an unconditional 7th item
-would render off the bottom of the canvas). Instead: in `original`/
-`gridlines`, pollen **replaces visibility** in the grid whenever available,
-keeping the grid at exactly 6 cells either way. In `compact` mode, pollen
-is added as a genuine **5th cell** when available (new `layout.py`
-3-over-2 grid, `data_point_cell_compact_5`, plus a generalized
-`data_point_cell_1xn` for the `icon_above_row` mockup style), falling back
-to today's 4-cell grid otherwise.
+`weather_data._combine_aqi_pollen_tier` maps both inputs onto one new
+4-tier scale, `COMBINED_TIERS = ["Goed", "Matig", "Slecht", "Zeer
+slecht"]` - a fresh scale (confirmed with the user, picked over reusing
+either AQI's native 6 tiers or pollen's native 4 outright) chosen so both
+inputs can reach every tier symmetrically: AQI's 6 tiers fold on via
+`_AQI_TIER_TO_COMBINED = [0, 0, 1, 2, 3, 3]`, pollen's 4 tiers already
+match 1:1. `get_combined_rotation` reuses `render_aqi_gauge`'s existing 4
+color bands unchanged, positioning the needle by combined tier index
+instead of a literal 0-100 AQI value, so the needle stays honest even when
+pollen (not AQI) is the worse contributor. The driving pollen species is
+still named as a second word (e.g. "Zeer slecht Berk") when pollen's tier
+is at or above AQI's contribution; when AQI alone is the worse or equal
+factor, no species is shown. `render_pollen_icon` (the standalone flower
+icon from the earlier version) and `get_pollen_color` were removed as
+dead code once nothing called them anymore.
 
-New `render_pollen_icon` (`widgets/gauge.py`) draws a flat flower/blossom
-silhouette procedurally (6 petal circles + a center circle, single flat
-tier color) - mirrors `render_uv_icon`'s minimal-shape pattern, since no
-pollen/flower icon exists in the weather-icons-derived asset set (see
-`docs/icons.md`). Shrunk once after the first hardware render: the initial
-shape nearly filled its full 120x120 canvas (10px margin), reading much
-larger/heavier than the other data-point icons sharing the same box.
+The longer "Kwaliteit & Pollen" label didn't fit compact mode's fixed-size
+fonts at the old label length ("Luchtkwaliteit") - added `WeatherCanvas.
+_fit_font`, a small shrink-to-fit-width helper (steps font size down in
+2px increments until `font.getlength(text) <= max_width`), applied to
+both label and value text in both compact styles rather than special-
+casing this one string.
 
-New `scripts/test_pollen_scenarios.py` (mirrors entry 20's precip-scenario
-script) fakes the air-quality fetch with crafted hourly pollen values,
-covering all 4 tiers, a tree-vs-grass tie-break case, the zero-vs-active
-species tie regression, the daily-peak-vs-current-hour regression, and the
-no-data fallback - live weather can't reliably guarantee season/hemisphere
-coverage on any given test run.
+`scripts/test_pollen_scenarios.py` (mirrors entry 20's precip-scenario
+script) fakes the air-quality fetch with crafted hourly pollen *and*
+`european_aqi` values, covering: every pollen tier alone, a tree-vs-grass
+tie-break, the zero-vs-active species tie regression, the
+daily-peak-vs-current-hour regression, AQI alone, AQI-worse-than-pollen
+(no species named), pollen-worse-than-AQi (species named), a tied-tier
+case, and the neither-available fallback - live weather can't reliably
+guarantee season/hemisphere coverage or a specific AQI+pollen combination
+on any given run.
 
-**Active** - current pollen implementation. Known permanent limitations,
-tracked in `TODO.md`: Europe-only/seasonal coverage (an Open-Meteo data
-limitation, not a bug), no "extreme" tier, and Open-Meteo/CAMS modeling
-fewer herb/weed species than Dutch pollen services track (confirmed against
-pollennieuws.nl's broader "Kruiden" category).
+**Active** - current design. Known permanent limitations, tracked in
+`TODO.md`: pollen's contribution is Europe-only/seasonal (an Open-Meteo
+data limitation, not a bug, falls back to AQI alone or "N/A"), and
+Open-Meteo/CAMS models fewer herb/weed species than Dutch pollen services
+track (confirmed against pollennieuws.nl's broader "Kruiden" category).
 
 ---
 

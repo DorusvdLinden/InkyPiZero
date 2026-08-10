@@ -43,9 +43,9 @@ CHART_AREA = Region(0, TODAY.bottom + 6, 800, 160)
 FORECAST_ROW = Region(0, CHART_AREA.bottom + 8, 800, 95)
 
 # Data-point grid: 2 columns x 3 rows, filled row-major in the same order as
-# weather_data.py's data_points list (wind, humidity, pressure, uv, then a
-# 5th slot that's "pollen" when Open-Meteo has current-hour pollen data for
-# the location, else "visibility", then aqi).
+# weather_data.py's data_points list (wind, humidity, pressure, uv,
+# visibility, aqi - "aqi" is the combined "Kwaliteit & Pollen" data point,
+# see weather_data._combine_aqi_pollen_tier).
 DATA_POINT_COLS = 2
 DATA_POINT_ROWS = 3
 DATA_POINT_ICON_FRACTION = 0.38  # matches .data-point-img-container width:38%
@@ -70,26 +70,11 @@ def data_point_cell_2x2(index: int) -> Region:
     return Region(DATA_POINTS.x + col * cell_w, DATA_POINTS.y + row * cell_h, cell_w, cell_h)
 
 
-def data_point_cell_1xn(index: int, count: int) -> Region:
-    """"compact" screen mode's alternate single-row layout - same details as
-    data_point_cell_2x2/data_point_cell_compact_5, full DATA_POINTS width
-    split `count` ways instead of a 2-row grid."""
-    cell_w = DATA_POINTS.w // count
+def data_point_cell_1x4(index: int) -> Region:
+    """"compact" screen mode's alternate single-row layout - same 4 details,
+    full DATA_POINTS width split 4 ways instead of a 2x2 grid."""
+    cell_w = DATA_POINTS.w // 4
     return Region(DATA_POINTS.x + index * cell_w, DATA_POINTS.y, cell_w, DATA_POINTS.h)
-
-
-def data_point_cell_compact_5(index: int) -> Region:
-    """"compact" screen mode's 5-detail grid (wind/humidity/uv/pollen/aqi,
-    when pollen data is available) - 3 cells in the top row, 2 in the
-    bottom row (matching data_point_cell_2x2's bottom-row width), same
-    DATA_POINTS footprint and row height as the 4-detail 2x2 grid."""
-    cell_h = DATA_POINTS.h // 2
-    if index < 3:
-        cell_w = DATA_POINTS.w // 3
-        return Region(DATA_POINTS.x + index * cell_w, DATA_POINTS.y, cell_w, cell_h)
-    cell_w = DATA_POINTS.w // 2
-    col = index - 3
-    return Region(DATA_POINTS.x + col * cell_w, DATA_POINTS.y + cell_h, cell_w, cell_h)
 
 
 def forecast_card(index: int, count: int) -> Region:

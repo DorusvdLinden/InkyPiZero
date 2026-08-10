@@ -143,24 +143,6 @@ def render_uv_icon(uv_color_hex: str, uv_beams: list) -> Image.Image:
     return img
 
 
-def render_pollen_icon(color_hex: str) -> Image.Image:
-    """Flat single-color flower/blossom silhouette - 6 petal circles around
-    a center circle, matching render_uv_icon's minimal flat-shape style
-    (no weather-icons asset exists for pollen, see docs/icons.md)."""
-    size = (120, 120)
-    img = Image.new("RGBA", size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    cx, cy = 60, 60
-    petal_r, petal_dist, petal_count = 15, 18, 6
-    for i in range(petal_count):
-        angle = math.radians(360 / petal_count * i)
-        px = cx + petal_dist * math.sin(angle)
-        py = cy - petal_dist * math.cos(angle)
-        draw.ellipse([px - petal_r, py - petal_r, px + petal_r, py + petal_r], fill=color_hex)
-    draw.ellipse([cx - 12, cy - 12, cx + 12, cy + 12], fill=color_hex)
-    return img
-
-
 def render_aqi_gauge(rotation_deg: float) -> Image.Image:
     size = (200, 150)
     img = Image.new("RGBA", size, (0, 0, 0, 0))

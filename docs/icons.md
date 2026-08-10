@@ -147,21 +147,13 @@ steps).
 | `widgets/forecast.py:27-33` | Moon-phase icon on forecast card (`show_moon_phase` only) | fixed constant | `(14, 14)` | **Yes** (default strength) |
 | `widgets/icons.py:139-140` (`draw_humidity_drops`) | 5 humidity droplets (3-over-2) | `drop_h = int(region.h * 0.42)`, `drop_w = int(drop_h * 28/38)` | original grid (`h=55`): `(16, 23)` per drop | No |
 
-`widgets/gauge.py` draws the wind compass, pressure gauge, UV sunburst, AQI
-band, and pollen flower entirely with PIL primitives - none of them load a
-raster icon.
-
-## Pollen icon (`widgets/gauge.py:render_pollen_icon`)
-
-No pollen/flower icon exists as a source asset - `erikflowers/weather-icons`
-is a weather-*condition* icon set, not a plausible source for a pollen
-glyph, so this one is drawn procedurally instead, mirroring
-`render_uv_icon`'s flat-shape approach: 6 petal circles arranged around a
-center circle on a 120x120 canvas, all filled with a single precomputed hex
-color (no source PNG, no `AssetStore` involvement). The color comes from
-`weather_data.get_pollen_color(tier)`, which reuses `PALETTE.uv_low`/
-`uv_moderate`/`uv_high`/`uv_very_high` directly rather than adding separate
-pollen palette roles - pollen has no "extreme" tier, unlike UV.
+`widgets/gauge.py` draws the wind compass, pressure gauge, UV sunburst, and
+AQI band entirely with PIL primitives - none of them load a raster icon.
+The AQI band/needle (`render_aqi_gauge`) is also the icon for the combined
+"Kwaliteit & Pollen" data point (see `docs/settings.md`) - no separate
+pollen icon exists; a procedurally-drawn flower icon was tried and then
+removed when pollen was merged into the AQI data point rather than kept as
+its own cell (see `docs/changes.md` entry 22).
 
 `scripts/icon_overview.py` also calls `assets.icon(key, (48, 48))` to build a
 dev-only contact sheet (`mock_display_output/icon_overviews/`) - not a
