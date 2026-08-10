@@ -144,8 +144,9 @@ class WeatherCanvas:
         # cell - draw.text doesn't wrap/clip.
         narrow = ref_cell_w < 200
         text_x = cell.x + icon_w + 10
-        font_label = self.assets.font("normal", 14 if narrow else 22)
-        font_value = self.assets.font("bold", 16 if narrow else 24)
+        text_size = 16 if narrow else 24
+        font_label = self.assets.font("normal", text_size)
+        font_value = self.assets.font("bold", text_size)
         label_y = cell.y + int(cell.h * 0.36)
         value_y = cell.y + int(cell.h * 0.68)
         draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
@@ -157,8 +158,18 @@ class WeatherCanvas:
         icon_box = layout.Region(cx - icon_size // 2, cell.y + int(cell.h * 0.06), icon_size, icon_size)
         self._draw_data_point_icon(image, icon_box, dp)
 
-        font_label = self.assets.font("normal", 16)
-        font_value = self.assets.font("bold", 20)
+        # "icon_above_row" packs this same per-cell drawing into a much
+        # narrower single row (120px at 4 cells, 96px at 5) than the
+        # 2-row "icon_above" grid (240px/160px) - needs its own smaller
+        # tier or centered text overlaps its neighbors.
+        if ref_cell_w >= 200:
+            text_size = 20
+        elif ref_cell_w >= 130:
+            text_size = 16
+        else:
+            text_size = 12
+        font_label = self.assets.font("normal", text_size)
+        font_value = self.assets.font("bold", text_size)
         label_y = cell.y + int(cell.h * 0.68)
         value_y = cell.y + int(cell.h * 0.88)
         draw.text((cx, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="mm")
