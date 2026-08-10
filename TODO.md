@@ -55,7 +55,20 @@ reference docs this list feeds into.
   the pixel grid for crisp small-size rendering) in favor of a generic
   downscale blend. Also cost meaningfully more CPU per label. Don't
   re-attempt supersampling without addressing the hinting-loss problem
-  specifically. No working fix found yet.
+  specifically.
+
+  **Researched alternatives (2026-08-10)**: two viable candidates fully
+  written up as standalone plan docs, neither implemented or chosen yet -
+  [docs/plans/text-rendering-option-1-fontmode.md](./docs/plans/text-rendering-option-1-fontmode.md)
+  (PIL's built-in `fontmode="1"` native monochrome rasterization - zero
+  new dependencies, cheapest to try) and
+  [docs/plans/text-rendering-option-2-bitmap-fonts.md](./docs/plans/text-rendering-option-2-bitmap-fonts.md)
+  (true bitmap fonts via `BdfFontFile`/`PcfFontFile` - what the
+  `Weather-EPS32S3` sibling project already does on this same physical
+  panel, and what Adafruit's own e-ink guidance recommends, at the cost
+  of a new font asset and a real visual-identity change). Headless
+  Chromium/CSS and switching to a different TrueType font were both
+  researched and dropped - see either plan doc's Context section for why.
 
 ## Config & settings
 
