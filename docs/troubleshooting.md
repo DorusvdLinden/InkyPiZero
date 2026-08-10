@@ -14,6 +14,24 @@ Check the most recent run of the render itself:
 systemctl status pi-weather-display.service
 ```
 
+### Render crashes referencing a function/attribute that isn't actually in the source
+
+If `journalctl -u pi-weather-display.service` shows an `AttributeError`/
+`ImportError` naming something that clearly isn't in the current
+`git log`'d source (e.g. a function you already deleted in your last
+commit), suspect a **stale compiled bytecode cache**, not a real bug -
+seen once on 2026-08-10 right after a Pi reboot + `git pull`: `layout.py`'s
+`__pycache__/*.pyc` correctly recompiled from the freshly-pulled source,
+but `canvas.py`'s didn't, despite both files updating in the same pull
+(confirmed by comparing `ls -la --time-style=full-iso` on the `.py` vs
+`.pyc` - the source's mtime was newer, but the stale `.pyc` was used
+anyway). Root cause not fully pinned down; the fix is simple and safe
+either way (`__pycache__/` is gitignored, purely regenerable):
+```bash
+sudo find /home/dorus/InkyPiZero -name '__pycache__' -type d -exec rm -rf {} +
+sudo systemctl start pi-weather-display.service
+```
+
 ## Buttons not switching screen mode
 
 Unlike the render timer, the button listener is a persistent service, so it
