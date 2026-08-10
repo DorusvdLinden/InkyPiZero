@@ -19,6 +19,10 @@ Pi Zero W) that can't comfortably run a headless browser.
 **Features**:
 - Current conditions, an hourly temperature/rain chart, and a multi-day
   forecast, all hand-drawn with Pillow
+- Pollen/hay fever (Hooikoorts) reading for European locations in season -
+  replaces visibility in the details grid when Open-Meteo has data for the
+  current hour, otherwise visibility shows as usual - see
+  [settings.md](./docs/settings.md)
 - No plugins, no playlist scheduling - the *rendering* is a periodic
   `systemd` timer job (e.g. every 10 minutes), not a persistent service
 - A small always-on web UI (settings, WiFi management, shutdown) runs
@@ -95,7 +99,7 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   daily forecast, air quality/UV) into typed dataclasses
 - `layout.py` - fixed pixel regions for the 800x480 canvas
 - `canvas.py` - orchestrates one full render (`WeatherCanvas.render()`)
-- `widgets/` - gauge (wind/pressure/UV/AQI), chart (temp/rain), forecast-card,
+- `widgets/` - gauge (wind/pressure/UV/AQI/pollen), chart (temp/rain), forecast-card,
   and icon/humidity-drop drawing - all hand-drawn with Pillow
 - `display/inky_driver.py` - thin wrapper around the `inky` library;
   `display/mock_driver.py` saves to a file instead, for testing without

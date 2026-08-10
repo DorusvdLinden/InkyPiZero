@@ -38,12 +38,26 @@ runs, so this is how the choice survives across renders).
 
 | Mode | `VALID_MODES` value | Chart style | Data-point grid |
 |---|---|---|---|
-| Original | `"original"` | Dashed lines at the day's actual min/max (+ a 0°C line if it goes below freezing) | 2x3 grid, all 6 details (wind/humidity/pressure/UV/visibility/AQI) |
-| Gridlines | `"gridlines"` (**default**, `DEFAULT_MODE`) | Fixed dotted reference grid every 10°C across the visible range | 2x3 grid, all 6 details |
-| Compact | `"compact"` | Same gridlines style as above | 2x2 grid (or 1x4, see `compact_style`), only wind/humidity/UV/AQI (`canvas.COMPACT_KINDS`) |
+| Original | `"original"` | Dashed lines at the day's actual min/max (+ a 0°C line if it goes below freezing) | 2x3 grid, always 6 cells: wind/humidity/pressure/UV/AQI, plus a 5th "swap" cell - pollen when available, else visibility |
+| Gridlines | `"gridlines"` (**default**, `DEFAULT_MODE`) | Fixed dotted reference grid every 10°C across the visible range | 2x3 grid, same 6 cells as Original |
+| Compact | `"compact"` | Same gridlines style as above | Only wind/humidity/UV/AQI (`canvas.COMPACT_KINDS`) normally - 4 cells (2x2, or 1x4, see `compact_style`); grows to 5 cells (3-over-2, or 1x5) whenever pollen data is available |
 
 If the state file is missing or contains something outside `VALID_MODES`,
 `get_mode()` falls back to `DEFAULT_MODE`.
+
+### Pollen (Hooikoorts)
+
+Open-Meteo's air-quality endpoint (the same one already used for UV/AQI)
+also serves hourly pollen concentrations, but only for **European
+locations** and only during each species' **active season** - null
+otherwise. `weather_data._classify_pollen` checks all 6 species (alder,
+birch, grass, mugwort, olive, ragweed) for the current hour and returns
+the worst tier (Laag/Matig/Hoog/Zeer hoog) plus the species driving it, or
+`None` if every species is null. When `None`, the app falls back to
+showing visibility instead - this is why pollen isn't a guaranteed 7th
+data point: most non-European renders, and any European one outside the
+season, simply won't have it. See `scripts/test_pollen_scenarios.py` for
+deterministic coverage of every tier plus the fallback.
 
 ## Via the web UI (`web_app.py`, always-on)
 

@@ -255,7 +255,7 @@ both live data (14-location test) and deterministic synthetic fixtures for
 all four branches (`scripts/test_precip_scenarios.py`, since live weather
 can't reliably guarantee a hailstorm on any given test run).
 
-### 21. WiFi provisioning + always-on settings web UI — most recent
+### 21. WiFi provisioning + always-on settings web UI
 Branch `wifi-setup-webui`
 
 The project's first departure from "no web UI, no long-running service
@@ -298,6 +298,46 @@ runtime reconnect-check (the connectivity check only runs at
 DNS redirect on the setup AP, no authentication anywhere (matches button
 A's existing unauthenticated-shutdown precedent; trusted-LAN-only by
 design).
+
+---
+
+### 22. Pollen / hay fever (Hooikoorts) data point — most recent
+Branch `pollen-hayfever-detail`
+
+Adds a pollen data point, sourced from the same Open-Meteo air-quality
+endpoint already used for UV/AQI (6 hourly species: alder, birch, grass,
+mugwort, olive, ragweed - Europe-only, null outside each species' active
+season). `weather_data._classify_pollen` picks the worst tier
+(Laag/Matig/Hoog/Zeer hoog) across all species with current-hour data, plus
+the species driving it; `get_pollen_color` reuses `PALETTE.uv_low/
+uv_moderate/uv_high/uv_very_high` rather than adding new palette roles (no
+"extreme" tier for pollen, unlike UV's 5).
+
+Since pollen data is frequently absent, it isn't a naive 7th data point
+(the 2x3 grid's `_draw_data_points` has no cap - an unconditional 7th item
+would render off the bottom of the canvas). Instead: in `original`/
+`gridlines`, pollen **replaces visibility** in the grid whenever available,
+keeping the grid at exactly 6 cells either way. In `compact` mode, pollen
+is added as a genuine **5th cell** when available (new `layout.py`
+3-over-2 grid, `data_point_cell_compact_5`, plus a generalized
+`data_point_cell_1xn` for the `icon_above_row` mockup style), falling back
+to today's 4-cell grid otherwise.
+
+New `render_pollen_icon` (`widgets/gauge.py`) draws a flat flower/blossom
+silhouette procedurally (6 petal circles + a center circle, single flat
+tier color) - mirrors `render_uv_icon`'s minimal-shape pattern, since no
+pollen/flower icon exists in the weather-icons-derived asset set (see
+`docs/icons.md`).
+
+New `scripts/test_pollen_scenarios.py` (mirrors entry 20's precip-scenario
+script) fakes the air-quality fetch with crafted hourly pollen values,
+covering all 4 tiers, a tree-vs-grass tie-break case, and the no-data
+fallback - live weather can't reliably guarantee season/hemisphere coverage
+on any given test run.
+
+**Active** - current pollen implementation. Known permanent limitations,
+tracked in `TODO.md`: Europe-only/seasonal coverage (an Open-Meteo data
+limitation, not a bug) and no "extreme" tier.
 
 ---
 

@@ -50,8 +50,12 @@ python main.py --mock-output output.png
   precipitation axis label (rain/hail/snow/dry) via crafted fixtures,
   since live weather can't reliably guarantee all four (a hailstorm
   especially) on any given run.
+- `python scripts/test_pollen_scenarios.py` - covers the pollen/hay-fever
+  data point's tiers and the visibility fallback via crafted air-quality
+  fixtures, since live weather can't reliably guarantee season/hemisphere
+  coverage on any given run.
 
-Both save their renders to `mock_display_output/` for visual review - see
+All three save their renders to `mock_display_output/` for visual review - see
 [icons.md](./icons.md) and [changes.md](./changes.md) for the rest of the
 project's reference docs.
 

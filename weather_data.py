@@ -31,7 +31,7 @@ UNITS = {
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language=nl&zoom=14"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
-OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=european_aqi,uv_index,uv_index_clear_sky&timezone=auto"
+OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=european_aqi,uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = {
     "standard": "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm",
     "metric": "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm",
@@ -232,6 +232,64 @@ def get_uv_color(uv_index) -> str:
         color = PALETTE.uv_very_high
     else:
         color = PALETTE.uv_extreme
+    return "#{:02x}{:02x}{:02x}".format(*color)
+
+
+# Open-Meteo's pollen variables (grains/m3) are Europe-only and null outside
+# the active season for each species - there's no single published scale
+# that covers both tree and grass/weed pollen, and no universal consensus on
+# exact cutoffs even within each group; these bands follow the commonly
+# cited European pollen-count tiers.
+POLLEN_SPECIES_NL = {
+    "alder_pollen": "Els",
+    "birch_pollen": "Berk",
+    "grass_pollen": "Gras",
+    "mugwort_pollen": "Bijvoet",
+    "olive_pollen": "Olijf",
+    "ragweed_pollen": "Ambrosia",
+}
+POLLEN_TREE_SPECIES = {"alder_pollen", "birch_pollen", "olive_pollen"}
+POLLEN_TREE_THRESHOLDS = (10, 100, 1000)  # Laag/Matig/Hoog/Zeer hoog cutoffs
+POLLEN_GRASS_WEED_THRESHOLDS = (5, 20, 50)
+POLLEN_TIERS = ["Laag", "Matig", "Hoog", "Zeer hoog"]
+
+
+def _pollen_tier_index(species: str, value: float) -> int:
+    thresholds = POLLEN_TREE_THRESHOLDS if species in POLLEN_TREE_SPECIES else POLLEN_GRASS_WEED_THRESHOLDS
+    for i, cutoff in enumerate(thresholds):
+        if value <= cutoff:
+            return i
+    return len(thresholds)
+
+
+def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
+    """Returns {"tier": ..., "species_nl": ...} for the worst-affected
+    species with data this hour, or None if every species is null (out of
+    season, or a non-European location - Open-Meteo's pollen coverage)."""
+    times = hourly.get("time", [])
+    worst_index, worst_species = -1, None
+    for species in POLLEN_SPECIES_NL:
+        value = _value_at_current_hour(times, hourly.get(species, []), tz, current_time)
+        if value is None:
+            continue
+        tier_index = _pollen_tier_index(species, value)
+        if tier_index > worst_index:
+            worst_index, worst_species = tier_index, species
+    if worst_species is None:
+        return None
+    return {"tier": POLLEN_TIERS[worst_index], "species_nl": POLLEN_SPECIES_NL[worst_species]}
+
+
+def get_pollen_color(tier: str) -> str:
+    """Reuses the UV widget's tier colors (widgets/palette.py) - same
+    abstract low/moderate/high/very-high severity progression, no separate
+    palette roles needed. Pollen has no "extreme" tier."""
+    color = {
+        "Laag": PALETTE.uv_low,
+        "Matig": PALETTE.uv_moderate,
+        "Hoog": PALETTE.uv_high,
+        "Zeer hoog": PALETTE.uv_very_high,
+    }.get(tier, PALETTE.uv_low)
     return "#{:02x}{:02x}{:02x}".format(*color)
 
 
@@ -571,23 +629,30 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
-    if units == "imperial":
-        visibility_conversion, visibility_max = 1 / 5280.0, 6.2
+    pollen = _classify_pollen(aqi_data.get("hourly", {}), tz, current_time)
+    if pollen is not None:
+        data_points.append({
+            "kind": "pollen", "label": "Hooikoorts", "measurement": pollen["tier"], "unit": pollen["species_nl"],
+            "pollen_color": get_pollen_color(pollen["tier"]),
+        })
     else:
-        visibility_conversion, visibility_max = 0.001, 10.0
-    raw_visibility = _value_at_current_hour(hourly_data.get("time", []), hourly_data.get("visibility", []), tz, current_time)
-    at_max_visibility = False
-    if raw_visibility is not None:
-        current_visibility = raw_visibility * visibility_conversion
-        at_max_visibility = current_visibility >= visibility_max
-        visibility_str = f"{current_visibility:.1f}"
-        if at_max_visibility:
-            visibility_str = "≥" + visibility_str
-    else:
-        visibility_str = "N/A"
-    data_points.append({
-        "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": UNITS[units]["distance"],
-    })
+        if units == "imperial":
+            visibility_conversion, visibility_max = 1 / 5280.0, 6.2
+        else:
+            visibility_conversion, visibility_max = 0.001, 10.0
+        raw_visibility = _value_at_current_hour(hourly_data.get("time", []), hourly_data.get("visibility", []), tz, current_time)
+        at_max_visibility = False
+        if raw_visibility is not None:
+            current_visibility = raw_visibility * visibility_conversion
+            at_max_visibility = current_visibility >= visibility_max
+            visibility_str = f"{current_visibility:.1f}"
+            if at_max_visibility:
+                visibility_str = "≥" + visibility_str
+        else:
+            visibility_str = "N/A"
+        data_points.append({
+            "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": UNITS[units]["distance"],
+        })
 
     aqi_times = aqi_data.get("hourly", {}).get("time", [])
     aqi_values = aqi_data.get("hourly", {}).get("european_aqi", [])

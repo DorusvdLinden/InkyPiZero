@@ -60,6 +60,18 @@ reference docs this list feeds into.
 
 - [ ] **`compact_style` was never decided on**: "compact" screen mode has three interchangeable sub-layouts (`icon_left`/`icon_above`/`icon_above_row`) built for comparison, but `icon_left` has just been the de facto wired default since day one with no follow-up commit formally choosing it. Either commit to `icon_left` and remove the other two mockups, or expose the choice as a real setting. Found while writing `docs/changes.md`.
 
+## Pollen
+
+- [ ] **Pollen coverage is permanently Europe-only and seasonal** - not a
+  bug, a real limitation of Open-Meteo's air-quality pollen data (null
+  outside a species' active season, and outside Europe entirely). Most
+  non-European renders, and any European one out of season, will always
+  fall back to showing visibility instead. Documented in `docs/settings.md`.
+- [ ] **No "extreme" pollen tier** - only 4 bands (Laag/Matig/Hoog/Zeer
+  hoog), unlike UV's 5 (which adds Extreem). The researched reference
+  concentration ranges for pollen only support 4 bands; revisit if a
+  clearer 5th-tier threshold turns up.
+
 ## General polish
 
 - [ ] All fonts, gauge sizes, and region positions in `layout.py` are a first-pass approximation of `weather.css`'s proportions, not pixel-matched to the original design yet.

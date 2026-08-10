@@ -24,7 +24,7 @@ def _data_point_value_text(dp: dict) -> str:
 
 # "compact" screen mode (button D) drops these two - see Ideas.md "third
 # option display" - keeping wind/humidity/uv/aqi.
-COMPACT_KINDS = {"wind", "humidity", "uv", "aqi"}
+COMPACT_KINDS = {"wind", "humidity", "uv", "aqi", "pollen"}
 
 
 class WeatherCanvas:
@@ -105,17 +105,21 @@ class WeatherCanvas:
     def _draw_data_points_compact(self, image, draw, data: WeatherSnapshot):
         """"compact" screen mode (button D, see Ideas.md) - 4 details
         (wind/humidity/uv/aqi) instead of 6, bigger fonts in the reclaimed
-        space. Three interchangeable arrangements to compare -
-        self.compact_style picks which:
+        space; grows to 5 (adding pollen) whenever Open-Meteo actually has
+        pollen data for the current hour/location. Three interchangeable
+        arrangements to compare - self.compact_style picks which:
           - "icon_left": same icon-then-stacked-text arrangement as the
-            original 6-detail grid, just in 2x2 cells with bigger fonts.
+            original 6-detail grid, just in 2x2 (or 3-over-2, at 5) cells
+            with bigger fonts.
           - "icon_above": icon centered above centered label/value text,
-            in the same 2x2 cells - a more "card"-like look.
+            in the same cells - a more "card"-like look.
           - "icon_above_row": same icon-above-text arrangement, but as a
-            single row of 4 cells spanning the full width instead of 2x2."""
+            single row spanning the full width instead of a 2-row grid."""
         points = [dp for dp in data.data_points if dp["kind"] in COMPACT_KINDS]
         if self.compact_style == "icon_above_row":
-            cells = [layout.data_point_cell_1x4(i) for i in range(len(points))]
+            cells = [layout.data_point_cell_1xn(i, len(points)) for i in range(len(points))]
+        elif len(points) == 5:
+            cells = [layout.data_point_cell_compact_5(i) for i in range(len(points))]
         else:
             cells = [layout.data_point_cell_2x2(i) for i in range(len(points))]
 
@@ -130,9 +134,13 @@ class WeatherCanvas:
         icon_box = layout.Region(cell.x, cell.y, icon_w, cell.h)
         self._draw_data_point_icon(image, icon_box, dp)
 
+        # narrower cells (the 5-detail grid's 3-cell top row, 160px vs the
+        # 4-detail grid's 240px) need smaller fonts or text overlaps the
+        # neighboring cell - draw.text doesn't wrap/clip.
+        narrow = cell.w < 200
         text_x = cell.x + icon_w + 10
-        font_label = self.assets.font("normal", 22)
-        font_value = self.assets.font("bold", 24)
+        font_label = self.assets.font("normal", 14 if narrow else 22)
+        font_value = self.assets.font("bold", 16 if narrow else 24)
         label_y = cell.y + int(cell.h * 0.36)
         value_y = cell.y + int(cell.h * 0.68)
         draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
@@ -161,6 +169,8 @@ class WeatherCanvas:
             gauge_img = gauge.render_uv_icon(dp["uv_color"], dp["uv_beams"])
         elif kind == "aqi":
             gauge_img = gauge.render_aqi_gauge(dp["aqi_rotation"])
+        elif kind == "pollen":
+            gauge_img = gauge.render_pollen_icon(dp["pollen_color"])
         elif kind == "humidity":
             icons_widget.draw_humidity_drops(image, box, self.assets, dp["drop_count"])
             return
