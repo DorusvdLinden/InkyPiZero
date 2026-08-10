@@ -60,6 +60,31 @@ reference docs this list feeds into.
 
 - [ ] **`compact_style` was never decided on**: "compact" screen mode has three interchangeable sub-layouts (`icon_left`/`icon_above`/`icon_above_row`) built for comparison, but `icon_left` has just been the de facto wired default since day one with no follow-up commit formally choosing it. Either commit to `icon_left` and remove the other two mockups, or expose the choice as a real setting. Found while writing `docs/changes.md`.
 
+## Kwaliteit & Pollen (combined AQI + pollen)
+
+- [ ] **Pollen's contribution is permanently Europe-only and seasonal** -
+  not a bug, a real limitation of Open-Meteo's air-quality pollen data
+  (null outside a species' active season, and outside Europe entirely).
+  Most non-European renders, and any European one out of season, fall back
+  to AQI alone (or "N/A" if AQI is also unavailable). Documented in
+  `docs/settings.md`.
+- [ ] **Open-Meteo/CAMS only models 6 pollen species, fewer than Dutch
+  pollen services track** - confirmed against pollennieuws.nl 2026-08-10:
+  it rates "Kruiden" (herbs/weeds) "Zeer ongunstig" (very unfavorable)
+  while this app's mugwort+ragweed readings were low/zero the same day.
+  Dutch services' "Kruiden" bucket commonly includes weeds Open-Meteo
+  doesn't model at all (e.g. nettle/brandnetel, sorrel/zuring,
+  plantain/weegbree), so this app's pollen contribution can genuinely
+  understate a Netherlands-focused service's even when both are working
+  correctly. Not fixable without a different upstream data source -
+  documented as a known gap, not a bug. See `docs/settings.md`.
+- [ ] **Combined scale is a fresh 4-tier design (Goed/Matig/Slecht/Zeer
+  slecht), not identical to either input's own vocabulary** - confirmed
+  with the user 2026-08-10 as the preferred option over reusing AQI's 6
+  tiers or pollen's 4 outright. Worth revisiting if the combined wording
+  ever feels redundant next to AQI's/UV's own tier vocabulary shown
+  elsewhere on the same screen.
+
 ## General polish
 
 - [ ] All fonts, gauge sizes, and region positions in `layout.py` are a first-pass approximation of `weather.css`'s proportions, not pixel-matched to the original design yet.

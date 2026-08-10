@@ -43,7 +43,9 @@ CHART_AREA = Region(0, TODAY.bottom + 6, 800, 160)
 FORECAST_ROW = Region(0, CHART_AREA.bottom + 8, 800, 95)
 
 # Data-point grid: 2 columns x 3 rows, filled row-major in the same order as
-# weather_data.py's data_points list (wind, humidity, pressure, uv, visibility, aqi).
+# weather_data.py's data_points list (wind, humidity, pressure, uv,
+# visibility, aqi - "aqi" is the combined "Kwaliteit & Pollen" data point,
+# see weather_data._combine_aqi_pollen_tier).
 DATA_POINT_COLS = 2
 DATA_POINT_ROWS = 3
 DATA_POINT_ICON_FRACTION = 0.38  # matches .data-point-img-container width:38%

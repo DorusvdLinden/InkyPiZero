@@ -149,6 +149,11 @@ steps).
 
 `widgets/gauge.py` draws the wind compass, pressure gauge, UV sunburst, and
 AQI band entirely with PIL primitives - none of them load a raster icon.
+The AQI band/needle (`render_aqi_gauge`) is also the icon for the combined
+"Kwaliteit & Pollen" data point (see `docs/settings.md`) - no separate
+pollen icon exists; a procedurally-drawn flower icon was tried and then
+removed when pollen was merged into the AQI data point rather than kept as
+its own cell (see `docs/changes.md` entry 22).
 
 `scripts/icon_overview.py` also calls `assets.icon(key, (48, 48))` to build a
 dev-only contact sheet (`mock_display_output/icon_overviews/`) - not a
