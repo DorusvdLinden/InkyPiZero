@@ -264,8 +264,15 @@ def _pollen_tier_index(species: str, value: float) -> int:
 
 def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
     """Returns {"tier": ..., "species_nl": ...} for the worst-affected
-    species with data this hour, or None if every species is null (out of
-    season, or a non-European location - Open-Meteo's pollen coverage).
+    species using each species' peak value anywhere in the current
+    calendar day, or None if every species is null all day (out of season,
+    or a non-European location - Open-Meteo's pollen coverage).
+
+    Deliberately today's peak rather than the current-hour reading (unlike
+    UV/AQI/humidity, which do use the live instant value) - pollen swings
+    hard hour to hour (e.g. a grass count of 4-10 grains/m3 across one
+    day), so a single instant can sit at a local dip while the rest of the
+    day is a genuine "watch out" day. Confirmed against pollennieuws.nl.
 
     Off-season species commonly read a flat 0.0 (not null) rather than
     dropping out of the response entirely, so ties are broken by each
@@ -274,9 +281,10 @@ def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
     species (e.g. alder in August) would win "worst" over a genuinely
     active one on tier alone."""
     times = hourly.get("time", [])
+    today = current_time.date()
     best = None  # (tier_index, normalized_value, species)
     for species in POLLEN_SPECIES_NL:
-        value = _value_at_current_hour(times, hourly.get(species, []), tz, current_time)
+        value = _value_max_today(times, hourly.get(species, []), tz, today)
         if value is None:
             continue
         thresholds = POLLEN_TREE_THRESHOLDS if species in POLLEN_TREE_SPECIES else POLLEN_GRASS_WEED_THRESHOLDS
@@ -594,6 +602,24 @@ def _value_at_current_hour(times, values, tz, current_time):
         except ValueError:
             continue
     return None
+
+
+def _value_max_today(times, values, tz, current_date):
+    """Highest non-null value among hours on current_date - used for pollen
+    (see _classify_pollen) since a single instant can sit at a local dip
+    while the rest of the day is much worse, unlike UV/AQI/humidity which
+    intentionally show the live current-hour reading."""
+    best = None
+    for i, time_str in enumerate(times):
+        try:
+            if datetime.fromisoformat(time_str).astimezone(tz).date() != current_date:
+                continue
+        except ValueError:
+            continue
+        value = values[i] if i < len(values) else None
+        if value is not None and (best is None or value > best):
+            best = value
+    return best
 
 
 def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:

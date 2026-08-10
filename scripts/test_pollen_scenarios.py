@@ -53,6 +53,31 @@ def _make_payload(pollen_values: dict) -> dict:
     return {"hourly": hourly}
 
 
+def _make_daily_peak_dip_payload() -> dict:
+    """Regression for classifying by today's peak rather than the exact
+    current hour (weather_data._value_max_today): grass_pollen dips at the
+    current hour but peaks later today - classification must pick up the
+    peak. (Assumes at least one hour is left today when this test runs -
+    same real-time-dependent caveat as this script's other scenarios.)"""
+    now = datetime.now().replace(minute=0, second=0, microsecond=0)
+    today = now.date()
+    hourly_times = [(now + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(HOURS)]
+    grass = []
+    for i in range(HOURS):
+        hour_date = (now + timedelta(hours=i)).date()
+        if i == 0:
+            grass.append(2.0)  # dip at the exact current hour
+        elif hour_date == today:
+            grass.append(9.0)  # peak later today
+        else:
+            grass.append(2.0)
+    hourly = {"time": hourly_times, "grass_pollen": grass}
+    for species in weather_data.POLLEN_SPECIES_NL:
+        if species != "grass_pollen":
+            hourly[species] = [None] * HOURS
+    return {"hourly": hourly}
+
+
 SCENARIOS = {
     "no_data": lambda: _make_payload({}),
     "laag": lambda: _make_payload({"grass_pollen": 3}),
@@ -66,6 +91,11 @@ SCENARIOS = {
     # order - a same-tier ("Laag") tie must not let that 0.0 species win
     # over a genuinely active one just by iteration order.
     "zero_species_tie": lambda: _make_payload({"alder_pollen": 0.0, "grass_pollen": 4.9}),
+    # regression for a real bug: classifying off the exact current hour
+    # missed a day that peaked well above the current dip (confirmed
+    # against pollennieuws.nl - a "watch out today" grass day showed
+    # "Laag" because the instant reading happened to be low).
+    "daily_peak_not_current_hour": _make_daily_peak_dip_payload,
 }
 
 EXPECTED = {
@@ -76,6 +106,7 @@ EXPECTED = {
     "zeer_hoog": ("Zeer hoog", "Berk"),
     "mixed_worst_wins": ("Zeer hoog", "Berk"),
     "zero_species_tie": ("Laag", "Gras"),
+    "daily_peak_not_current_hour": ("Matig", "Gras"),
 }
 
 

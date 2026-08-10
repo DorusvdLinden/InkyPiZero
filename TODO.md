@@ -71,6 +71,16 @@ reference docs this list feeds into.
   hoog), unlike UV's 5 (which adds Extreem). The researched reference
   concentration ranges for pollen only support 4 bands; revisit if a
   clearer 5th-tier threshold turns up.
+- [ ] **Open-Meteo/CAMS only models 6 species, fewer than Dutch pollen
+  services track** - confirmed against pollennieuws.nl 2026-08-10: it rates
+  "Kruiden" (herbs/weeds) "Zeer ongunstig" (very unfavorable) while this
+  app's mugwort+ragweed readings were low/zero the same day. Dutch services'
+  "Kruiden" bucket commonly includes weeds Open-Meteo doesn't model at all
+  (e.g. nettle/brandnetel, sorrel/zuring, plantain/weegbree), so this app's
+  herb/weed reading can genuinely understate a Netherlands-focused
+  service's even when both are working correctly. Not fixable without a
+  different upstream data source - documented as a known gap, not a bug.
+  See `docs/settings.md`.
 
 ## General polish
 

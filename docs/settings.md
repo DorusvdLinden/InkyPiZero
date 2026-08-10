@@ -51,13 +51,26 @@ Open-Meteo's air-quality endpoint (the same one already used for UV/AQI)
 also serves hourly pollen concentrations, but only for **European
 locations** and only during each species' **active season** - null
 otherwise. `weather_data._classify_pollen` checks all 6 species (alder,
-birch, grass, mugwort, olive, ragweed) for the current hour and returns
-the worst tier (Laag/Matig/Hoog/Zeer hoog) plus the species driving it, or
-`None` if every species is null. When `None`, the app falls back to
-showing visibility instead - this is why pollen isn't a guaranteed 7th
-data point: most non-European renders, and any European one outside the
-season, simply won't have it. See `scripts/test_pollen_scenarios.py` for
-deterministic coverage of every tier plus the fallback.
+birch, grass, mugwort, olive, ragweed) using each species' **peak value
+anywhere in the current calendar day** (`_value_max_today`, not the exact
+current-hour reading UV/AQI/humidity use) and returns the worst tier
+(Laag/Matig/Hoog/Zeer hoog) plus the species driving it, or `None` if
+every species is null all day. Deliberately today's peak, not the instant
+value - pollen swings hard hour to hour, so a single reading can sit at a
+local dip while the rest of the day is a genuine "watch out" day; confirmed
+against pollennieuws.nl's own daily trend framing. When `None`, the app
+falls back to showing visibility instead - this is why pollen isn't a
+guaranteed 7th data point: most non-European renders, and any European one
+outside the season, simply won't have it. See
+`scripts/test_pollen_scenarios.py` for deterministic coverage of every
+tier, the daily-peak-vs-current-hour behavior, and the fallback.
+
+Note Open-Meteo/CAMS only models these 6 species - Dutch pollen services
+like pollennieuws.nl group mugwort+ragweed (and sometimes other weeds not
+modeled here, e.g. nettle/sorrel/plantain) under a broader "Kruiden"
+category, so this app's herb/weed reading can understate what a
+Netherlands-focused service reports even when both are working correctly -
+a real, permanent data-source gap (see `TODO.md`), not a bug.
 
 ## Via the web UI (`web_app.py`, always-on)
 

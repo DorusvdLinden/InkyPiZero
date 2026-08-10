@@ -308,10 +308,24 @@ Adds a pollen data point, sourced from the same Open-Meteo air-quality
 endpoint already used for UV/AQI (6 hourly species: alder, birch, grass,
 mugwort, olive, ragweed - Europe-only, null outside each species' active
 season). `weather_data._classify_pollen` picks the worst tier
-(Laag/Matig/Hoog/Zeer hoog) across all species with current-hour data, plus
-the species driving it; `get_pollen_color` reuses `PALETTE.uv_low/
+(Laag/Matig/Hoog/Zeer hoog) across all species using each species' **peak
+value anywhere in the current calendar day** (`_value_max_today`), plus the
+species driving it; `get_pollen_color` reuses `PALETTE.uv_low/
 uv_moderate/uv_high/uv_very_high` rather than adding new palette roles (no
 "extreme" tier for pollen, unlike UV's 5).
+
+Went through two real correctness fixes after comparing live output against
+pollennieuws.nl: (1) ties within the same tier were broken by dict
+iteration order, so an always-0.0 off-season species (alder, in August)
+beat a genuinely active one (grass) just by being listed first in
+`POLLEN_SPECIES_NL` - fixed by breaking ties on concentration normalized
+against each species' own threshold group instead; (2) classification
+originally used the exact current-hour reading (matching UV/AQI/humidity's
+pattern), but pollen swings hard hour to hour - Sittard's grass count
+ranged 4.4-9.8 grains/m3 across one day, and the exact hour checked
+happened to sit at a local dip, showing "Laag" on a day pollennieuws.nl
+rated "ongunstig" (unfavorable). Switched to today's peak per species,
+a deliberate exception to the current-hour pattern the other gauges use.
 
 Since pollen data is frequently absent, it isn't a naive 7th data point
 (the 2x3 grid's `_draw_data_points` has no cap - an unconditional 7th item
@@ -327,17 +341,22 @@ New `render_pollen_icon` (`widgets/gauge.py`) draws a flat flower/blossom
 silhouette procedurally (6 petal circles + a center circle, single flat
 tier color) - mirrors `render_uv_icon`'s minimal-shape pattern, since no
 pollen/flower icon exists in the weather-icons-derived asset set (see
-`docs/icons.md`).
+`docs/icons.md`). Shrunk once after the first hardware render: the initial
+shape nearly filled its full 120x120 canvas (10px margin), reading much
+larger/heavier than the other data-point icons sharing the same box.
 
 New `scripts/test_pollen_scenarios.py` (mirrors entry 20's precip-scenario
 script) fakes the air-quality fetch with crafted hourly pollen values,
-covering all 4 tiers, a tree-vs-grass tie-break case, and the no-data
-fallback - live weather can't reliably guarantee season/hemisphere coverage
-on any given test run.
+covering all 4 tiers, a tree-vs-grass tie-break case, the zero-vs-active
+species tie regression, the daily-peak-vs-current-hour regression, and the
+no-data fallback - live weather can't reliably guarantee season/hemisphere
+coverage on any given test run.
 
 **Active** - current pollen implementation. Known permanent limitations,
 tracked in `TODO.md`: Europe-only/seasonal coverage (an Open-Meteo data
-limitation, not a bug) and no "extreme" tier.
+limitation, not a bug), no "extreme" tier, and Open-Meteo/CAMS modeling
+fewer herb/weed species than Dutch pollen services track (confirmed against
+pollennieuws.nl's broader "Kruiden" category).
 
 ---
 
