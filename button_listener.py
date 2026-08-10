@@ -29,6 +29,7 @@ from gpiod.line import Bias, Direction, Edge
 from PIL import Image
 
 import layout
+import display_freshness
 import display_mode
 from display.inky_driver import InkyDriver
 
@@ -49,6 +50,7 @@ def blank_and_shutdown():
 def switch_mode(mode: str):
     logger.info("Switching to %r screen mode.", mode)
     display_mode.set_mode(mode)
+    display_freshness.request_forced_refresh()
     subprocess.run(["systemctl", "start", "pi-weather-display.service"], check=True)
 
 
