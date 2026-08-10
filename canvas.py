@@ -123,21 +123,26 @@ class WeatherCanvas:
         else:
             cells = [layout.data_point_cell_2x2(i) for i in range(len(points))]
 
+        # Icon/font sizing is derived from the narrowest cell in the grid
+        # (not each cell's own width) and shared by every cell, so the
+        # 5-detail grid's wider bottom row doesn't render bigger icons/text
+        # than its narrower top row - just extra breathing room to its right.
+        ref_cell_w = min(cell.w for cell in cells)
         for dp, cell in zip(points, cells):
             if self.compact_style == "icon_left":
-                self._draw_compact_cell_icon_left(image, draw, cell, dp)
+                self._draw_compact_cell_icon_left(image, draw, cell, dp, ref_cell_w)
             else:
-                self._draw_compact_cell_icon_above(image, draw, cell, dp)
+                self._draw_compact_cell_icon_above(image, draw, cell, dp, ref_cell_w)
 
-    def _draw_compact_cell_icon_left(self, image, draw, cell: layout.Region, dp: dict):
-        icon_w = int(cell.w * 0.32)
+    def _draw_compact_cell_icon_left(self, image, draw, cell: layout.Region, dp: dict, ref_cell_w: int):
+        icon_w = int(ref_cell_w * 0.32)
         icon_box = layout.Region(cell.x, cell.y, icon_w, cell.h)
         self._draw_data_point_icon(image, icon_box, dp)
 
-        # narrower cells (the 5-detail grid's 3-cell top row, 160px vs the
-        # 4-detail grid's 240px) need smaller fonts or text overlaps the
-        # neighboring cell - draw.text doesn't wrap/clip.
-        narrow = cell.w < 200
+        # narrower grids (the 5-detail grid's 160px cells vs the 4-detail
+        # grid's 240px) need smaller fonts or text overlaps the neighboring
+        # cell - draw.text doesn't wrap/clip.
+        narrow = ref_cell_w < 200
         text_x = cell.x + icon_w + 10
         font_label = self.assets.font("normal", 14 if narrow else 22)
         font_value = self.assets.font("bold", 16 if narrow else 24)
@@ -146,9 +151,9 @@ class WeatherCanvas:
         draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
         draw.text((text_x, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="lm")
 
-    def _draw_compact_cell_icon_above(self, image, draw, cell: layout.Region, dp: dict):
+    def _draw_compact_cell_icon_above(self, image, draw, cell: layout.Region, dp: dict, ref_cell_w: int):
         cx = cell.x + cell.w // 2
-        icon_size = int(min(cell.w * 0.4, cell.h * 0.45))
+        icon_size = int(min(ref_cell_w * 0.4, cell.h * 0.45))
         icon_box = layout.Region(cx - icon_size // 2, cell.y + int(cell.h * 0.06), icon_size, icon_size)
         self._draw_data_point_icon(image, icon_box, dp)
 
