@@ -8,7 +8,7 @@ reference docs this list feeds into.
 
 ## Color palette & quantization
 
-- [ ] **`widgets/palette.py`'s `PALETTE` singleton isn't wired to `config.py`**: `PALETTE = Palette(saturation=0.0)` is a module-level constant that must be hand-edited any time `DisplayConfig.inky_saturation` changes, or every authored color silently stops being an exact panel-palette match and starts dithering again - nothing asserts or warns on a mismatch. Found while writing `docs/settings.md`.
+- [ ] **`widgets/palette.py`'s `PALETTE` singleton isn't wired to `config.py`**: `PALETTE = Palette(saturation=0.0)` is a module-level constant that must be hand-edited any time `DisplayConfig.inky_saturation` changes, or every authored color silently stops being an exact panel-palette match and starts dithering again - nothing asserts or warns on a mismatch. Found while writing `docs/settings.md`. Fix planned, not yet implemented - see [docs/plans/palette-saturation-sync-fix.md](./docs/plans/palette-saturation-sync-fix.md).
 
 ## Icons
 
