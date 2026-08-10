@@ -57,12 +57,13 @@ GPIO for falling-edge presses, debounced 50ms (`DEBOUNCE_MS`).
 | Button | GPIO (BCM) | Action |
 |---|---|---|
 | A | 5 (hardware-confirmed) | Blank the display and shut the Pi down (`blank_and_shutdown()`) |
-| B | 6 | Switch to `"original"` screen mode |
-| C | 16 | Switch to `"gridlines"` screen mode |
-| D | 24 | Switch to `"compact"` screen mode |
+| B | 6 (hardware-confirmed) | Switch to `"original"` screen mode |
+| C | 16 (hardware-confirmed) | Switch to `"gridlines"` screen mode |
+| D | 24 (hardware-confirmed) | Switch to `"compact"` screen mode |
 
-B/C/D=GPIO6/16/24 follow Pimoroni's standard 4-button layout but, unlike A,
-haven't been individually hardware-verified on this specific board.
+All four buttons follow Pimoroni's standard 4-button GPIO layout and have
+each been individually confirmed on the real board (press -> correct
+screen mode switches).
 
 Pressing B/C/D calls `display_mode.set_mode(mode)` then forces an immediate
 re-render (`systemctl start pi-weather-display.service`) so the new layout

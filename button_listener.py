@@ -5,7 +5,7 @@ Impression and responds accordingly:
   - Button C switches to the "gridlines" screen layout (10deg reference
     grid instead of the day's actual min/max lines) - the default.
   - Button D switches to the "compact" screen layout (4 details instead
-    of 6 - see Ideas.md "third option display").
+    of 6).
 B/C/D all trigger an immediate re-render so the new layout shows right
 away, rather than waiting for the next scheduled timer tick.
 
@@ -15,9 +15,8 @@ installed as its own persistent systemd service (pi-weather-buttons.service),
 separate from the periodic render timer.
 
 GPIO pin numbers follow Pimoroni's standard 4-button layout for the Inky
-Impression (A=5, B=6, C=16, D=24) - A was confirmed via a live probe during
-initial install; B/C/D are the same standard mapping but not yet confirmed
-on this specific board."""
+Impression (A=5, B=6, C=16, D=24) - all four individually confirmed via a
+live probe/press on the real board."""
 
 import logging
 from datetime import timedelta

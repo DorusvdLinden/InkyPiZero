@@ -22,8 +22,7 @@ def _data_point_value_text(dp: dict) -> str:
     return value_text
 
 
-# "compact" screen mode (button D) drops these two - see Ideas.md "third
-# option display" - keeping wind/humidity/uv/aqi.
+# "compact" screen mode (button D) drops these two, keeping wind/humidity/uv/aqi.
 COMPACT_KINDS = {"wind", "humidity", "uv", "aqi"}
 
 
@@ -103,7 +102,7 @@ class WeatherCanvas:
             draw.text((text_x, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="lm")
 
     def _draw_data_points_compact(self, image, draw, data: WeatherSnapshot):
-        """"compact" screen mode (button D, see Ideas.md) - 4 details
+        """"compact" screen mode (button D) - 4 details
         (wind/humidity/uv/aqi - "aqi" is the combined "Kwaliteit & Pollen"
         data point, see weather_data._combine_aqi_pollen_tier) instead of
         6, bigger fonts in the reclaimed space. Three interchangeable
