@@ -195,12 +195,27 @@ there:
 
 1. Implement and test locally first (`--mock-output` above).
 2. **Commit the change** — one commit per major change, with a descriptive message.
-3. Push to `origin`, then on the target Pi: `git pull`. Since this is a one-shot job (not
-   a long-running process), the *next* scheduled timer tick picks up changed code
-   automatically — no service restart needed for plain code changes. Only rerun
-   `sudo bash install/install.sh` if dependencies or the systemd unit files themselves
-   changed (safe to rerun any time).
+3. Push to `origin`, then on the target Pi: `git pull`.
+   - `pi-weather-display.service` is a one-shot job (not a long-running process) — the
+     *next* scheduled timer tick, or a forced one, picks up changed code automatically.
+     No restart needed for plain code changes to it or anything it imports.
+   - `pi-weather-buttons.service` and `pi-weather-web.service` are **persistent**
+     processes — a `git pull` updates the file on disk but an already-running process
+     keeps executing the old in-memory code until explicitly restarted
+     (`sudo systemctl restart pi-weather-buttons.service` /
+     `pi-weather-web.service`). Any change touching `button_listener.py`,
+     `web_app.py`, `web/`, `wifi_manager.py`, `display_mode.py`, `display_freshness.py`,
+     or `settings_store.py` needs one of these restarted before testing on the Pi, or
+     the fix will look like it didn't work (confirmed the hard way 2026-08-10:
+     `switch_mode()`'s new forced-refresh call sat deployed on disk for 3.5 hours while
+     the running button-listener process, started before that change existed, silently
+     kept using the old code — button presses looked like they did nothing).
+   - Only rerun `sudo bash install/install.sh` if dependencies or the systemd unit files
+     themselves changed (safe to rerun any time).
 4. Final test = let a real timer tick happen (or force one with `sudo systemctl start
-   pi-weather-display.service`) and confirm the physical display updated correctly.
+   pi-weather-display.service`) and confirm the physical display updated correctly. If
+   the change touched a persistent service (above), confirm *that* service was actually
+   restarted (`systemctl show <service> --property=ActiveEnterTimestamp` vs. the
+   source file's mtime) before trusting a "didn't work" result.
 5. Merge to `main` only when explicitly asked; clean up (delete, locally and on
    the remote) the branch once merged.

@@ -58,6 +58,34 @@ sudo touch /var/lib/pi-weather-display/force_refresh_requested
 sudo systemctl start pi-weather-display.service
 ```
 
+## Button press (or settings save) logs correctly but the display doesn't refresh
+
+If `journalctl -u pi-weather-buttons.service` shows the button press being
+handled (`Switching to 'X' screen mode`) and `journalctl -u
+pi-weather-display.service` shows it ran right after, but logged
+`Skipping display update - icon/temp unchanged...` instead of actually
+refreshing - the forced-refresh sentinel
+(`display_freshness.request_forced_refresh()`) didn't fire. The most
+likely cause, seen once already (2026-08-10): **`pi-weather-buttons.service`
+or `pi-weather-web.service` is running stale code** - both are persistent
+processes (unlike the one-shot render service), so a `git pull` updates the
+file on disk but an already-running process keeps executing whatever was
+in memory when it last started, until explicitly restarted. Compare the
+service's actual start time against the source file's last-modified time:
+```bash
+systemctl show pi-weather-buttons.service --property=ActiveEnterTimestamp
+ls -la --time-style=full-iso button_listener.py
+```
+(swap in `pi-weather-web.service`/`web/routes.py` for the settings-save
+path.) If the service started *before* the file was last changed, restart it:
+```bash
+sudo systemctl restart pi-weather-buttons.service pi-weather-web.service
+```
+See `CLAUDE.md`'s Git workflow section - any change touching
+`button_listener.py`, `web_app.py`, `web/`, `wifi_manager.py`,
+`display_mode.py`, `display_freshness.py`, or `settings_store.py` needs
+one of these two services restarted before testing on the Pi.
+
 ## Buttons not switching screen mode
 
 Unlike the render timer, the button listener is a persistent service, so it
