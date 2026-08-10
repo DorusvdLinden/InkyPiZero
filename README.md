@@ -24,7 +24,11 @@ Pi Zero W) that can't comfortably run a headless browser.
   the worse of the two on a combined Goed/Matig/Slecht/Zeer slecht scale -
   see [settings.md](./docs/settings.md)
 - No plugins, no playlist scheduling - the *rendering* is a periodic
-  `systemd` timer job (e.g. every 10 minutes), not a persistent service
+  `systemd` timer job (e.g. every 10 minutes), not a persistent service.
+  The physical panel itself only actually refreshes when the current
+  icon/temperature changes (or at least once an hour regardless) - not
+  every single tick, sparing the display unnecessary wear/flash - see
+  [settings.md](./docs/settings.md)
 - A small always-on web UI (settings, WiFi management, shutdown) runs
   independently of that render timer - see [settings.md](./docs/settings.md)
 - If it can't reach a known WiFi network, the device hosts its own setup AP
@@ -70,8 +74,10 @@ upstream project this was forked from).
    [networking.md](./docs/networking.md).
 
 The installer sets up its own minimal Python virtual environment and a
-`pi-weather-display.timer` systemd unit that renders and updates the display
-every 10 minutes.
+`pi-weather-display.timer` systemd unit that checks for fresh weather data
+every 10 minutes - the physical panel itself only actually refreshes when
+the current icon/temperature changes, or at least once an hour regardless
+(see [settings.md](./docs/settings.md)).
 
 Useful commands after installing:
 
@@ -112,7 +118,10 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   `settings.json` on top of it (written by the web UI) - see
   [settings.md](./docs/settings.md) for every option
 - `main.py` - fetch -> render -> display, no scheduling loop of its own
-  (that's the systemd timer's job)
+  (that's the systemd timer's job); on real hardware, only actually pushes
+  to the panel if the current icon/temperature changed or an hour has
+  passed since the last refresh (`display_freshness.py`) - `--mock-output`
+  always renders
 - `button_listener.py` - listens for the physical buttons: A (GPIO5) blanks
   the screen + powers off, B/C/D (GPIO6/16/24) switch the active screen
   layout (`display_mode.py`) and trigger an immediate re-render; unlike
@@ -121,6 +130,9 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 - `display_mode.py` - persists which screen layout (B/C/D button choice) is
   currently selected, since `main.py` is a one-shot timer job with no
   memory between renders
+- `display_freshness.py` - decides whether a timer tick should actually
+  refresh the physical display (see [settings.md](./docs/settings.md)) -
+  same one-shot-job persistence pattern as `display_mode.py`
 - `web_app.py` + `web/` - a small always-on Flask service
   (`pi-weather-web.service`) for settings/WiFi management/shutdown,
   completely independent of the render timer - see

@@ -49,6 +49,12 @@ automatically, without being asked each time.
   combination on any given run. Saves to `mock_display_output/pollen_scenario_test/`.
   Run this after any change to `weather_data.py`'s pollen/AQI classification or to
   `canvas.py`'s/`layout.py`'s compact-grid code, alongside the two tests above.
+- **Always test display-freshness logic**: `python scripts/test_display_freshness.py`
+  covers `display_freshness.py`'s skip/force decision (icon/temp changed, an hour
+  elapsed, a forced-refresh sentinel pending) against a temp state directory - no
+  network/hardware needed. Run this after any change to `display_freshness.py`,
+  `main.py`'s real-hardware render path, or the forced-refresh sentinel calls in
+  `button_listener.py`/`web/routes.py`.
 
 ## Documentation maintenance
 

@@ -8,6 +8,7 @@ import subprocess
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+import display_freshness
 import settings_store
 import wifi_manager
 from config import DisplayConfig
@@ -22,6 +23,7 @@ def _trigger_rerender():
     established - a settings save should show up within seconds, not wait
     for the next scheduled timer tick. Best-effort: local dev machines
     (no systemd) just log and move on rather than failing the request."""
+    display_freshness.request_forced_refresh()
     try:
         subprocess.run(["systemctl", "start", "pi-weather-display.service"], check=True)
     except (OSError, subprocess.CalledProcessError) as e:

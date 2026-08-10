@@ -301,7 +301,7 @@ design).
 
 ---
 
-### 22. Pollen data merged into AQI as one combined "Kwaliteit & Pollen" reading — most recent
+### 22. Pollen data merged into AQI as one combined "Kwaliteit & Pollen" reading
 Branch `pollen-hayfever-detail`
 
 Started as a standalone pollen/hay-fever (Hooikoorts) data point, sourced
@@ -387,6 +387,51 @@ alone already says everything's fine. Confirmed with the user 2026-08-10.
 data limitation, not a bug, falls back to AQI alone or "N/A"), and
 Open-Meteo/CAMS models fewer herb/weed species than Dutch pollen services
 track (confirmed against pollennieuws.nl's broader "Kruiden" category).
+
+---
+
+### 23. Skip unchanged display refreshes, force one hourly — most recent
+Branch `skip-unchanged-refresh`
+
+`pi-weather-display.timer` still fires every 10 minutes and `main.py`
+still fetches fresh data every tick, but the physical panel is only
+actually refreshed - the flash, and the real e-paper wear cycle - when
+it's worth it: the main current-conditions icon or the big temperature
+number changed since the last refresh, or an hour has passed regardless
+(so slower-moving details like the forecast cards, hourly chart, and
+"Laatste update" timestamp don't go stale indefinitely during a long
+stretch of unchanged weather).
+
+New `display_freshness.py` mirrors `display_mode.py`'s established
+"small state file under `/var/lib/pi-weather-display/`" pattern
+(`main.py` is a one-shot job with no memory between runs): persists the
+last-shown icon key/temperature/timestamp, and a separate one-shot
+sentinel file for forced refreshes. `main.py` was split so the freshness
+decision happens right after fetch, *before* the costlier canvas render
+step - a skipped tick avoids both the Pillow render and the display
+write, not just the write. `--mock-output` (local testing/preview)
+bypasses the check entirely and always renders.
+
+`button_listener.py`'s `switch_mode()` and `web/routes.py`'s
+`_trigger_rerender()` (the single shared trigger for every settings-save/
+WiFi-change re-render in the web UI) both write the forced-refresh
+sentinel immediately before their existing `systemctl start
+pi-weather-display.service` call - a user pressing a screen-mode button
+or saving a setting always sees the change immediately, never silently
+skipped because the icon/temperature happened to be unchanged.
+
+New `scripts/test_display_freshness.py` covers the decision logic
+directly against a temp state directory (first run, unchanged within/past
+the hour, changed icon, changed temp, a skipped tick not resetting the
+timer, a corrupt state file, the forced-refresh sentinel) - no network or
+hardware needed, matching this repo's established crafted-fixture testing
+convention.
+
+**Active** - current design. Deliberate tradeoff, tracked in `TODO.md`:
+other data points can go up to an hour stale on the physical display even
+though the underlying fetch happens every 10 minutes, if the icon/temp
+both hold steady. The 10-minute/1-hour cadence is hardcoded, not exposed
+as a setting.
 
 ---
 

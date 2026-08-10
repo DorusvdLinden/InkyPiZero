@@ -32,6 +32,32 @@ sudo find /home/dorus/InkyPiZero -name '__pycache__' -type d -exec rm -rf {} +
 sudo systemctl start pi-weather-display.service
 ```
 
+## Display isn't updating every 10 minutes / seems "stuck"
+
+This is expected, not a bug - see `docs/settings.md`'s "Display refresh
+cadence" section. `main.py` still fetches fresh data every 10 minutes,
+but only pushes to the physical panel when the current icon/temperature
+changed, or at least once an hour regardless. Check the actual timer
+runs are happening (this doesn't mean the *display* updated, just that
+the check ran):
+```bash
+journalctl -u pi-weather-display.service -n 50
+```
+A skipped tick logs `Skipping display update - icon/temp unchanged and
+last refresh was under an hour ago` and exits cleanly - that's working
+as designed, not a failure. Check the current freshness state directly:
+```bash
+cat /var/lib/pi-weather-display/display_freshness.json
+```
+To force an immediate real refresh regardless of state, either press any
+screen-mode button, save any setting in the web UI (both bypass the
+check via a one-shot sentinel - see `display_freshness.request_forced_refresh()`),
+or manually create the sentinel yourself:
+```bash
+sudo touch /var/lib/pi-weather-display/force_refresh_requested
+sudo systemctl start pi-weather-display.service
+```
+
 ## Buttons not switching screen mode
 
 Unlike the render timer, the button listener is a persistent service, so it

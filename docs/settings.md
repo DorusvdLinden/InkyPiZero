@@ -10,6 +10,44 @@ requires a `git pull` on the device to take effect).
 Keep this file up to date whenever a setting is added, renamed, removed, or
 its default changes - see the standing rule in [CLAUDE.md](../CLAUDE.md).
 
+## Display refresh cadence (`display_freshness.py`)
+
+`install/pi-weather-display.timer` still fires every 10 minutes (fetching
+fresh weather data every time), but `main.py` only actually **pushes to the
+physical panel** when it's worth the wear/flash of a real e-paper refresh:
+
+- The main current-conditions icon or the big temperature number changed
+  since the last refresh, **or**
+- More than an hour has passed since the last refresh (keeps slower-moving
+  details - forecast cards, the hourly chart, "Laatste update", sunrise/
+  sunset, moon phase - from going stale indefinitely during a long stretch
+  of unchanged weather), **or**
+- A screen-mode button press or a web-UI settings save requested an
+  immediate refresh (see below) - these always show up right away,
+  regardless of whether the icon/temperature changed.
+
+Otherwise the tick is skipped entirely - no canvas render, no display
+write, just a log line. State persists to
+`/var/lib/pi-weather-display/display_freshness.json` (same one-shot-job
+persistence pattern as `display_mode.py`): last-shown icon key,
+temperature, and refresh timestamp. A missing or corrupt state file is
+treated as "never refreshed" (always refreshes) rather than crashing the
+render pipeline.
+
+Button presses (`button_listener.py`'s `switch_mode()`) and settings saves
+(`web/routes.py`'s `_trigger_rerender()`) both write a one-shot sentinel
+file (`display_freshness.request_forced_refresh()`) immediately before
+forcing the render service to start, so `main.py` knows to bypass the
+skip check for that one run - a user-triggered change is never silently
+dropped because the icon/temperature happened to be unchanged.
+
+This is **not** configurable via `config.py`/the web UI - the 10-minute
+fetch cadence and the 1-hour force-refresh ceiling are both hardcoded
+(`display_freshness.MAX_STALE`). `--mock-output` (local testing/preview)
+always renders, bypassing this check entirely - see
+`scripts/test_display_freshness.py` for deterministic coverage of every
+branch.
+
 ## Via the physical buttons (`button_listener.py`)
 
 The only settings changeable without editing code. `button_listener.py` runs

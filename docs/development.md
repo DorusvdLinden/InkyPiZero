@@ -55,10 +55,13 @@ python main.py --mock-output output.png
   fallback) via crafted air-quality fixtures, since live weather can't
   reliably guarantee season/hemisphere coverage or a specific AQI+pollen
   combination on any given run.
+- `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
+  skip/force decision (see [settings.md](./settings.md)'s "Display refresh
+  cadence") against a temp state directory - no network/hardware needed.
 
-All three save their renders to `mock_display_output/` for visual review - see
-[icons.md](./icons.md) and [changes.md](./changes.md) for the rest of the
-project's reference docs.
+The first three save their renders to `mock_display_output/` for visual
+review - see [icons.md](./icons.md) and [changes.md](./changes.md) for the
+rest of the project's reference docs.
 
 ## Development Tips
 
