@@ -374,6 +374,14 @@ per-species mapping), confirmed with the user 2026-08-10.
 `_classify_pollen`'s returned key was renamed `species_nl` ->
 `category_nl` to match.
 
+**Then refined when the category is shown**: appended after a colon now
+("Zeer slecht: Boom" rather than "Zeer slecht Boom" - a new per-data-point
+`unit_separator` field on `_data_point_value_text`, every other data point
+still uses a plain space), and only when pollen is genuinely elevated
+(`pollen_tier_index > 0`) as well as at-or-above AQI's contribution - a
+tied "Goed" (pollen merely Laag) no longer names a category, since "Goed"
+alone already says everything's fine. Confirmed with the user 2026-08-10.
+
 **Active** - current design. Known permanent limitations, tracked in
 `TODO.md`: pollen's contribution is Europe-only/seasonal (an Open-Meteo
 data limitation, not a bug, falls back to AQI alone or "N/A"), and

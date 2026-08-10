@@ -724,12 +724,15 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     cause_category = ""
     if pollen is not None and combined_index is not None:
         aqi_combined = _AQI_TIER_TO_COMBINED[aqi_tier_index] if aqi_tier_index is not None else -1
-        if pollen_tier_index >= aqi_combined:
+        # pollen_tier_index > 0 excludes "Laag" (good/negligible pollen) even
+        # when it ties or beats AQI's contribution - not worth naming a
+        # species that isn't actually elevated.
+        if pollen_tier_index > 0 and pollen_tier_index >= aqi_combined:
             cause_category = pollen["category_nl"]
     data_points.append({
         "kind": "aqi", "label": "Kwaliteit & Pollen",
         "measurement": COMBINED_TIERS[combined_index] if combined_index is not None else "N/A",
-        "unit": cause_category,
+        "unit": cause_category, "unit_separator": ": ",
         "aqi_rotation": get_combined_rotation(combined_index),
     })
 

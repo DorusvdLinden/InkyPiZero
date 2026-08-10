@@ -29,7 +29,7 @@ os.chdir(REPO_DIR)
 
 import weather_data
 from config import DisplayConfig
-from canvas import WeatherCanvas
+from canvas import WeatherCanvas, _data_point_value_text
 from widgets.icons import AssetStore
 from display.mock_driver import MockDriver
 import display_mode
@@ -109,26 +109,34 @@ SCENARIOS = {
     "aqi_worse_than_pollen": lambda: _make_payload({"grass_pollen": 3}, aqi_value=90),  # AQI tier 4 -> combined 3
     # combining: pollen is the worse of the two - species should be named
     "pollen_worse_than_aqi": lambda: _make_payload({"birch_pollen": 2000}, aqi_value=10),  # AQI tier 0 -> combined 0
-    # combining: both present, same combined tier - species still named
-    # (pollen_tier_index >= aqi_combined, not strictly greater)
-    "tied_combined_tier": lambda: _make_payload({"grass_pollen": 3}, aqi_value=30),  # AQI tier 1 -> combined 0
+    # combining: tied at "Goed" (pollen is Laag) - category dropped even
+    # though pollen_tier_index >= aqi_combined, since Laag isn't worth
+    # naming a cause for.
+    "tied_tier_pollen_laag": lambda: _make_payload({"grass_pollen": 3}, aqi_value=30),  # AQI tier 1 -> combined 0
+    # combining: tied at "Matig" (pollen is genuinely elevated) - category
+    # still shown, unlike the Laag tie above.
+    "tied_tier_pollen_elevated": lambda: _make_payload({"grass_pollen": 15}, aqi_value=45),  # AQI tier 2 -> combined 1
 }
 
 # (expected combined measurement, expected unit/species) or None for the
 # neither-available fallback
 EXPECTED = {
     "no_data": ("N/A", ""),
-    "pollen_laag": ("Goed", "Gras"),
+    # Laag pollen never names a category, even standing alone (see
+    # get_combined_rotation/the label-formatting rule: "Tier: Categorie"
+    # only when the category is genuinely elevated).
+    "pollen_laag": ("Goed", ""),
     "pollen_matig": ("Matig", "Boom"),
     "pollen_hoog": ("Slecht", "Ambrosia"),
     "pollen_zeer_hoog": ("Zeer slecht", "Boom"),
     "mixed_worst_wins": ("Zeer slecht", "Boom"),
-    "zero_species_tie": ("Goed", "Gras"),
+    "zero_species_tie": ("Goed", ""),
     "daily_peak_not_current_hour": ("Matig", "Gras"),
     "aqi_only": ("Matig", ""),
     "aqi_worse_than_pollen": ("Zeer slecht", ""),
     "pollen_worse_than_aqi": ("Zeer slecht", "Boom"),
-    "tied_combined_tier": ("Goed", "Gras"),
+    "tied_tier_pollen_laag": ("Goed", ""),
+    "tied_tier_pollen_elevated": ("Matig", "Gras"),
 }
 
 
@@ -149,9 +157,12 @@ def main():
         aqi_points = [dp for dp in data.data_points if dp["kind"] == "aqi"]
         has_visibility = any(dp["kind"] == "visibility" for dp in data.data_points)
         expected = EXPECTED[name]
+        expected_text = f"{expected[0]}: {expected[1]}" if expected[1] else expected[0]
         got = (aqi_points[0]["measurement"], aqi_points[0]["unit"]) if aqi_points else "no aqi point"
-        ok = len(aqi_points) == 1 and got == expected and has_visibility
-        status = "OK" if ok else f"FAIL: expected {expected!r} (+visibility), got {got!r} (visibility={has_visibility})"
+        got_text = _data_point_value_text(aqi_points[0]) if aqi_points else "no aqi point"
+        ok = len(aqi_points) == 1 and got == expected and got_text == expected_text and has_visibility
+        status = "OK" if ok else (f"FAIL: expected {expected!r}/{expected_text!r} (+visibility), "
+                                   f"got {got!r}/{got_text!r} (visibility={has_visibility})")
         results.append((name, status))
         print(f"{'OK' if ok else 'FAIL':6s}{name:22s} {got!r}")
 
