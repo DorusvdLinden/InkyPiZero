@@ -78,6 +78,84 @@ UI" that a new feature just made false) rather than only adding new content - th
 repo's history has repeatedly found docs that were correct when written but never
 revisited when something later contradicted them.
 
+## Verification & decision-making
+
+- **Verify before asserting.** Before recommending an action based on a remembered
+  fact (a file path, a function name, a config value, an SSH/access detail), check
+  it's still true by reading the current file/state rather than trusting memory or
+  an earlier read from this conversation.
+- **Root-cause with evidence before proposing a fix.** When something fails (a
+  render bug, a deploy failure, a hardware quirk), gather direct evidence (logs,
+  actual device state, a minimal reproduction) before deciding why - and be
+  willing to discard the first hypothesis and pivot the whole approach if the
+  evidence contradicts it (e.g. the WiFi setup-AP NetworkManager-to-hostapd
+  pivot, root-caused via live `journalctl` evidence rather than assumed from
+  docs).
+- **Ask when it's a genuine fork** — an architecture choice with real tradeoffs,
+  an ambiguous requirement, or "should I proceed even though this might disrupt
+  the live device" — a structured question beats guessing wrong and redoing
+  work. Don't ask when there's a reasonable default; make the call and let the
+  user redirect.
+- **Confirm before anything destructive or hard-to-reverse** — force-push,
+  `reset --hard`, discarding uncommitted work, deleting a branch that isn't
+  fully merged, or disrupting the live Pi's network/power state — scoped to
+  exactly what's being discarded. A prior approval doesn't extend to a new
+  instance of the same category of action.
+
+## Working modes
+
+Three explicit modes govern how much I act before checking in - see
+[Dorus-Claude-Collaboration](https://github.com/DorusvdLinden/Dorus-Claude-Collaboration)
+for the full portable version this is adapted from. Default is Mode 2 unless
+told otherwise or the task calls for a different one; the modes change *when*
+confirmation happens, not whether this file's other rules (destructive-action
+confirmation, documentation maintenance, testing) apply - those hold in all
+three.
+
+### Mode 1 - Plan (deliberate)
+
+Trigger: "let's plan this," or automatically for architecturally significant /
+ambiguous / hard-to-reverse work (e.g. the WiFi provisioning + settings web UI
+feature).
+
+- Break the problem into steps out loud before touching anything; surface real
+  options with tradeoffs instead of silently picking one.
+- No edits, no side-effecting commands, until the plan is explicitly confirmed.
+- Ask clarifying questions freely.
+- Once confirmed, create a new feature branch before making any changes, then
+  move into Mode 2 to execute.
+
+### Mode 2 - Build (default)
+
+Trigger: everyday tasks by default.
+
+- Create/switch to a feature branch before the first edit, unless already on
+  one suited to this task - never build directly on `main`.
+- Make reasonable, reversible changes without asking step-by-step permission;
+  still ask on a genuine fork, still confirm before anything destructive.
+- Narrate briefly at key moments (findings, direction changes, blockers), not a
+  play-by-play.
+- Commit/push as part of the standard Git workflow loop below once a change is
+  tested and working - this file's Git workflow section is itself the standing
+  authorization for that, not something to ask about each time.
+
+### Mode 3 - Away (autonomous)
+
+Trigger: "I'll be away," "go do X while I'm out," scheduled/overnight runs.
+
+- Start by creating a dedicated branch - everything happens there; `main` and
+  the deployed Pi stay untouched until reviewed.
+- Push as far as possible without stopping; use judgment + memory + reasonable
+  defaults for anything that would normally be a quick check-in.
+- When a genuine fork has multiple good options, build each as its own branch
+  rather than silently picking one (keep it to 2-3, only when worth the build
+  time).
+- Never merge to `main`, deploy to the Pi, or take any irreversible action
+  unilaterally - queue the go/no-go for the end.
+- Keep a running decision log while working; on return, give one consolidated
+  summary with a short list of decisions needing a yes/no before anything ships
+  further (including the merge itself).
+
 ## Install procedure
 
 - `install/install.sh` / `install/uninstall.sh`, using `install/requirements.txt` /
@@ -96,7 +174,10 @@ revisited when something later contradicted them.
 
 ## Git workflow
 
-For each major change:
+Branch before editing, in every working mode (see Working modes above) —
+create/switch to a feature branch before the first edit unless already on one
+suited to the task, never build directly on `main`. For each major change from
+there:
 
 1. Implement and test locally first (`--mock-output` above).
 2. **Commit the change** — one commit per major change, with a descriptive message.
@@ -107,3 +188,5 @@ For each major change:
    changed (safe to rerun any time).
 4. Final test = let a real timer tick happen (or force one with `sudo systemctl start
    pi-weather-display.service`) and confirm the physical display updated correctly.
+5. Merge to `main` only when explicitly asked; clean up (delete, locally and on
+   the remote) the branch once merged.
