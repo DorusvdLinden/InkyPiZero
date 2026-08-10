@@ -42,6 +42,20 @@ reference docs this list feeds into.
 ## Fonts & text
 
 - [ ] **Missing font glyph fallback**: `AssetStore.font()` only loads Jost.ttf/Jost-SemiBold.ttf, which have no CJK (or other non-Latin) glyphs. When a location name comes back in a non-Latin script (e.g. Tokyo's Nominatim result), PIL silently drops the unsupported characters instead of rendering anything - the header ends up with a blank gap where the city name should be. The old Chromium/CSS renderer didn't hit this because browsers do automatic per-character font fallback; Pillow's single-TTF loader doesn't. Found via `mock_display_output/pi_zero/pi_zero_render_tokyo_japan.png`. Fix likely needs a bundled fallback font (broad Unicode coverage) tried per-character when Jost can't render something.
+- [ ] **Bold text ~18-24px (e.g. "Matig", data-point values) shows visible
+  stair-stepped curves on real hardware** - the display's quantization
+  (`display/quantize.py`) hardens antialiased edges to a hard black/white
+  decision with no dithering, the right call for icons/chart lines, but
+  leaves jagged curves on text in this size range. **Tried and rejected**
+  (branch `supersampled-text-compare`, not merged, 2026-08-10): rendering
+  glyphs at 4x then downsampling with LANCZOS before compositing looked
+  smoother in isolated digital PNG-crop comparisons, but on the *real*
+  panel looked worse, not better - most likely because it discards the
+  font's own size-specific TrueType hinting (which snaps stems/curves to
+  the pixel grid for crisp small-size rendering) in favor of a generic
+  downscale blend. Also cost meaningfully more CPU per label. Don't
+  re-attempt supersampling without addressing the hinting-loss problem
+  specifically. No working fix found yet.
 
 ## Config & settings
 
