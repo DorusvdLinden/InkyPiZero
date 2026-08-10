@@ -55,7 +55,51 @@ reference docs this list feeds into.
   the pixel grid for crisp small-size rendering) in favor of a generic
   downscale blend. Also cost meaningfully more CPU per label. Don't
   re-attempt supersampling without addressing the hinting-loss problem
-  specifically. No working fix found yet.
+  specifically.
+
+  **Researched alternatives (2026-08-10, branch
+  `text-rendering-alternatives-research`, not yet tried)**, in order of
+  how promising they look:
+  1. **PIL's built-in `fontmode="1"`** (`ImageDraw.Draw.fontmode`) - tells
+     FreeType to rasterize text directly in monochrome (no antialiasing
+     at all), instead of rendering antialiased then post-hoc thresholding
+     via `harden_neutral_pixels`. One-line change, zero new dependencies,
+     already in the current stack. Untested - worth prototyping first
+     given the low cost.
+  2. **True bitmap fonts via PIL's `BdfFontFile`/`PcfFontFile` ->
+     `to_imagefont()`** (or the legacy `ImageFont.load()` `.pil` format) -
+     hand-designed pixel-perfect glyphs (e.g. Tamzen/Spleen/Terminus/
+     Creep/Cozette, all free BDF fonts) instead of a scaled vector
+     outline. This is what our own sibling project
+     (`Weather-EPS32S3`, same author, same physical panel family -
+     targets this exact Pimoroni AC073TC1A 7.3" ACeP display too) already
+     does for *all* its text: it uses u8g2's pre-rasterized bitmap font
+     tables via `U8g2_for_Adafruit_GFX`, specifically because bitmap
+     fonts have no antialiasing to harden in the first place (see that
+     repo's `README.md:316-324`, `src/assets/asset_store.h:6-20`).
+     Adafruit's own "Preparing Graphics for E-Ink Displays" guidance
+     agrees: disable smoothing, bitmap fonts work well when pixels map
+     1:1 to the display. Real tradeoff: fixed set of pre-baked sizes
+     (matching this app's ~6 different font sizes would need 6 separate
+     bitmap fonts per weight, not one scalable TTF), and Jost's specific
+     look would be lost unless a Jost BDF bake exists (unlikely) or a
+     different pixel font is adopted app-wide.
+  3. **Headless Chromium/CSS rendering** (real browser font engine,
+     proper hinting/subpixel handling) - this is literally what the
+     upstream `fatihak/InkyPi` this project forked from still does. Not
+     viable here: already deliberately moved away from specifically
+     because a Pi Zero W can't comfortably run headless Chromium (see
+     `docs/changes.md` entry 1) - a text-quality win wouldn't be worth
+     reintroducing that resource cost.
+  4. **Switch away from Jost to a font with better small-size hinting** -
+     untested; no specific better-hinted alternative identified yet.
+     Would need real A/B hardware comparison the same way the rejected
+     supersampling attempt was validated, and changes the app's visual
+     identity, not just a rendering-pipeline tweak.
+
+  Option 1 is the obvious next thing to prototype (same
+  `scripts/text_supersample_compare.py`-style side-by-side approach,
+  pushed to real hardware) given it costs nothing to try.
 
 ## Config & settings
 
