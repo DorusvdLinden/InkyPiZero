@@ -365,6 +365,15 @@ case, and the neither-available fallback - live weather can't reliably
 guarantee season/hemisphere coverage or a specific AQI+pollen combination
 on any given run.
 
+**Then simplified the driving-cause label further**: the exact species
+name (e.g. "Berk") was too granular for the small icon label, so
+`_pollen_category_nl` summarizes it to one of 3 broad categories instead -
+**Boom** (alder/birch/olive), **Gras** (grass), or **Ambrosia**
+(mugwort/ragweed - named for the more severe weed species, not a literal
+per-species mapping), confirmed with the user 2026-08-10.
+`_classify_pollen`'s returned key was renamed `species_nl` ->
+`category_nl` to match.
+
 **Active** - current design. Known permanent limitations, tracked in
 `TODO.md`: pollen's contribution is Europe-only/seasonal (an Open-Meteo
 data limitation, not a bug, falls back to AQI alone or "N/A"), and

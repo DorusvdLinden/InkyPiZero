@@ -119,15 +119,15 @@ SCENARIOS = {
 EXPECTED = {
     "no_data": ("N/A", ""),
     "pollen_laag": ("Goed", "Gras"),
-    "pollen_matig": ("Matig", "Berk"),
+    "pollen_matig": ("Matig", "Boom"),
     "pollen_hoog": ("Slecht", "Ambrosia"),
-    "pollen_zeer_hoog": ("Zeer slecht", "Berk"),
-    "mixed_worst_wins": ("Zeer slecht", "Berk"),
+    "pollen_zeer_hoog": ("Zeer slecht", "Boom"),
+    "mixed_worst_wins": ("Zeer slecht", "Boom"),
     "zero_species_tie": ("Goed", "Gras"),
     "daily_peak_not_current_hour": ("Matig", "Gras"),
     "aqi_only": ("Matig", ""),
     "aqi_worse_than_pollen": ("Zeer slecht", ""),
-    "pollen_worse_than_aqi": ("Zeer slecht", "Berk"),
+    "pollen_worse_than_aqi": ("Zeer slecht", "Boom"),
     "tied_combined_tier": ("Goed", "Gras"),
 }
 

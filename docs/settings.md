@@ -67,7 +67,11 @@ than two cards that can disagree.
   use - pollen swings hard hour to hour, so a single instant can sit at a
   local dip while the rest of the day is a genuine "watch out" day;
   confirmed against pollennieuws.nl). Returns a 0-3 tier index
-  (Laag/Matig/Hoog/Zeer hoog) plus the driving species, or `None` if every
+  (Laag/Matig/Hoog/Zeer hoog) plus the driving species summarized to one
+  of 3 broad categories for display (`_pollen_category_nl`, confirmed with
+  the user 2026-08-10) - **Boom** (alder/birch/olive), **Gras** (grass),
+  or **Ambrosia** (mugwort/ragweed - named for the more severe of the two
+  weed species, not a literal per-species mapping) - or `None` if every
   species is null all day.
 - **Combining** (`weather_data._combine_aqi_pollen_tier`): both inputs map
   onto one new 4-tier scale, `COMBINED_TIERS = ["Goed", "Matig", "Slecht",
@@ -77,9 +81,10 @@ than two cards that can disagree.
   3]`; pollen's 4 tiers already match 1:1. The displayed measurement is
   `COMBINED_TIERS[max(aqi_combined, pollen_tier_index)]`; when only one
   input has data, that one drives it alone; when neither does, shows
-  "N/A". The driving pollen species is shown as a second word (e.g. "Zeer
-  slecht Berk") only when pollen's tier is at or above AQI's contribution
-  - when AQI is the sole or bigger driver, no species is named.
+  "N/A". The driving pollen category is shown as a second word (e.g.
+  "Zeer slecht Boom") only when pollen's tier is at or above AQI's
+  contribution - when AQI is the sole or bigger driver, no category is
+  named.
 - **Gauge needle** (`weather_data.get_combined_rotation`): reuses
   `render_aqi_gauge`'s existing 4 color bands unchanged (very_high/high/
   moderate/low), needle centered in the band matching the combined tier

@@ -279,6 +279,20 @@ POLLEN_GRASS_WEED_THRESHOLDS = (5, 20, 50)
 POLLEN_TIERS = ["Laag", "Matig", "Hoog", "Zeer hoog"]
 
 
+def _pollen_category_nl(species: str) -> str:
+    """The exact species (POLLEN_SPECIES_NL) is too granular for the small
+    "Kwaliteit & Pollen" cause label - summarize to one of 3 broad
+    categories instead, confirmed with the user 2026-08-10. "Ambrosia"
+    represents the weed group (mugwort_pollen/ragweed_pollen) - the more
+    severe of the two and the one Dutch pollen sites call out by name -
+    not a literal 1:1 species mapping like "Boom"/"Gras" are."""
+    if species in POLLEN_TREE_SPECIES:
+        return "Boom"
+    if species == "grass_pollen":
+        return "Gras"
+    return "Ambrosia"
+
+
 def _pollen_tier_index(species: str, value: float) -> int:
     thresholds = POLLEN_TREE_THRESHOLDS if species in POLLEN_TREE_SPECIES else POLLEN_GRASS_WEED_THRESHOLDS
     for i, cutoff in enumerate(thresholds):
@@ -288,12 +302,14 @@ def _pollen_tier_index(species: str, value: float) -> int:
 
 
 def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
-    """Returns {"tier_index": ..., "tier": ..., "species_nl": ...} for the
+    """Returns {"tier_index": ..., "tier": ..., "category_nl": ...} for the
     worst-affected species using each species' peak value anywhere in the
     current calendar day, or None if every species is null all day (out of
     season, or a non-European location - Open-Meteo's pollen coverage).
     tier_index (0-3) is a direct 1:1 match for COMBINED_TIERS, feeding the
     "Kwaliteit & Pollen" data point's worst-of-both-inputs comparison.
+    category_nl (Boom/Gras/Ambrosia, see _pollen_category_nl) is the
+    driving species summarized to one of 3 broad categories for display.
 
     Deliberately today's peak rather than the current-hour reading (unlike
     UV/AQI/humidity, which do use the live instant value) - pollen swings
@@ -321,7 +337,7 @@ def _classify_pollen(hourly: dict, tz, current_time) -> dict | None:
     if best is None:
         return None
     tier_index, _, species = best
-    return {"tier_index": tier_index, "tier": POLLEN_TIERS[tier_index], "species_nl": POLLEN_SPECIES_NL[species]}
+    return {"tier_index": tier_index, "tier": POLLEN_TIERS[tier_index], "category_nl": _pollen_category_nl(species)}
 
 
 def get_uv_beam_points(uv_index, beam_count=10, cx=60, cy=60, core_r=24, min_len=10, max_len=32, half_width=5):
@@ -705,15 +721,15 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     pollen_tier_index = pollen["tier_index"] if pollen is not None else None
 
     combined_index = _combine_aqi_pollen_tier(aqi_tier_index, pollen_tier_index)
-    cause_species = ""
+    cause_category = ""
     if pollen is not None and combined_index is not None:
         aqi_combined = _AQI_TIER_TO_COMBINED[aqi_tier_index] if aqi_tier_index is not None else -1
         if pollen_tier_index >= aqi_combined:
-            cause_species = pollen["species_nl"]
+            cause_category = pollen["category_nl"]
     data_points.append({
         "kind": "aqi", "label": "Kwaliteit & Pollen",
         "measurement": COMBINED_TIERS[combined_index] if combined_index is not None else "N/A",
-        "unit": cause_species,
+        "unit": cause_category,
         "aqi_rotation": get_combined_rotation(combined_index),
     })
 
