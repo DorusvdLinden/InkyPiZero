@@ -8,7 +8,7 @@ reference docs this list feeds into.
 
 ## Color palette & quantization
 
-- [ ] **`widgets/palette.py`'s `PALETTE` singleton isn't wired to `config.py`**: `PALETTE = Palette(saturation=0.0)` is a module-level constant that must be hand-edited any time `DisplayConfig.inky_saturation` changes, or every authored color silently stops being an exact panel-palette match and starts dithering again - nothing asserts or warns on a mismatch. Found while writing `docs/settings.md`. Fix planned, not yet implemented - see [docs/plans/palette-saturation-sync-fix.md](./docs/plans/palette-saturation-sync-fix.md).
+- [x] ~~`widgets/palette.py`'s `PALETTE` singleton isn't wired to `config.py`~~ Fixed: `PALETTE.set_saturation(config.inky_saturation)` now runs at the top of both real rendering entry points (`canvas.py`'s `WeatherCanvas.__init__`, `setup_screen.py`'s `render_setup_screen`), keeping every widget color synced to whatever `inky_saturation` is actually configured instead of a hardcoded `0.0`. See `docs/plans/palette-saturation-sync-fix.md` and `scripts/test_palette_sync.py`.
 
 ## Icons
 

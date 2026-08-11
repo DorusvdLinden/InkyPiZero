@@ -21,6 +21,12 @@ def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
 
 
 def render_setup_screen(assets: AssetStore, config: DisplayConfig, ssid: str, password: str, url: str) -> Image.Image:
+    # Keeps PALETTE.chart_warm/chart_cool an exact panel-palette match -
+    # web_app.py is a long-running process, so without this a saturation
+    # change via the settings form wouldn't reach this screen until the
+    # whole service restarted (see canvas.py's WeatherCanvas for the same
+    # fix on the main render path).
+    PALETTE.set_saturation(config.inky_saturation)
     bg = _hex_to_rgb(config.background_color)
     text_color = _hex_to_rgb(config.text_color)
     cx = layout.CANVAS_SIZE[0] // 2

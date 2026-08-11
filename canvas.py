@@ -29,6 +29,11 @@ COMPACT_KINDS = {"wind", "humidity", "uv", "aqi"}
 class WeatherCanvas:
     def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig,
                  screen_mode: str = "original", compact_style: str = "icon_left"):
+        # Keeps every PALETTE.* color an exact panel-palette match at
+        # whatever saturation this config actually specifies - PALETTE is
+        # a shared singleton that otherwise stays frozen at its own
+        # hardcoded default forever (see widgets/palette.py).
+        PALETTE.set_saturation(config.inky_saturation)
         self.assets = assets
         self.config = config
         self.screen_mode = screen_mode

@@ -469,7 +469,7 @@ check confirming `record_check` doesn't clobber `record_display`'s state
 **Active** - supersedes `refresh_interval_seconds`, entry 23's hardcoded
 `MAX_STALE`.
 
-### 25. Metric-only: remove imperial/standard unit support — most recent
+### 25. Metric-only: remove imperial/standard unit support
 Branch `metric-only-units`
 
 Removes `config.py`'s `units` field and every `imperial`/`standard`
@@ -498,6 +498,43 @@ Kelvin can't occur) in favor of a plain `°C` suffix everywhere.
 label classification itself is unaffected; only its imperial "in" variant
 (never separately called out there) is gone - `rain_unit`/`snow_unit` are
 always "mm"/"cm" now.
+
+### 26. Wire `PALETTE` to `config.inky_saturation` — most recent
+Branch `palette-saturation-sync`
+
+Closes a long-standing TODO.md item: `widgets.palette.PALETTE` (every
+widget's color source - `PALETTE.uv_low`, `PALETTE.aqi_band_high`, wind
+compass colors, etc.) was a module-level singleton computed once at
+import time from a hardcoded `saturation=0.0`, completely disconnected
+from `DisplayConfig.inky_saturation` - a genuinely user-changeable field,
+exposed and persisted via the web UI's settings form since entry 21. The
+*final* display step already read `config.inky_saturation` correctly and
+dynamically; only the palette-color side didn't. Had a user ever changed
+the setting away from `0.0`, every "exact panel match" color would have
+silently stopped being exact, reintroducing the dithered-speckle problem
+this whole `PALETTE` system exists to prevent (entries 6/9 - see
+`color_palette_decision`/`quantization_pipeline_decision` history).
+
+The fix mechanism already existed and was already correct -
+`Palette.set_saturation()` mutates the shared singleton in place, but was
+only ever called from `scripts/color_options.py`, a dev-only comparison
+tool. Rather than scatter a sync call across every current and future
+render call site, it's now called once at the top of each of the app's
+two actual rendering entry points - `canvas.py`'s `WeatherCanvas.__init__`
+and `setup_screen.py`'s `render_setup_screen` - so every caller
+(`main.py`, all three standing test scripts, `web_app.py`'s WiFi-AP setup
+screen) gets it automatically with no changes of their own needed.
+
+New `scripts/test_palette_sync.py` asserts `PALETTE.saturation` actually
+moves to match a non-default config after constructing each entry point,
+including re-syncing correctly across a second construction with a
+*different* saturation (the real bug scenario: `main.py` loads whatever
+config is currently saved, fresh, on every one-shot run). Verified beyond
+the unit test too - rendered at `inky_saturation=0.5` and confirmed via
+`scripts/panel_sim.py` that colors stayed flat/on-palette, not speckled.
+
+**Active** - current design. No remaining known gaps for this specific
+item.
 
 ---
 
