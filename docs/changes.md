@@ -390,7 +390,7 @@ track (confirmed against pollennieuws.nl's broader "Kruiden" category).
 
 ---
 
-### 23. Skip unchanged display refreshes, force one hourly — most recent
+### 23. Skip unchanged display refreshes, force one hourly
 Branch `skip-unchanged-refresh`
 
 `pi-weather-display.timer` still fires every 10 minutes and `main.py`
@@ -419,6 +419,36 @@ sentinel immediately before their existing `systemctl start
 pi-weather-display.service` call - a user pressing a screen-mode button
 or saving a setting always sees the change immediately, never silently
 skipped because the icon/temperature happened to be unchanged.
+
+### 24. Metric-only: remove imperial/standard unit support — most recent
+Branch `metric-only-units`
+
+Removes `config.py`'s `units` field and every `imperial`/`standard`
+(Kelvin) code path - the app is metric-only now (°C, m/s, km, mm/cm).
+Tested via `--mock-output` in all three screen modes 2026-08-11: real
+chart-axis bugs turned up specific to those unit systems (Kelvin's
+0-310K range made gridlines/compact mode nearly unreadable - a fixed
+10-unit gridline step over that span produced ~30 overlapping labels;
+Fahrenheit's 0-floored axis wasted most of the chart's vertical space).
+Both were caused by axis-scaling logic (`widgets/chart.py`) calibrated
+for Celsius's small near-zero range, not by the unit conversions
+themselves - rather than generalizing the axis logic to handle
+arbitrary units, the simpler fix was removing the units this app was
+never really designed to support well in the first place.
+
+`weather_data.py` lost its `UNITS`/`OPEN_METEO_UNIT_PARAMS` dicts, the
+`get_wind_speed_ms()` imperial conversion, and every `if units ==
+"standard"`/`"imperial"` branch (Kelvin's `+273.15` offset, Fahrenheit's
+visibility-in-miles/inch precipitation units) - `config.units` is gone
+from `config.py`, `settings_store.py`, `web/routes.py`'s form parsing,
+and the settings page's "Eenheden" dropdown. `canvas.py`/
+`widgets/chart.py` also lost their `!= "K"` conditionals (dead now that
+Kelvin can't occur) in favor of a plain `°C` suffix everywhere.
+
+**Active** - current design, metric-only. Entry 20's rain/hail/snow axis-
+label classification itself is unaffected; only its imperial "in" variant
+(never separately called out there) is gone - `rain_unit`/`snow_unit` are
+always "mm"/"cm" now.
 
 New `scripts/test_display_freshness.py` covers the decision logic
 directly against a temp state directory (first run, unchanged within/past

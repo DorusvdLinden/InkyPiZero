@@ -113,11 +113,11 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
             _dotted_horizontal(draw, y, plot_x0, plot_x1, PALETTE.chart_zero_line)
             if v != min_temp and v != max_temp:
                 # shifted left by the pixel width of the axis-extreme labels'
-                # unit suffix ("C"/"F"/"K", not present here) so the numbers
+                # unit suffix ("C", not present here) so the numbers
                 # themselves line up in a column - a space character isn't
                 # the same width as the letter it's standing in for, so
                 # padding with literal spaces would leave them misaligned.
-                label = f"{v}°" if unit_label_temp != "K" else str(v)
+                label = f"{v}°"
                 unit_w = font_bold.getbbox(unit_label_temp)[2]
                 draw.text((plot_x0 - 6 - unit_w, y), label, font=font_bold, fill=PALETTE.chart_zero_line, anchor="rm")
             v += 10
@@ -136,7 +136,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
             y = y_temp(value)
             _dotted_horizontal(draw, y, plot_x0, plot_x1, color)
             label_dy = 14 if (plot_y1 - y) > 20 else -14
-            label = f"{value}°" if unit_label_temp != "K" else str(value)
+            label = f"{value}°"
             draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
 
         # black dashed 0deg reference line, only shown when the day actually
@@ -171,7 +171,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # a separate always-present vertical "C" label off to the side - one
     # less element competing for space, and the chart reclaims that whole
     # column (see LEFT_MARGIN).
-    temp_unit_suffix = unit_label_temp if unit_label_temp == "K" else f"°{unit_label_temp}"
+    temp_unit_suffix = f"°{unit_label_temp}"
     rain_max_label = f"{rain_axis_max:g}"
     draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_bold, fill=text_color, anchor="rm")
     draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_bold, fill=text_color, anchor="rm")

@@ -26,10 +26,6 @@ STATE_PATH = "/var/lib/pi-weather-display/settings.json"
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
-def _valid_units(v):
-    return v in ("metric", "imperial", "standard")
-
-
 def _valid_time_format(v):
     return v in ("24h", "12h")
 
@@ -66,7 +62,6 @@ def _valid_timezone(v):
 FIELD_VALIDATORS = {
     "latitude": _valid_latitude,
     "longitude": _valid_longitude,
-    "units": _valid_units,
     "timezone": _valid_timezone,
     "time_format": _valid_time_format,
     "forecast_days": _valid_positive_int,

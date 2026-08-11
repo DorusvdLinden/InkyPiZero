@@ -53,7 +53,7 @@ reference docs this list feeds into.
 ## Config & settings
 
 - [ ] **`config.py`'s `refresh_interval_seconds` is dead**: not read anywhere in the codebase. The actual render cadence is `install/pi-weather-display.timer`'s hardcoded `OnUnitActiveSec` (10min), a completely separate value. Changing `refresh_interval_seconds` currently does nothing, which will mislead anyone who edits it expecting an effect. Either wire it into the installer (template the timer file from it) or remove the field. Found while writing `docs/settings.md`.
-- [ ] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far.
+- [x] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far: resolved by removing `imperial`/`standard` support entirely (2026-08-11) - the app is metric-only now, `config.py` has no `units` field. Testing surfaced real chart-axis bugs specific to those unit systems (0-floored axis, fixed gridline step) that no longer apply since only Celsius remains.
 
 ## Display refresh cadence
 

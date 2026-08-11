@@ -40,7 +40,7 @@ PRESETS = [
 ]
 
 LOCATIONS = [
-    ("sittard_netherlands", DisplayConfig(latitude=51.0004365, longitude=5.8993687, timezone="Europe/Amsterdam", units="metric")),
+    ("sittard_netherlands", DisplayConfig(latitude=51.0004365, longitude=5.8993687, timezone="Europe/Amsterdam")),
 ]
 
 

@@ -29,22 +29,22 @@ import display_mode
 ICON_DIR = os.path.join(REPO_DIR, "assets", "icons")
 FONT_DIR = os.path.join(REPO_DIR, "assets", "fonts")
 
-# name, lat, lon, timezone, units, notes
+# name, lat, lon, timezone, notes
 LOCATIONS = [
-    ("sittard_netherlands", 51.0004365, 5.8993687, "Europe/Amsterdam", "metric", "baseline, temperate, daytime"),
-    ("phoenix_arizona_usa", 33.4484, -112.0740, "America/Phoenix", "metric", "hot desert, daytime"),
-    ("dubai_uae", 25.2048, 55.2708, "Asia/Dubai", "metric", "extreme desert heat, evening"),
-    ("reykjavik_iceland", 64.1466, -21.9426, "Atlantic/Reykjavik", "metric", "cold, wind/rain, daytime"),
-    ("bangkok_thailand", 13.7563, 100.5018, "Asia/Bangkok", "metric", "tropical monsoon rain, night"),
-    ("mumbai_india", 19.0760, 72.8777, "Asia/Kolkata", "metric", "monsoon heavy rain, evening"),
-    ("sydney_australia", -33.8688, 151.2093, "Australia/Sydney", "metric", "S.hemisphere winter, cold, night"),
-    ("ushuaia_argentina", -54.8019, -68.3030, "America/Argentina/Ushuaia", "metric", "far south winter, freezing/snow, daytime"),
-    ("tokyo_japan", 35.6762, 139.6503, "Asia/Tokyo", "metric", "humid, possible rain, night"),
-    ("sanfrancisco_usa", 37.7749, -122.4194, "America/Los_Angeles", "metric", "mild, fog, early morning"),
-    ("auckland_newzealand", -36.8485, 174.7633, "Pacific/Auckland", "metric", "S.hemisphere winter, deep night"),
-    ("ulaanbaatar_mongolia", 47.8864, 106.9057, "Asia/Ulaanbaatar", "metric", "continental extreme, night"),
-    ("mcmurdo_antarctica", -77.8419, 166.6863, "Antarctica/McMurdo", "metric", "all-negative hourly temps, deep winter"),
-    ("bariloche_argentina", -41.1335, -71.3103, "America/Argentina/Buenos_Aires", "metric", "hourly temps cross zero (both + and -)"),
+    ("sittard_netherlands", 51.0004365, 5.8993687, "Europe/Amsterdam", "baseline, temperate, daytime"),
+    ("phoenix_arizona_usa", 33.4484, -112.0740, "America/Phoenix", "hot desert, daytime"),
+    ("dubai_uae", 25.2048, 55.2708, "Asia/Dubai", "extreme desert heat, evening"),
+    ("reykjavik_iceland", 64.1466, -21.9426, "Atlantic/Reykjavik", "cold, wind/rain, daytime"),
+    ("bangkok_thailand", 13.7563, 100.5018, "Asia/Bangkok", "tropical monsoon rain, night"),
+    ("mumbai_india", 19.0760, 72.8777, "Asia/Kolkata", "monsoon heavy rain, evening"),
+    ("sydney_australia", -33.8688, 151.2093, "Australia/Sydney", "S.hemisphere winter, cold, night"),
+    ("ushuaia_argentina", -54.8019, -68.3030, "America/Argentina/Ushuaia", "far south winter, freezing/snow, daytime"),
+    ("tokyo_japan", 35.6762, 139.6503, "Asia/Tokyo", "humid, possible rain, night"),
+    ("sanfrancisco_usa", 37.7749, -122.4194, "America/Los_Angeles", "mild, fog, early morning"),
+    ("auckland_newzealand", -36.8485, 174.7633, "Pacific/Auckland", "S.hemisphere winter, deep night"),
+    ("ulaanbaatar_mongolia", 47.8864, 106.9057, "Asia/Ulaanbaatar", "continental extreme, night"),
+    ("mcmurdo_antarctica", -77.8419, 166.6863, "Antarctica/McMurdo", "all-negative hourly temps, deep winter"),
+    ("bariloche_argentina", -41.1335, -71.3103, "America/Argentina/Buenos_Aires", "hourly temps cross zero (both + and -)"),
 ]
 
 SCREEN_MODES = sorted(display_mode.VALID_MODES)
@@ -55,8 +55,8 @@ os.makedirs(OUT_DIR, exist_ok=True)
 assets = AssetStore(ICON_DIR, FONT_DIR)
 
 results = []
-for name, lat, lon, tz, units, notes in LOCATIONS:
-    config = DisplayConfig(latitude=lat, longitude=lon, timezone=tz, units=units)
+for name, lat, lon, tz, notes in LOCATIONS:
+    config = DisplayConfig(latitude=lat, longitude=lon, timezone=tz)
     try:
         data = fetch_snapshot(config)
         for mode in SCREEN_MODES:

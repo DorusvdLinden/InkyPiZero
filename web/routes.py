@@ -53,7 +53,6 @@ def _config_from_form(form) -> tuple[DisplayConfig, list[str]]:
 
     _set("latitude", float)
     _set("longitude", float)
-    _set("units", str)
     _set("timezone", str)
     _set("time_format", str)
     _set("forecast_days", int)

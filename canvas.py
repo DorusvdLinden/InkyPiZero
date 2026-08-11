@@ -77,10 +77,9 @@ class WeatherCanvas:
         temp_w = draw.textlength(temp_str, font=font_temp)
         draw.text((text_cx + temp_w / 2 + 4, temp_y - 22), data.temp_unit, font=font_unit, fill=self.text_color, anchor="lm")
 
-        degree = "°" if data.temp_unit != "K" else ""
-        draw.text((text_cx, temp_y + 34), f"Gevoelstemp. {data.feels_like}{degree}", font=font_small, fill=self.text_color, anchor="mm")
+        draw.text((text_cx, temp_y + 34), f"Gevoelstemp. {data.feels_like}°", font=font_small, fill=self.text_color, anchor="mm")
         draw.text((text_cx, temp_y + 56),
-                   f"{data.last_night_low}{degree} / {data.day_high}{degree} / {data.next_night_low}{degree}",
+                   f"{data.last_night_low}° / {data.day_high}° / {data.next_night_low}°",
                    font=font_small, fill=self.text_color, anchor="mm")
 
     def _draw_data_points(self, image, draw, data: WeatherSnapshot):
@@ -197,7 +196,7 @@ class WeatherCanvas:
         image.paste(resized, (paste_x, paste_y), resized)
 
     def _draw_chart(self, image, data: WeatherSnapshot):
-        temp_unit_label = data.temp_unit.replace("°", "") if data.temp_unit != "K" else "K"
+        temp_unit_label = data.temp_unit.replace("°", "")
         chart_widget.render_chart(
             image, layout.CHART_AREA, data.hourly, data.sun_events, self.text_color,
             lambda key, size: self.assets.icon(key, size), self.config.graph_icon_step,

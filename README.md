@@ -113,7 +113,7 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   hardware
 - `assets/` - the icon PNGs and Jost font files it actually uses (see
   [attribution.md](./docs/attribution.md))
-- `config.py` - a plain dataclass (location, units, screen mode, etc.) of
+- `config.py` - a plain dataclass (location, screen mode, etc.) of
   hard-coded defaults; `settings_store.py` overlays a saved
   `settings.json` on top of it (written by the web UI) - see
   [settings.md](./docs/settings.md) for every option
