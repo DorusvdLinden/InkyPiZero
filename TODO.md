@@ -6,9 +6,6 @@ them) once fixed. Grouped by area, open items first in each group. See also
 `docs/settings.md`, `docs/icons.md`, and `docs/changes.md` for the broader
 reference docs this list feeds into.
 
-## Color palette & quantization
-
-- [x] ~~`widgets/palette.py`'s `PALETTE` singleton isn't wired to `config.py`~~ Fixed: `PALETTE.set_saturation(config.inky_saturation)` now runs at the top of both real rendering entry points (`canvas.py`'s `WeatherCanvas.__init__`, `setup_screen.py`'s `render_setup_screen`), keeping every widget color synced to whatever `inky_saturation` is actually configured instead of a hardcoded `0.0`. See `docs/plans/palette-saturation-sync-fix.md` and `scripts/test_palette_sync.py`.
 
 ## Icons
 
@@ -22,55 +19,6 @@ reference docs this list feeds into.
 ## Fonts & text
 
 - [ ] **Missing font glyph fallback**: `AssetStore.font()` only loads Jost.ttf/Jost-SemiBold.ttf, which have no CJK (or other non-Latin) glyphs. When a location name comes back in a non-Latin script (e.g. Tokyo's Nominatim result), PIL silently drops the unsupported characters instead of rendering anything - the header ends up with a blank gap where the city name should be. The old Chromium/CSS renderer didn't hit this because browsers do automatic per-character font fallback; Pillow's single-TTF loader doesn't. Found via `mock_display_output/pi_zero/pi_zero_render_tokyo_japan.png`. Fix likely needs a bundled fallback font (broad Unicode coverage) tried per-character when Jost can't render something.
-- [ ] **Bold text ~18-24px (e.g. "Matig", data-point values) shows visible
-  stair-stepped curves on real hardware** - the display's quantization
-  (`display/quantize.py`) hardens antialiased edges to a hard black/white
-  decision with no dithering, the right call for icons/chart lines, but
-  leaves jagged curves on text in this size range. **Tried and rejected**
-  (branch `supersampled-text-compare`, not merged, 2026-08-10): rendering
-  glyphs at 4x then downsampling with LANCZOS before compositing looked
-  smoother in isolated digital PNG-crop comparisons, but on the *real*
-  panel looked worse, not better - most likely because it discards the
-  font's own size-specific TrueType hinting (which snaps stems/curves to
-  the pixel grid for crisp small-size rendering) in favor of a generic
-  downscale blend. Also cost meaningfully more CPU per label. Don't
-  re-attempt supersampling without addressing the hinting-loss problem
-  specifically.
-
-  **Every researched alternative tried on real hardware and rejected
-  (2026-08-11) - keeping Jost + normal rendering as-is.** Pushed
-  side-by-side comparisons to the actual panel, not just digital
-  previews (this project's own precedent: a digital comparison already
-  proved misleading once, for the supersampling attempt above):
-  - [docs/plans/text-rendering-option-1-fontmode.md](./docs/plans/text-rendering-option-1-fontmode.md)
-    (PIL's `fontmode="1"` native monochrome rasterization) - **rejected**,
-    not better than normal rendering.
-  - [docs/plans/text-rendering-option-2-bitmap-fonts.md](./docs/plans/text-rendering-option-2-bitmap-fonts.md)
-    (true bitmap fonts, Spleen + Terminus including a faked-bold alpha
-    dilation for Spleen's single weight) - **rejected**.
-  - Reopened "switch to a different TrueType font entirely" (dropped in
-    the original research for lack of a candidate) with two fonts
-    specifically researched for e-ink use - Literata and League Spartan
-    (the latter also tried under `fontmode="1"`, since it has real
-    hinting instructions unlike Jost, which has none - Jost's `fpgm`
-    table is 0 bytes, confirmed by inspecting the TTF directly) -
-    **rejected**, no dedicated plan doc, full comparison scripts remain
-    on branch `text-rendering-font-candidates` for reference.
-  - Headless Chromium/CSS was dropped earlier without prototyping (a
-    Pi Zero W can't run it comfortably) - see either plan doc's Context
-    section.
-
-## Display refresh cadence
-
-- [ ] **Deliberate tradeoff: slower-changing data can go stale on the
-  physical display (up to `force_refresh_max_stale_minutes`, default 1h)
-  even though the underlying fetch happens every 10 min** -
-  `display_freshness.py` only forces a real panel refresh when the main
-  icon/temperature changes, or that window has elapsed. If the icon and
-  temp both happen to hold steady, forecast cards/the hourly chart/
-  humidity/wind/etc. can all be that old on-screen despite fresh data
-  existing. Confirmed as the intended behavior (2026-08-10), not a bug -
-  documented in `docs/settings.md`.
 
 ## WiFi & web UI
 
@@ -80,34 +28,7 @@ reference docs this list feeds into.
 - [ ] **No authentication anywhere in the web UI** - settings edits, WiFi credential changes, and shutdown are all reachable by anyone who can reach the device's IP or join its setup AP. Deliberate, matches button A's existing unauthenticated physical shutdown and the project's trusted-LAN-only threat model - documented explicitly in `docs/networking.md`, not an oversight, but would need revisiting if this device is ever exposed beyond a home LAN.
 - [ ] No QR code on the setup screen (would encode `WIFI:S:<ssid>;T:WPA;P:<password>;;` for one-tap phone connect) - would need a new `qrcode` dependency and more rendering work, scoped out of v1.
 
-## Screen modes
 
-- [x] **`compact_style` was never decided on**: committed to `icon_left` (2026-08-11) after comparing fresh renders of all three - `icon_above` left an awkward whitespace gap between icon and text, `icon_above_row` didn't clearly beat `icon_left`. Removed `icon_above`/`icon_above_row`, the `compact_style` parameter (`canvas.py`, `main.py`'s `--compact-style` flag), and the now-dead `layout.data_point_cell_1x4`.
-
-## Kwaliteit & Pollen (combined AQI + pollen)
-
-- [ ] **Pollen's contribution is permanently Europe-only and seasonal** -
-  not a bug, a real limitation of Open-Meteo's air-quality pollen data
-  (null outside a species' active season, and outside Europe entirely).
-  Most non-European renders, and any European one out of season, fall back
-  to AQI alone (or "N/A" if AQI is also unavailable). Documented in
-  `docs/settings.md`.
-- [ ] **Open-Meteo/CAMS only models 6 pollen species, fewer than Dutch
-  pollen services track** - confirmed against pollennieuws.nl 2026-08-10:
-  it rates "Kruiden" (herbs/weeds) "Zeer ongunstig" (very unfavorable)
-  while this app's mugwort+ragweed readings were low/zero the same day.
-  Dutch services' "Kruiden" bucket commonly includes weeds Open-Meteo
-  doesn't model at all (e.g. nettle/brandnetel, sorrel/zuring,
-  plantain/weegbree), so this app's pollen contribution can genuinely
-  understate a Netherlands-focused service's even when both are working
-  correctly. Not fixable without a different upstream data source -
-  documented as a known gap, not a bug. See `docs/settings.md`.
-- [ ] **Combined scale is a fresh 4-tier design (Goed/Matig/Slecht/Zeer
-  slecht), not identical to either input's own vocabulary** - confirmed
-  with the user 2026-08-10 as the preferred option over reusing AQI's 6
-  tiers or pollen's 4 outright. Worth revisiting if the combined wording
-  ever feels redundant next to AQI's/UV's own tier vocabulary shown
-  elsewhere on the same screen.
 
 ## General polish
 
