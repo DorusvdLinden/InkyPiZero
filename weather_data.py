@@ -23,20 +23,14 @@ DUTCH_MONTHS = [
     "juli", "augustus", "september", "oktober", "november", "december"
 ]
 
-UNITS = {
-    "standard": {"temperature": "K", "speed": "m/s", "distance": "km"},
-    "metric": {"temperature": "°C", "speed": "m/s", "distance": "km"},
-    "imperial": {"temperature": "°F", "speed": "mph", "distance": "mi"},
-}
+TEMP_UNIT = "°C"
+SPEED_UNIT = "m/s"
+DISTANCE_UNIT = "km"
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language=nl&zoom=14"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
 OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=european_aqi,uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
-OPEN_METEO_UNIT_PARAMS = {
-    "standard": "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm",
-    "metric": "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm",
-    "imperial": "temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch",
-}
+OPEN_METEO_UNIT_PARAMS = "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm"
 
 
 def format_date_nl(dt: datetime) -> str:
@@ -131,10 +125,6 @@ def get_wind_direction_abbr_nl(wind_deg: float) -> str:
 
 def get_wind_icon_rotation(wind_deg: float) -> float:
     return (wind_deg + 180) % 360
-
-
-def get_wind_speed_ms(speed: float, units: str) -> float:
-    return speed * 0.44704 if units == "imperial" else speed
 
 
 def get_beaufort_description_nl(speed_ms: float) -> str:
@@ -425,9 +415,8 @@ def get_nearest_location_name(lat: float, long: float) -> str:
         return ""
 
 
-def _get_open_meteo_data(lat, long, units, forecast_days):
-    unit_params = OPEN_METEO_UNIT_PARAMS[units]
-    url = OPEN_METEO_FORECAST_URL.format(lat=lat, long=long, forecast_days=forecast_days) + f"&{unit_params}"
+def _get_open_meteo_data(lat, long, forecast_days):
+    url = OPEN_METEO_FORECAST_URL.format(lat=lat, long=long, forecast_days=forecast_days) + f"&{OPEN_METEO_UNIT_PARAMS}"
     response = requests.get(url, timeout=30)
     if not 200 <= response.status_code < 300:
         raise RuntimeError(f"Failed to retrieve Open-Meteo weather data: {response.content}")
@@ -442,14 +431,11 @@ def _get_open_meteo_air_quality(lat, long):
     return response.json()
 
 
-def _parse_forecast(daily_data, units, tz, lat) -> list[DayForecast]:
+def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
     temp_max = daily_data.get("temperature_2m_max", [])
     temp_min = daily_data.get("temperature_2m_min", [])
-    if units == "standard":
-        temp_max = [t + 273.15 for t in temp_max]
-        temp_min = [t + 273.15 for t in temp_min]
 
     forecast = []
     for i in range(len(times)):
@@ -491,7 +477,7 @@ def _get_sun_events(start_epoch, end_epoch, sun_epoch_pairs) -> list[SunEvent]:
     return events
 
 
-def _night_day_temps(hourly_data, daily_data, units, tz, current_time) -> tuple[int | None, int | None]:
+def _night_day_temps(hourly_data, daily_data, tz, current_time) -> tuple[int | None, int | None]:
     """(last_night_low, next_night_low) for the current-conditions header -
     the minimum hourly temperature between local midnight and today's
     sunrise ("last night"), and between today's sunset and tomorrow's
@@ -505,8 +491,6 @@ def _night_day_temps(hourly_data, daily_data, units, tz, current_time) -> tuple[
     day's calendar min/max)."""
     times = hourly_data.get("time", [])
     temperatures = hourly_data.get("temperature_2m", [])
-    if units == "standard":
-        temperatures = [t + 273.15 for t in temperatures]
 
     sunrises = daily_data.get("sunrise", [])
     sunsets = daily_data.get("sunset", [])
@@ -537,7 +521,7 @@ def _night_day_temps(hourly_data, daily_data, units, tz, current_time) -> tuple[
     return last_night_low, next_night_low
 
 
-def _classify_precip(codes, precipitation, snowfall, units) -> tuple[list[float], str]:
+def _classify_precip(codes, precipitation, snowfall) -> tuple[list[float], str]:
     """Picks which quantity the chart's precipitation bars should plot for
     this hourly window, and the matching Dutch axis label - snowfall (cm)
     for a snowy window, total precipitation (mm) for a rainy or hail-bearing
@@ -547,23 +531,18 @@ def _classify_precip(codes, precipitation, snowfall, units) -> tuple[list[float]
     has_snow = any(code in SNOW_CODES for code in codes)
     total_precip = sum(precipitation) if precipitation else 0
 
-    rain_unit = "in" if units == "imperial" else "mm"
-    snow_unit = "in" if units == "imperial" else "cm"
-
     if has_hail:
-        return precipitation, f"Hagel [{rain_unit}]"
+        return precipitation, "Hagel [mm]"
     if has_snow:
-        return snowfall, f"Sneeuw [{snow_unit}]"
+        return snowfall, "Sneeuw [cm]"
     if total_precip > 0:
-        return precipitation, f"Regen [{rain_unit}]"
+        return precipitation, "Regen [mm]"
     return precipitation, "Droog"
 
 
-def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tuple[list[HourPoint], list[SunEvent], str]:
+def _parse_hourly(hourly_data, tz, time_format, sunrises, sunsets) -> tuple[list[HourPoint], list[SunEvent], str]:
     times = hourly_data.get("time", [])
     temperatures = hourly_data.get("temperature_2m", [])
-    if units == "standard":
-        temperatures = [t + 273.15 for t in temperatures]
     rain = hourly_data.get("precipitation", [])
     snowfall = hourly_data.get("snowfall", [])
     codes = hourly_data.get("weather_code", [])
@@ -595,7 +574,7 @@ def _parse_hourly(hourly_data, units, tz, time_format, sunrises, sunsets) -> tup
 
     count = min(24, len(sliced_times))
     precip_values, precip_label = _classify_precip(
-        sliced_codes[:count], sliced_rain[:count], sliced_snowfall[:count], units)
+        sliced_codes[:count], sliced_rain[:count], sliced_snowfall[:count])
 
     hourly = []
     prev_date = None
@@ -652,7 +631,7 @@ def _value_max_today(times, values, tz, current_date):
     return best
 
 
-def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
+def _parse_data_points(weather_data, aqi_data, tz) -> list[dict]:
     data_points = []
     current_data = weather_data.get("current", {})
     hourly_data = weather_data.get("hourly", {})
@@ -662,8 +641,8 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     wind_deg = current_data.get("winddirection", 0)
     data_points.append({
         "kind": "wind",
-        "label": get_beaufort_description_nl(get_wind_speed_ms(wind_speed, units)),
-        "measurement": wind_speed, "unit": UNITS[units]["speed"],
+        "label": get_beaufort_description_nl(wind_speed),
+        "measurement": wind_speed, "unit": SPEED_UNIT,
         "direction": get_wind_direction_abbr_nl(wind_deg),
         "rotation": get_wind_icon_rotation(wind_deg),
     })
@@ -694,10 +673,7 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
-    if units == "imperial":
-        visibility_conversion, visibility_max = 1 / 5280.0, 6.2
-    else:
-        visibility_conversion, visibility_max = 0.001, 10.0
+    visibility_conversion, visibility_max = 0.001, 10.0
     raw_visibility = _value_at_current_hour(hourly_data.get("time", []), hourly_data.get("visibility", []), tz, current_time)
     at_max_visibility = False
     if raw_visibility is not None:
@@ -709,7 +685,7 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
     else:
         visibility_str = "N/A"
     data_points.append({
-        "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": UNITS[units]["distance"],
+        "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": DISTANCE_UNIT,
     })
 
     aqi_times = aqi_data.get("hourly", {}).get("time", [])
@@ -741,7 +717,7 @@ def _parse_data_points(weather_data, aqi_data, units, tz) -> list[dict]:
 
 def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     """Fetches current Open-Meteo data and returns a fully-parsed WeatherSnapshot."""
-    weather_data = _get_open_meteo_data(config.latitude, config.longitude, config.units, config.forecast_days + 1)
+    weather_data = _get_open_meteo_data(config.latitude, config.longitude, config.forecast_days + 1)
     aqi_data = _get_open_meteo_air_quality(config.latitude, config.longitude)
 
     weather_timezone = weather_data.get("timezone")
@@ -754,12 +730,10 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     is_day = current.get("is_day", 1)
     current_icon_key = map_weather_code_to_icon(weather_code, is_day)
 
-    temperature_conversion = 273.15 if config.units == "standard" else 0.0
-
-    daily_forecast = _parse_forecast(daily, config.units, tz, config.latitude)
-    data_points = _parse_data_points(weather_data, aqi_data, config.units, tz)
+    daily_forecast = _parse_forecast(daily, tz, config.latitude)
+    data_points = _parse_data_points(weather_data, aqi_data, tz)
     hourly, sun_events, precip_label = _parse_hourly(
-        weather_data.get("hourly", {}), config.units, tz, config.time_format,
+        weather_data.get("hourly", {}), tz, config.time_format,
         daily.get("sunrise", []), daily.get("sunset", []),
     )
     location = get_nearest_location_name(config.latitude, config.longitude)
@@ -769,7 +743,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
 
     day_high = daily_forecast[0].high if daily_forecast else 0
     day_low = daily_forecast[0].low if daily_forecast else 0
-    last_night_low, next_night_low = _night_day_temps(weather_data.get("hourly", {}), daily, config.units, tz, now)
+    last_night_low, next_night_low = _night_day_temps(weather_data.get("hourly", {}), daily, tz, now)
     if last_night_low is None:
         last_night_low = day_low
     if next_night_low is None:
@@ -779,9 +753,9 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         current_date=format_date_nl(dt),
         location=location,
         current_icon_key=current_icon_key,
-        current_temp=round(current.get("temperature", 0) + temperature_conversion),
-        feels_like=round(current.get("apparent_temperature", current.get("temperature", 0)) + temperature_conversion),
-        temp_unit=UNITS[config.units]["temperature"],
+        current_temp=round(current.get("temperature", 0)),
+        feels_like=round(current.get("apparent_temperature", current.get("temperature", 0))),
+        temp_unit=TEMP_UNIT,
         last_night_low=last_night_low,
         day_high=day_high,
         next_night_low=next_night_low,

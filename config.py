@@ -10,7 +10,6 @@ class DisplayConfig:
     """
     latitude: float = 51.0004365
     longitude: float = 5.8993687
-    units: str = "metric"          # "metric" | "imperial" | "standard"
     timezone: str = "Europe/Amsterdam"
     time_format: str = "24h"       # "24h" | "12h"
     forecast_days: int = 7

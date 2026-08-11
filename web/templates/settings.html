@@ -18,13 +18,6 @@
 
     <fieldset>
       <legend>Weergave</legend>
-      <label>Eenheden
-        <select name="units">
-          {% for value, label in [("metric", "Metrisch"), ("imperial", "Imperial"), ("standard", "Standaard (Kelvin)")] %}
-            <option value="{{ value }}" {{ "selected" if config.units == value }}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </label>
       <label>Tijdnotatie
         <select name="time_format">
           {% for value, label in [("24h", "24-uurs"), ("12h", "12-uurs")] %}
