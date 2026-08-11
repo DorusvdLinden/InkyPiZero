@@ -43,7 +43,8 @@ def _show_setup_screen(config, ssid, password):
     from setup_screen import render_setup_screen
     from display.inky_driver import InkyDriver
 
-    assets = AssetStore(os.path.join(BASE_DIR, "assets", "icons"), os.path.join(BASE_DIR, "assets", "fonts"))
+    assets = AssetStore(os.path.join(BASE_DIR, "assets", "icons"), os.path.join(BASE_DIR, "assets", "fonts"),
+                        font_family=config.font_family)
     image = render_setup_screen(assets, config, ssid, password, wifi_manager.AP_SETUP_URL)
     InkyDriver(saturation=config.inky_saturation).show(image)
 

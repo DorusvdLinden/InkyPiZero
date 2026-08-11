@@ -96,12 +96,18 @@ class WeatherCanvas:
             self._draw_data_point_icon(image, icon_box, dp)
 
             text_x = cell.x + icon_w + 8
-            font_label = self.assets.font("normal", 18)
-            font_value = self.assets.font("bold", 18)
+            max_width = cell.right - text_x - 4
+            value_text = _data_point_value_text(dp)
+            # Shrinks to fit instead of a fixed 18px, same as compact mode's
+            # cells - different font families have different metrics at the
+            # same point size ("Kwaliteit & Pollen" clipped in Bitter, which
+            # is wider than Jost, before this).
+            font_label = self._fit_font(dp["label"], "normal", 18, max_width)
+            font_value = self._fit_font(value_text, "bold", 18, max_width)
             label_y = cell.y + int(cell.h * 0.28)
             value_y = cell.y + int(cell.h * 0.68)
             draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
-            draw.text((text_x, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="lm")
+            draw.text((text_x, value_y), value_text, font=font_value, fill=self.text_color, anchor="lm")
 
     def _draw_data_points_compact(self, image, draw, data: WeatherSnapshot):
         """"compact" screen mode (button D) - 4 details (wind/humidity/uv/aqi -

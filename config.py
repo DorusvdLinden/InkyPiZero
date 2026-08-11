@@ -18,6 +18,10 @@ class DisplayConfig:
     background_color: str = "#ffffff"
     text_color: str = "#000000"
     inky_saturation: float = 0.0
+    # "jost" | "bitter" - see widgets/icons.py's FONT_FAMILIES. Bitter is the
+    # default (2026-08-11) - chosen over Jost after a real-hardware
+    # comparison, see docs/changes.md. Also a web UI setting.
+    font_family: str = "bitter"
     # 0 = no extra throttling beyond the fixed 10-minute systemd timer tick
     # (install/pi-weather-display.timer) - raising this skips a check
     # entirely (before even fetching weather data) until this many minutes

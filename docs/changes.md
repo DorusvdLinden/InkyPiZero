@@ -563,7 +563,7 @@ threading through `render_canvas()`; `layout.py`'s now-dead
 **Active** - current design. `compact_style` no longer exists as a
 concept anywhere in the codebase.
 
-### 28. Text-rendering fix investigation - every alternative rejected, keeping Jost — most recent
+### 28. Text-rendering fix investigation - every alternative rejected, keeping Jost
 Branches `text-rendering-fontmode-prototype`,
 `text-rendering-bitmap-font-prototype`, `text-rendering-font-candidates`
 (none merged)
@@ -612,6 +612,45 @@ branches were never merged and remain as a reference trail (full
 prototypes, license verifications, and the two corrected-API findings
 above) rather than being folded into `main` - see `TODO.md`'s Fonts &
 text section and the two plan docs' Status lines for the summary.
+**Outdated**: this entry's own "keep Jost" conclusion didn't hold - a
+further round of comparisons (entry 29) landed on Bitter after all.
+
+### 29. Adopt Bitter as the default font — most recent
+Branch `font-family-jost-bitter`
+
+Supersedes entry 28's "keep Jost" conclusion. One more real-hardware
+comparison round (Literata, Charter/XCharter, Bitter, Vollkorn, plus a
+local-only digital check of Georgia - Bookerly excluded entirely, no
+legitimate downloadable source exists for Amazon's Kindle-only font) -
+Bitter won this time.
+
+`config.font_family` (`"jost"` | `"bitter"`, `widgets/icons.py`'s
+`FONT_FAMILIES`) is now a real, persisted web UI setting (`settings.html`'s
+"Weergave" fieldset), default `"bitter"` - not merely a rendering-mode
+toggle like entries 24-28's rejected options, an actual typeface swap.
+Bitter ships as a single variable-weight file (no separate bold TTF,
+confirmed via `font.get_variation_names()`) - `AssetStore.font()` selects
+its named `Bold`/`Regular` instance via `set_variation_by_name()`.
+`main.py` gained a `--font-family` flag for testing new candidates
+locally without touching the saved setting.
+
+Testing across the *full* app (not just isolated "Matig Gras" samples,
+the mistake earlier rounds risked) found and fixed a real bug before
+shipping Bitter as the default: it's wider than Jost at the same point
+size, which clipped the "Kwaliteit & Pollen" label in the 6-cell
+(original/gridlines) data-point grid. `_draw_data_points` now uses the
+same `_fit_font` width-shrinking helper `_draw_compact_cell` already had
+- makes the whole app robust to any future font's different metrics, not
+just a one-off patch for Bitter.
+
+Also surfaced (not fixed, not new): a chart gridline-mode max-value-
+label-vs-tick-label collision, confirmed via a same-data side-by-side
+render to reproduce identically with Jost too - font-independent,
+tracked separately in `TODO.md`.
+
+**Active** - current design. `docs/attribution.md` updated (Bitter's
+entry promoted from "candidate, not wired in" to the actual default;
+Jost's entry now notes it's the selectable alternative).
 
 ---
 

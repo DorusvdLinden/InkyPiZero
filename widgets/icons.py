@@ -77,10 +77,23 @@ def _pad_to_fraction(img: Image.Image, fraction: float) -> Image.Image:
     return padded
 
 
+# One entry per selectable font family (config.font_family / the web UI) -
+# "normal"/"bold" filenames, both loaded the same way via .font(). Bitter
+# ships as a single variable-weight file (no separate bold TTF) - its
+# named "Bold"/"Regular" instances are selected in .font() below via
+# set_variation_by_name(), confirmed to exist via font.get_variation_names().
+FONT_FAMILIES = {
+    "jost": {"normal": "Jost.ttf", "bold": "Jost-SemiBold.ttf"},
+    "bitter": {"normal": "Bitter-Variable.ttf", "bold": "Bitter-Variable.ttf"},
+}
+BITTER_VARIATIONS = {"normal": "Regular", "bold": "Bold"}
+
+
 class AssetStore:
-    def __init__(self, icon_dir: str, font_dir: str):
+    def __init__(self, icon_dir: str, font_dir: str, font_family: str = "jost"):
         self.icon_dir = icon_dir
         self.font_dir = font_dir
+        self.font_family = font_family
         self._icon_cache = {}
         self._resized_cache = {}
         self._font_cache = {}
@@ -117,11 +130,13 @@ class AssetStore:
         return resized
 
     def font(self, weight: str, size_px: int) -> ImageFont.FreeTypeFont:
-        cache_key = (weight, size_px)
+        cache_key = (self.font_family, weight, size_px)
         font = self._font_cache.get(cache_key)
         if font is None:
-            filename = "Jost-SemiBold.ttf" if weight == "bold" else "Jost.ttf"
+            filename = FONT_FAMILIES[self.font_family][weight]
             font = ImageFont.truetype(os.path.join(self.font_dir, filename), size_px)
+            if self.font_family == "bitter":
+                font.set_variation_by_name(BITTER_VARIATIONS[weight])
             self._font_cache[cache_key] = font
         return font
 

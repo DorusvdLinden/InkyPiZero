@@ -111,7 +111,8 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 - `display/inky_driver.py` - thin wrapper around the `inky` library;
   `display/mock_driver.py` saves to a file instead, for testing without
   hardware
-- `assets/` - the icon PNGs and Jost font files it actually uses (see
+- `assets/` - the icon PNGs and font files it actually uses (Bitter,
+  Jost - selectable via `config.font_family`/the web UI, see
   [attribution.md](./docs/attribution.md))
 - `config.py` - a plain dataclass (location, screen mode, etc.) of
   hard-coded defaults; `settings_store.py` overlays a saved
