@@ -1,9 +1,14 @@
 # Plan: crisp text via PIL's native monochrome rasterization (`fontmode="1"`)
 
-Status: **proposed, not implemented**. One of two candidate fixes for
-jagged text on the e-paper panel - see also
-[text-rendering-option-2-bitmap-fonts.md](./text-rendering-option-2-bitmap-fonts.md).
-Neither has been chosen yet.
+Status: **rejected on real hardware** (2026-08-11). Prototyped and
+pushed to the actual Inky panel (branch
+`text-rendering-fontmode-prototype`, never merged - not better than the
+current normal rendering, `canvas.py` untouched). Full prototype/
+findings on that branch, including the empirically-corrected detail that
+`fontmode="1"` toggles per-call with no side effects. See also
+[text-rendering-option-2-bitmap-fonts.md](./text-rendering-option-2-bitmap-fonts.md)
+(also rejected) and `TODO.md`'s Fonts & text section for the full
+picture, including a third avenue (new TrueType fonts) tried afterward.
 
 ## Context
 

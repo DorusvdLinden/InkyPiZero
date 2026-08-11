@@ -37,18 +37,28 @@ reference docs this list feeds into.
   re-attempt supersampling without addressing the hinting-loss problem
   specifically.
 
-  **Researched alternatives (2026-08-10)**: two viable candidates fully
-  written up as standalone plan docs, neither implemented or chosen yet -
-  [docs/plans/text-rendering-option-1-fontmode.md](./docs/plans/text-rendering-option-1-fontmode.md)
-  (PIL's built-in `fontmode="1"` native monochrome rasterization - zero
-  new dependencies, cheapest to try) and
-  [docs/plans/text-rendering-option-2-bitmap-fonts.md](./docs/plans/text-rendering-option-2-bitmap-fonts.md)
-  (true bitmap fonts via `BdfFontFile`/`PcfFontFile` - what the
-  `Weather-EPS32S3` sibling project already does on this same physical
-  panel, and what Adafruit's own e-ink guidance recommends, at the cost
-  of a new font asset and a real visual-identity change). Headless
-  Chromium/CSS and switching to a different TrueType font were both
-  researched and dropped - see either plan doc's Context section for why.
+  **Every researched alternative tried on real hardware and rejected
+  (2026-08-11) - keeping Jost + normal rendering as-is.** Pushed
+  side-by-side comparisons to the actual panel, not just digital
+  previews (this project's own precedent: a digital comparison already
+  proved misleading once, for the supersampling attempt above):
+  - [docs/plans/text-rendering-option-1-fontmode.md](./docs/plans/text-rendering-option-1-fontmode.md)
+    (PIL's `fontmode="1"` native monochrome rasterization) - **rejected**,
+    not better than normal rendering.
+  - [docs/plans/text-rendering-option-2-bitmap-fonts.md](./docs/plans/text-rendering-option-2-bitmap-fonts.md)
+    (true bitmap fonts, Spleen + Terminus including a faked-bold alpha
+    dilation for Spleen's single weight) - **rejected**.
+  - Reopened "switch to a different TrueType font entirely" (dropped in
+    the original research for lack of a candidate) with two fonts
+    specifically researched for e-ink use - Literata and League Spartan
+    (the latter also tried under `fontmode="1"`, since it has real
+    hinting instructions unlike Jost, which has none - Jost's `fpgm`
+    table is 0 bytes, confirmed by inspecting the TTF directly) -
+    **rejected**, no dedicated plan doc, full comparison scripts remain
+    on branch `text-rendering-font-candidates` for reference.
+  - Headless Chromium/CSS was dropped earlier without prototyping (a
+    Pi Zero W can't run it comfortably) - see either plan doc's Context
+    section.
 
 ## Display refresh cadence
 

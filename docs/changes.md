@@ -539,7 +539,7 @@ the unit test too - rendered at `inky_saturation=0.5` and confirmed via
 **Active** - current design. No remaining known gaps for this specific
 item.
 
-### 27. Commit to icon_left, remove compact_style's other two sub-layouts — most recent
+### 27. Commit to icon_left, remove compact_style's other two sub-layouts
 Branch `commit-compact-style-icon-left`
 
 Closes entry 14's leftover decision: "compact" screen mode had three
@@ -562,6 +562,56 @@ threading through `render_canvas()`; `layout.py`'s now-dead
 
 **Active** - current design. `compact_style` no longer exists as a
 concept anywhere in the codebase.
+
+### 28. Text-rendering fix investigation - every alternative rejected, keeping Jost — most recent
+Branches `text-rendering-fontmode-prototype`,
+`text-rendering-bitmap-font-prototype`, `text-rendering-font-candidates`
+(none merged)
+
+Closed out the "bold text ~18-24px shows stair-stepped curves on real
+hardware" TODO item (entry-worthy on its own, given the amount of real
+testing involved, even though the conclusion is "no change"). Three
+alternatives prototyped and pushed to the *actual* Inky panel - not just
+digital previews, this project's own precedent (the earlier
+`supersampled-text-compare` experiment) already showed a digital
+comparison can look better while looking worse on real e-paper:
+
+1. **PIL's `fontmode="1"` native monochrome rasterization** - zero new
+   dependencies, confirmed empirically to toggle per-call with no side
+   effects. **Rejected** - not better than normal antialiased+hardened
+   rendering.
+2. **True bitmap fonts** - Spleen and Terminus (both BDF, both
+   discovered/verified via their actual license files rather than
+   assumed), including a `thicken_icon()`-style alpha-dilated fake-bold
+   for Spleen's single weight. Also corrected a wrong assumption in the
+   original plan: `BdfFontFile.to_imagefont()` doesn't exist in this
+   repo's pinned Pillow (12.1.1) - the real path is `BdfFontFile.save()`
+   + `ImageFont.load()`, confirmed by introspecting the actual class.
+   **Rejected**.
+3. **Switching TrueType fonts entirely** - dropped in the original
+   research for lack of a candidate, reopened after researching what's
+   actually recommended for e-ink displays specifically (not general
+   ebook-reading fonts, a different problem - those solve grayscale
+   body-text legibility at reader-chosen sizes). Literata (Google Play
+   Books' serif) and League Spartan (a bold geometric sans specifically
+   singled out for e-ink use elsewhere, and a closer stylistic match to
+   this app's short bold labels). Along the way, corrected another wrong
+   assumption (an initial web-search-sourced claim that Literata is
+   unhinted) by inspecting the actual TTF `fpgm` table directly - it
+   isn't. That same inspection found `Jost-SemiBold.ttf`'s `fpgm` table
+   is 0 bytes, i.e. **Jost itself has no real hinting instructions and
+   never has** - relies entirely on FreeType's generic autohinter. League
+   Spartan (which does have real hinting) was retested under
+   `fontmode="1"` specifically for this reason. **Rejected** - a final
+   longer paragraph-scale 2x2 comparison (Jost/League Spartan x Normal/
+   `fontmode="1"`) confirmed Jost's current normal rendering still reads
+   best.
+
+**Rejected**, all three. `canvas.py` untouched throughout. The three
+branches were never merged and remain as a reference trail (full
+prototypes, license verifications, and the two corrected-API findings
+above) rather than being folded into `main` - see `TODO.md`'s Fonts &
+text section and the two plan docs' Status lines for the summary.
 
 ---
 

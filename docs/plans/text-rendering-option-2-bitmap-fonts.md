@@ -1,9 +1,17 @@
 # Plan: crisp text via true bitmap fonts (`PIL.BdfFontFile`/`PcfFontFile`)
 
-Status: **proposed, not implemented**. One of two candidate fixes for
-jagged text on the e-paper panel - see also
-[text-rendering-option-1-fontmode.md](./text-rendering-option-1-fontmode.md).
-Neither has been chosen yet.
+Status: **rejected on real hardware** (2026-08-11). Prototyped (Spleen +
+Terminus bitmap fonts, including a faked-bold alpha dilation for
+Spleen's single weight) and pushed to the actual Inky panel (branch
+`text-rendering-bitmap-font-prototype`, never merged - not better than
+the current normal Jost rendering, `canvas.py` untouched). Full
+prototype/findings on that branch, including the empirically-corrected
+detail that `BdfFontFile.to_imagefont()` doesn't exist in this repo's
+pinned Pillow (the real API is `BdfFontFile.save()` + `ImageFont.load()`).
+See also
+[text-rendering-option-1-fontmode.md](./text-rendering-option-1-fontmode.md)
+(also rejected) and `TODO.md`'s Fonts & text section for the full
+picture, including a third avenue (new TrueType fonts) tried afterward.
 
 ## Context
 
