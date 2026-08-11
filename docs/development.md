@@ -58,6 +58,10 @@ python main.py --mock-output output.png
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
   skip/force decision (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.
+- `python scripts/test_palette_sync.py` - covers `widgets.palette.PALETTE`
+  staying synced to whatever `inky_saturation` the current render's config
+  specifies (see [settings.md](./settings.md)'s "Color palette" section) -
+  no network/hardware needed.
 
 The first three save their renders to `mock_display_output/` for visual
 review - see [icons.md](./icons.md) and [changes.md](./changes.md) for the

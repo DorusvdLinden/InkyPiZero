@@ -9,10 +9,14 @@ something meant to look like a soft blend, but for flat icon fills, chart
 lines, and gauge dials it just reads as noise.
 
 `native_colors()` must be computed at the same `saturation` the display is
-actually driven at (`DisplayConfig.inky_saturation`, currently 0.5) for its
-colors to render perfectly flat - see scripts/panel_sim.py to preview any
-render as it will actually look on the physical panel, and
-scripts/color_options.py for side-by-side alternatives at other saturations.
+actually driven at (`DisplayConfig.inky_saturation`) for its colors to
+render perfectly flat - the shared `PALETTE` singleton below is kept in
+sync with whatever the current config specifies via `set_saturation()`,
+called from canvas.py's `WeatherCanvas.__init__`/setup_screen.py's
+`render_setup_screen` (the app's two actual rendering entry points), not
+hardcoded here. See scripts/panel_sim.py to preview any render as it will
+actually look on the physical panel, and scripts/color_options.py for
+side-by-side alternatives at other saturations.
 """
 
 # Panel's native palette at full ink saturation vs. fully paper-shifted -
@@ -109,4 +113,7 @@ class Palette:
         self.__dict__.update(Palette(saturation).__dict__)
 
 
-PALETTE = Palette(saturation=0.0)  # must match DisplayConfig.inky_saturation
+PALETTE = Palette(saturation=0.0)  # matches DisplayConfig's own default;
+# kept in sync with whatever's actually configured via set_saturation()
+# (see canvas.py/setup_screen.py) - this initial value is only ever used
+# before the first real render, or by dev tools that never call sync.

@@ -355,7 +355,7 @@ fields:
 | `show_moon_phase` | `False` | Whether forecast cards show the moon-phase icon + illumination % (bottom-left of each card) |
 | `background_color` | `"#ffffff"` | Canvas background (hex) |
 | `text_color` | `"#000000"` | Default text/line color (hex) |
-| `inky_saturation` | `0.0` | 0.0-1.0 blend between the panel's desaturated and fully-saturated native palettes (see [Color palette](#color-palette-widgetspalettepy) below) - **must** match `widgets/palette.py`'s hardcoded `PALETTE = Palette(saturation=0.0)` singleton, they aren't wired together |
+| `inky_saturation` | `0.0` | 0.0-1.0 blend between the panel's desaturated and fully-saturated native palettes (see [Color palette](#color-palette-widgetspalettepy) below) - changing it automatically re-syncs every widget color (`widgets.palette.PALETTE`), not just the final quantization step |
 | `refresh_interval_seconds` | `600` | **Currently unused/vestigial** - not read anywhere in the codebase. The actual render cadence is `install/pi-weather-display.timer`'s `OnUnitActiveSec=10min`, a separately hardcoded value. Changing this field alone does nothing; see [Install-time settings](#install-time-settings) to actually change the cadence |
 
 ## Via CLI flags (`main.py`, local/dev use only)
@@ -391,11 +391,18 @@ configured:
 
 ## Color palette (`widgets/palette.py`)
 
-Not a "setting" in the adjustable-knob sense, but the one place a would-be
-setting silently *isn't* wired to `config.py`: `PALETTE = Palette(saturation=0.0)`
-is a module-level singleton computed once at import time. If
-`DisplayConfig.inky_saturation` is ever changed from `0.0`, this line must be
-changed to match by hand, or authored colors (icons, chart lines, gauges)
-will stop being exact palette matches and start dithering. See
-`scripts/panel_sim.py` (preview at the actual driven saturation) and
-`scripts/color_options.py` (side-by-side comparison at other saturations).
+Not a "setting" in the adjustable-knob sense, but a would-be sharp edge
+that's now handled automatically: every widget color comes from the
+shared `widgets.palette.PALETTE` singleton (`PALETTE.uv_low`,
+`PALETTE.aqi_band_high`, wind compass colors, etc.), computed at a given
+`saturation`. `PALETTE.set_saturation(config.inky_saturation)` is called
+at the top of both of the app's actual rendering entry points
+(`canvas.py`'s `WeatherCanvas.__init__`, `setup_screen.py`'s
+`render_setup_screen`), so every render keeps `PALETTE` in sync with
+whatever `inky_saturation` that particular `DisplayConfig` specifies -
+authored colors always stay exact panel-palette matches, never silently
+drifting into dithered speckle even if `inky_saturation` is changed via
+the web UI. See `scripts/test_palette_sync.py` for deterministic
+coverage, `scripts/panel_sim.py` (preview at the actual driven
+saturation), and `scripts/color_options.py` (side-by-side comparison at
+other saturations).

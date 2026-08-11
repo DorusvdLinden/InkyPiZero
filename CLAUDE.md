@@ -55,6 +55,11 @@ automatically, without being asked each time.
   network/hardware needed. Run this after any change to `display_freshness.py`,
   `main.py`'s real-hardware render path, or the forced-refresh sentinel calls in
   `button_listener.py`/`web/routes.py`.
+- **Always test palette sync**: `python scripts/test_palette_sync.py` covers
+  `widgets.palette.PALETTE` staying synced to whatever `inky_saturation` the current
+  render's `DisplayConfig` specifies, via `WeatherCanvas.__init__`/`render_setup_screen`
+  - no network/hardware needed. Run this after any change to `widgets/palette.py`,
+  `canvas.py`'s `WeatherCanvas.__init__`, or `setup_screen.py`'s `render_setup_screen`.
 
 ## Documentation maintenance
 

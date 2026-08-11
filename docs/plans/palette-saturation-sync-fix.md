@@ -1,7 +1,7 @@
 # Plan: wire `PALETTE` to `config.inky_saturation`
 
-Status: **proposed, not implemented**. Fixes TODO.md's "Color palette &
-quantization" item.
+Status: **implemented** (2026-08-11). Fixed TODO.md's "Color palette &
+quantization" item - see `docs/changes.md` for the current-state entry.
 
 ## Context
 
