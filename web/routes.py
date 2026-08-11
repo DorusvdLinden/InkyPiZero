@@ -61,6 +61,7 @@ def _config_from_form(form) -> tuple[DisplayConfig, list[str]]:
     _set("background_color", str)
     _set("text_color", str)
     _set("inky_saturation", float)
+    _set("font_family", str)
     _set("min_update_interval_minutes", int)
     _set("force_refresh_max_stale_minutes", int)
 

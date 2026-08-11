@@ -18,6 +18,7 @@ import os
 import re
 
 from config import DisplayConfig
+from widgets.icons import FONT_FAMILIES
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,10 @@ def _valid_timezone(v):
     return isinstance(v, str) and len(v) > 0
 
 
+def _valid_font_family(v):
+    return v in FONT_FAMILIES
+
+
 # One validator per DisplayConfig field - keep in sync with config.py.
 FIELD_VALIDATORS = {
     "latitude": _valid_latitude,
@@ -74,6 +79,7 @@ FIELD_VALIDATORS = {
     "background_color": _valid_hex_color,
     "text_color": _valid_hex_color,
     "inky_saturation": _valid_saturation,
+    "font_family": _valid_font_family,
     "min_update_interval_minutes": _valid_nonnegative_int,
     "force_refresh_max_stale_minutes": _valid_positive_int,
 }

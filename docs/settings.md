@@ -375,6 +375,7 @@ specific to those unit systems (`TODO.md`), rather than being fixed.
 | `background_color` | `"#ffffff"` | Canvas background (hex) |
 | `text_color` | `"#000000"` | Default text/line color (hex) |
 | `inky_saturation` | `0.0` | 0.0-1.0 blend between the panel's desaturated and fully-saturated native palettes (see [Color palette](#color-palette-widgetspalettepy) below) - changing it automatically re-syncs every widget color (`widgets.palette.PALETTE`), not just the final quantization step |
+| `font_family` | `"bitter"` | `"bitter"` \| `"jost"` - see `widgets/icons.py`'s `FONT_FAMILIES`. Bitter is the default after a real-hardware comparison (2026-08-11, see `docs/changes.md`); Jost remains available. Local-only override for testing new candidates without a web UI entry: `main.py --font-family` |
 | `min_update_interval_minutes` | `0` | Minimum minutes between checks, on top of the fixed 10-minute systemd timer cadence - `0` means no extra throttling. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 | `force_refresh_max_stale_minutes` | `60` | How long the physical display can go unrefreshed while the main icon/temperature are unchanged before a refresh is forced anyway. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 
@@ -387,6 +388,7 @@ no arguments) - only relevant when running `python main.py` by hand.
 |---|---|---|
 | `--mock-output <path>` | any file path | Render to a PNG via `display/mock_driver.py` instead of driving real Inky hardware |
 | `--screen-mode` | `original` \| `gridlines` \| `compact` | Override the button-selected mode (`display_mode.get_mode()`) for one render |
+| `--font-family` | `bitter` \| `jost` | Override `config.font_family` for one render, without touching the saved setting - useful for trying a new font candidate locally |
 
 ## Install-time settings
 

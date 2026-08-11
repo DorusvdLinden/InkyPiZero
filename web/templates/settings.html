@@ -18,6 +18,13 @@
 
     <fieldset>
       <legend>Weergave</legend>
+      <label>Lettertype
+        <select name="font_family">
+          {% for value, label in [("bitter", "Bitter"), ("jost", "Jost")] %}
+            <option value="{{ value }}" {{ "selected" if config.font_family == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Tijdnotatie
         <select name="time_format">
           {% for value, label in [("24h", "24-uurs"), ("12h", "12-uurs")] %}
