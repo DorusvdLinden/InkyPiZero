@@ -50,11 +50,6 @@ reference docs this list feeds into.
   Chromium/CSS and switching to a different TrueType font were both
   researched and dropped - see either plan doc's Context section for why.
 
-## Config & settings
-
-- [x] **`config.py`'s `refresh_interval_seconds` is dead**: removed and replaced with two real, web-UI-exposed settings - `min_update_interval_minutes` (software-only throttle, checked before even fetching weather data) and `force_refresh_max_stale_minutes` (renamed from the old hardcoded `MAX_STALE`). The underlying systemd timer cadence itself stays fixed/root-only, deliberately - see [docs/settings.md](./docs/settings.md)'s "Display refresh cadence" section.
-- [x] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far: resolved by removing `imperial`/`standard` support entirely (2026-08-11) - the app is metric-only now, `config.py` has no `units` field. Testing surfaced real chart-axis bugs specific to those unit systems (0-floored axis, fixed gridline step) that no longer apply since only Celsius remains.
-
 ## Display refresh cadence
 
 - [ ] **Deliberate tradeoff: slower-changing data can go stale on the
@@ -66,14 +61,6 @@ reference docs this list feeds into.
   humidity/wind/etc. can all be that old on-screen despite fresh data
   existing. Confirmed as the intended behavior (2026-08-10), not a bug -
   documented in `docs/settings.md`.
-- [x] `MAX_STALE` (1 hour) and the underlying 10-minute timer cadence
-  hardcoded, not exposed as `config.py`/web-UI settings: `MAX_STALE` is
-  now `force_refresh_max_stale_minutes`, a real config/web-UI setting.
-  The 10-minute systemd timer cadence itself stays fixed (rewriting it
-  from the web UI would need root and risks breaking the render
-  pipeline/`install.sh`'s idempotency) - instead added
-  `min_update_interval_minutes`, a software-only minimum spacing that
-  skips a tick before even fetching data.
 
 ## WiFi & web UI
 
