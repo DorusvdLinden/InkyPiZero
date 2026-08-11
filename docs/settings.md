@@ -94,7 +94,7 @@ runs, so this is how the choice survives across renders).
 |---|---|---|---|
 | Original | `"original"` | Dashed lines at the day's actual min/max (+ a 0°C line if it goes below freezing) | 2x3 grid, 6 cells: wind/humidity/pressure/UV/visibility/**Kwaliteit & Pollen** (combined AQI+pollen) |
 | Gridlines | `"gridlines"` (**default**, `DEFAULT_MODE`) | Fixed dotted reference grid every 10°C across the visible range | 2x3 grid, same 6 cells as Original |
-| Compact | `"compact"` | Same gridlines style as above | Only wind/humidity/UV/**Kwaliteit & Pollen** (`canvas.COMPACT_KINDS`) - 4 cells (2x2, or 1x4, see `compact_style`) |
+| Compact | `"compact"` | Same gridlines style as above | Only wind/humidity/UV/**Kwaliteit & Pollen** (`canvas.COMPACT_KINDS`) - 2x2 grid, 4 bigger cells |
 
 If the state file is missing or contains something outside `VALID_MODES`,
 `get_mode()` falls back to `DEFAULT_MODE`.
@@ -387,11 +387,6 @@ no arguments) - only relevant when running `python main.py` by hand.
 |---|---|---|
 | `--mock-output <path>` | any file path | Render to a PNG via `display/mock_driver.py` instead of driving real Inky hardware |
 | `--screen-mode` | `original` \| `gridlines` \| `compact` | Override the button-selected mode (`display_mode.get_mode()`) for one render |
-| `--compact-style` | `icon_left` (default) \| `icon_above` \| `icon_above_row` | Which of the three "compact" mode mockup layouts to use - see `canvas.WeatherCanvas._draw_data_points_compact` |
-
-`--compact-style` has no button/persisted-state equivalent - `icon_left` is
-the only style wired up for real use; the other two remain as comparison
-mockups.
 
 ## Install-time settings
 

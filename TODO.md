@@ -72,7 +72,7 @@ reference docs this list feeds into.
 
 ## Screen modes
 
-- [ ] **`compact_style` was never decided on**: "compact" screen mode has three interchangeable sub-layouts (`icon_left`/`icon_above`/`icon_above_row`) built for comparison, but `icon_left` has just been the de facto wired default since day one with no follow-up commit formally choosing it. Either commit to `icon_left` and remove the other two mockups, or expose the choice as a real setting. Found while writing `docs/changes.md`.
+- [x] **`compact_style` was never decided on**: committed to `icon_left` (2026-08-11) after comparing fresh renders of all three - `icon_above` left an awkward whitespace gap between icon and text, `icon_above_row` didn't clearly beat `icon_left`. Removed `icon_above`/`icon_above_row`, the `compact_style` parameter (`canvas.py`, `main.py`'s `--compact-style` flag), and the now-dead `layout.data_point_cell_1x4`.
 
 ## Kwaliteit & Pollen (combined AQI + pollen)
 

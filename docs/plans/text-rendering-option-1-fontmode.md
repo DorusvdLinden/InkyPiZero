@@ -118,8 +118,7 @@ supersampling attempt).
 ## Critical files
 
 - `canvas.py` - every `draw.text(...)` call site (`_draw_header`,
-  `_draw_current_conditions`, `_draw_data_points`,
-  `_draw_compact_cell_icon_left`, `_draw_compact_cell_icon_above`)
+  `_draw_current_conditions`, `_draw_data_points`, `_draw_compact_cell`)
 - `widgets/forecast.py` - forecast-card date/day-abbreviation text
 - `display/quantize.py` - unchanged, but confirms `harden_neutral_pixels`
   should be a safe no-op on already-binary pixels (worth a quick sanity

@@ -178,6 +178,9 @@ column-alignment fix.
 **Active** - all three modes (`original`/`gridlines`/`compact`) coexist
 today, all reachable via their buttons; `gridlines` is the default for fresh
 installs. See [settings.md](./settings.md) for the full mode/button table.
+**Outdated in one respect**: `compact_style`'s three sub-layouts and the
+"no follow-up commit revisiting the choice" gap are resolved by entry 27 -
+`icon_left` is now the only implementation, `compact_style` itself is gone.
 
 ### 15. Chart axis tweaks: unit-in-label, hour ticks, date-change line
 `dbb2466` (branch `chart-axis-tweaks`) - axis-extreme labels read "28°C"/
@@ -499,7 +502,7 @@ label classification itself is unaffected; only its imperial "in" variant
 (never separately called out there) is gone - `rain_unit`/`snow_unit` are
 always "mm"/"cm" now.
 
-### 26. Wire `PALETTE` to `config.inky_saturation` — most recent
+### 26. Wire `PALETTE` to `config.inky_saturation`
 Branch `palette-saturation-sync`
 
 Closes a long-standing TODO.md item: `widgets.palette.PALETTE` (every
@@ -535,6 +538,30 @@ the unit test too - rendered at `inky_saturation=0.5` and confirmed via
 
 **Active** - current design. No remaining known gaps for this specific
 item.
+
+### 27. Commit to icon_left, remove compact_style's other two sub-layouts — most recent
+Branch `commit-compact-style-icon-left`
+
+Closes entry 14's leftover decision: "compact" screen mode had three
+interchangeable data-point-cell arrangements (`compact_style`:
+`icon_left`/`icon_above`/`icon_above_row`) built for comparison, but only
+reachable via `main.py`'s `--compact-style` CLI flag - no button or web
+UI ever exposed the other two, `icon_left` had been the de facto live
+default since day one. Rendered fresh side-by-side comparisons of all
+three (2026-08-11): `icon_above` left an awkward whitespace gap between
+icon and text in each 2x2 cell; `icon_above_row`'s single-row layout was
+decent but didn't clearly beat `icon_left`, and weakened the visual
+grouping between an icon and its text. Committed to `icon_left`.
+
+Removed: `canvas.py`'s `compact_style` parameter and
+`_draw_compact_cell_icon_above` (the remaining
+`_draw_compact_cell_icon_left` renamed to `_draw_compact_cell`, now the
+only implementation); `main.py`'s `--compact-style` flag and its
+threading through `render_canvas()`; `layout.py`'s now-dead
+`data_point_cell_1x4` (only `icon_above_row` used it).
+
+**Active** - current design. `compact_style` no longer exists as a
+concept anywhere in the codebase.
 
 ---
 

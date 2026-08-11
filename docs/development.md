@@ -31,10 +31,9 @@ python main.py --mock-output output.png
 - **Test different locations/conditions** - edit the `DisplayConfig`
   defaults in `config.py` (or construct one with different
   `latitude`/`longitude` in a throwaway script) and rerun
-- **Try a different screen mode/layout locally** - `--screen-mode
-  {original,gridlines,compact}` and `--compact-style
-  {icon_left,icon_above,icon_above_row}` override the button-persisted
-  choice for one render, e.g. `python main.py --mock-output output.png
+- **Try a different screen mode locally** - `--screen-mode
+  {original,gridlines,compact}` overrides the button-persisted choice for
+  one render, e.g. `python main.py --mock-output output.png
   --screen-mode compact`. See [settings.md](./settings.md) for every
   option, and what the physical buttons do.
 - **Debug data parsing** - `weather_data.fetch_snapshot()` hits the live

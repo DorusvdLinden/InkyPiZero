@@ -27,8 +27,7 @@ COMPACT_KINDS = {"wind", "humidity", "uv", "aqi"}
 
 
 class WeatherCanvas:
-    def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig,
-                 screen_mode: str = "original", compact_style: str = "icon_left"):
+    def __init__(self, assets: icons_widget.AssetStore, config: DisplayConfig, screen_mode: str = "original"):
         # Keeps every PALETTE.* color an exact panel-palette match at
         # whatever saturation this config actually specifies - PALETTE is
         # a shared singleton that otherwise stays frozen at its own
@@ -37,7 +36,6 @@ class WeatherCanvas:
         self.assets = assets
         self.config = config
         self.screen_mode = screen_mode
-        self.compact_style = compact_style
         self.bg = _hex_to_rgb(config.background_color)
         self.text_color = _hex_to_rgb(config.text_color)
 
@@ -106,28 +104,16 @@ class WeatherCanvas:
             draw.text((text_x, value_y), _data_point_value_text(dp), font=font_value, fill=self.text_color, anchor="lm")
 
     def _draw_data_points_compact(self, image, draw, data: WeatherSnapshot):
-        """"compact" screen mode (button D) - 4 details
-        (wind/humidity/uv/aqi - "aqi" is the combined "Kwaliteit & Pollen"
-        data point, see weather_data._combine_aqi_pollen_tier) instead of
-        6, bigger fonts in the reclaimed space. Three interchangeable
-        arrangements to compare - self.compact_style picks which:
-          - "icon_left": same icon-then-stacked-text arrangement as the
-            original 6-detail grid, just in 2x2 cells with bigger fonts.
-          - "icon_above": icon centered above centered label/value text,
-            in the same 2x2 cells - a more "card"-like look.
-          - "icon_above_row": same icon-above-text arrangement, but as a
-            single row of 4 cells spanning the full width instead of 2x2."""
+        """"compact" screen mode (button D) - 4 details (wind/humidity/uv/aqi -
+        "aqi" is the combined "Kwaliteit & Pollen" data point, see
+        weather_data._combine_aqi_pollen_tier) instead of 6, bigger fonts in
+        the reclaimed space, same icon-then-stacked-text arrangement as the
+        original 6-detail grid just in 2x2 cells."""
         points = [dp for dp in data.data_points if dp["kind"] in COMPACT_KINDS]
-        if self.compact_style == "icon_above_row":
-            cells = [layout.data_point_cell_1x4(i) for i in range(len(points))]
-        else:
-            cells = [layout.data_point_cell_2x2(i) for i in range(len(points))]
+        cells = [layout.data_point_cell_2x2(i) for i in range(len(points))]
 
         for dp, cell in zip(points, cells):
-            if self.compact_style == "icon_left":
-                self._draw_compact_cell_icon_left(image, draw, cell, dp)
-            else:
-                self._draw_compact_cell_icon_above(image, draw, cell, dp)
+            self._draw_compact_cell(image, draw, cell, dp)
 
     def _fit_font(self, text: str, weight: str, max_size: int, max_width: float, min_size: int = 12):
         """Shrinks in 2px steps until text fits max_width, floor min_size -
@@ -140,7 +126,7 @@ class WeatherCanvas:
                 return font
         return self.assets.font(weight, min_size)
 
-    def _draw_compact_cell_icon_left(self, image, draw, cell: layout.Region, dp: dict):
+    def _draw_compact_cell(self, image, draw, cell: layout.Region, dp: dict):
         icon_w = int(cell.w * 0.32)
         icon_box = layout.Region(cell.x, cell.y, icon_w, cell.h)
         self._draw_data_point_icon(image, icon_box, dp)
@@ -154,21 +140,6 @@ class WeatherCanvas:
         value_y = cell.y + int(cell.h * 0.68)
         draw.text((text_x, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="lm")
         draw.text((text_x, value_y), value_text, font=font_value, fill=self.text_color, anchor="lm")
-
-    def _draw_compact_cell_icon_above(self, image, draw, cell: layout.Region, dp: dict):
-        cx = cell.x + cell.w // 2
-        icon_size = int(min(cell.w * 0.4, cell.h * 0.45))
-        icon_box = layout.Region(cx - icon_size // 2, cell.y + int(cell.h * 0.06), icon_size, icon_size)
-        self._draw_data_point_icon(image, icon_box, dp)
-
-        max_width = cell.w - 16
-        value_text = _data_point_value_text(dp)
-        font_label = self._fit_font(dp["label"], "normal", 20, max_width)
-        font_value = self._fit_font(value_text, "bold", 20, max_width)
-        label_y = cell.y + int(cell.h * 0.68)
-        value_y = cell.y + int(cell.h * 0.88)
-        draw.text((cx, label_y), dp["label"], font=font_label, fill=self.text_color, anchor="mm")
-        draw.text((cx, value_y), value_text, font=font_value, fill=self.text_color, anchor="mm")
 
     def _draw_data_point_icon(self, image, box: layout.Region, dp: dict):
         kind = dp["kind"]

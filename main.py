@@ -23,13 +23,12 @@ ICON_DIR = os.path.join(BASE_DIR, "assets", "icons")
 FONT_DIR = os.path.join(BASE_DIR, "assets", "fonts")
 
 
-def render_canvas(config: DisplayConfig, data: WeatherSnapshot, screen_mode: str | None = None,
-                   compact_style: str = "icon_left"):
+def render_canvas(config: DisplayConfig, data: WeatherSnapshot, screen_mode: str | None = None):
     assets = AssetStore(ICON_DIR, FONT_DIR)
     logger.info("Rendering canvas")
     if screen_mode is None:
         screen_mode = display_mode.get_mode()
-    return WeatherCanvas(assets, config, screen_mode, compact_style).render(data)
+    return WeatherCanvas(assets, config, screen_mode).render(data)
 
 
 def main():
@@ -37,8 +36,6 @@ def main():
     parser.add_argument("--mock-output", help="Save the render to this file instead of driving a real Inky display.")
     parser.add_argument("--screen-mode", choices=sorted(display_mode.VALID_MODES),
                          help="Override the button-selected screen mode (for local testing).")
-    parser.add_argument("--compact-style", choices=["icon_left", "icon_above", "icon_above_row"],
-                         default="icon_left", help="Which 'compact' mode mockup style to use (for local testing).")
     args = parser.parse_args()
 
     config = settings_store.load_config()
@@ -48,7 +45,7 @@ def main():
     if args.mock_output:
         logger.info("Fetching weather data")
         data = fetch_snapshot(config)
-        image = render_canvas(config, data, screen_mode=args.screen_mode, compact_style=args.compact_style)
+        image = render_canvas(config, data, screen_mode=args.screen_mode)
         from display.mock_driver import MockDriver
         MockDriver(args.mock_output).show(image)
         return
@@ -68,7 +65,7 @@ def main():
         logger.info("Skipping display update - icon/temp unchanged and last refresh was under force_refresh_max_stale_minutes")
         return
 
-    image = render_canvas(config, data, screen_mode=args.screen_mode, compact_style=args.compact_style)
+    image = render_canvas(config, data, screen_mode=args.screen_mode)
     from display.inky_driver import InkyDriver
     InkyDriver(saturation=config.inky_saturation).show(image)
     display_freshness.record_display(data.current_icon_key, data.current_temp, now)

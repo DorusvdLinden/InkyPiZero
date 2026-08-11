@@ -70,13 +70,6 @@ def data_point_cell_2x2(index: int) -> Region:
     return Region(DATA_POINTS.x + col * cell_w, DATA_POINTS.y + row * cell_h, cell_w, cell_h)
 
 
-def data_point_cell_1x4(index: int) -> Region:
-    """"compact" screen mode's alternate single-row layout - same 4 details,
-    full DATA_POINTS width split 4 ways instead of a 2x2 grid."""
-    cell_w = DATA_POINTS.w // 4
-    return Region(DATA_POINTS.x + index * cell_w, DATA_POINTS.y, cell_w, DATA_POINTS.h)
-
-
 def forecast_card(index: int, count: int) -> Region:
     gap = 12
     card_w = (FORECAST_ROW.w - gap * (count - 1)) // count
