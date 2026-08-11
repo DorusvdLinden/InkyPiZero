@@ -3,6 +3,7 @@ once per refresh by a systemd timer (or, for local testing, run directly) -
 no Flask app, no playlist/plugin machinery, just fetch -> render -> display."""
 
 import argparse
+import dataclasses
 import logging
 import os
 from datetime import datetime, timedelta
@@ -10,7 +11,7 @@ from datetime import datetime, timedelta
 from config import DisplayConfig
 from weather_data import fetch_snapshot, WeatherSnapshot
 from canvas import WeatherCanvas
-from widgets.icons import AssetStore
+from widgets.icons import AssetStore, FONT_FAMILIES
 import display_freshness
 import display_mode
 import settings_store
@@ -24,7 +25,7 @@ FONT_DIR = os.path.join(BASE_DIR, "assets", "fonts")
 
 
 def render_canvas(config: DisplayConfig, data: WeatherSnapshot, screen_mode: str | None = None):
-    assets = AssetStore(ICON_DIR, FONT_DIR)
+    assets = AssetStore(ICON_DIR, FONT_DIR, font_family=config.font_family)
     logger.info("Rendering canvas")
     if screen_mode is None:
         screen_mode = display_mode.get_mode()
@@ -36,9 +37,13 @@ def main():
     parser.add_argument("--mock-output", help="Save the render to this file instead of driving a real Inky display.")
     parser.add_argument("--screen-mode", choices=sorted(display_mode.VALID_MODES),
                          help="Override the button-selected screen mode (for local testing).")
+    parser.add_argument("--font-family", choices=sorted(FONT_FAMILIES),
+                         help="Override config.font_family (for local testing - not yet a web UI setting).")
     args = parser.parse_args()
 
     config = settings_store.load_config()
+    if args.font_family:
+        config = dataclasses.replace(config, font_family=args.font_family)
 
     # --mock-output is for local preview/testing - always render, skip the
     # real-hardware-only "don't refresh unless something changed" check.
