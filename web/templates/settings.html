@@ -58,12 +58,19 @@
     </fieldset>
 
     <fieldset>
-      <legend>Overig</legend>
-      <label>Ververssnelheid in seconden (refresh_interval_seconds)
-        <input type="number" min="1" step="1" name="refresh_interval_seconds" value="{{ config.refresh_interval_seconds }}" required>
+      <legend>Ververssnelheid</legend>
+      <label>Minimale tijd tussen controles in minuten (min_update_interval_minutes)
+        <input type="number" min="0" step="1" name="min_update_interval_minutes" value="{{ config.min_update_interval_minutes }}" required>
       </label>
-      <p class="hint">Heeft momenteel geen effect - de daadwerkelijke ververscyclus wordt bepaald
-        door de geïnstalleerde systemd-timer (<code>install/pi-weather-display.timer</code>), niet door dit veld.</p>
+      <p class="hint">0 = geen extra vertraging bovenop de vaste systemd-timer (elke 10 minuten).
+        Hoger zorgt dat een tik wordt overgeslagen - nog vóórdat weerdata wordt opgehaald - tot
+        dit aantal minuten is verstreken sinds de laatste controle.</p>
+      <label>Maximale tijd zonder verversing in minuten (force_refresh_max_stale_minutes)
+        <input type="number" min="1" step="1" name="force_refresh_max_stale_minutes" value="{{ config.force_refresh_max_stale_minutes }}" required>
+      </label>
+      <p class="hint">Hoe lang het scherm onveranderd mag blijven terwijl het hoofdicoon/de
+        temperatuur gelijk blijven, zodat langzamer veranderende details (voorspelkaarten, de
+        grafiek, "Laatste update") niet oneindig verouderen.</p>
     </fieldset>
 
     <button type="submit">Opslaan</button>

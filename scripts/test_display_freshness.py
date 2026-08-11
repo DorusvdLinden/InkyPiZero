@@ -24,6 +24,7 @@ display_freshness.STATE_PATH = os.path.join(TMP_DIR, "display_freshness.json")
 display_freshness.FORCE_REFRESH_PATH = os.path.join(TMP_DIR, "force_refresh_requested")
 
 NOW = datetime(2026, 8, 10, 12, 0, 0)
+MAX_STALE = timedelta(hours=1)
 
 
 def _reset():
@@ -36,55 +37,55 @@ def _reset():
 
 def test_first_run_always_updates():
     _reset()
-    return display_freshness.should_update_display("01d", 20, NOW) is True
+    return display_freshness.should_update_display("01d", 20, NOW, MAX_STALE) is True
 
 
-def test_unchanged_within_hour_skips():
+def test_unchanged_within_max_stale_skips():
     _reset()
     display_freshness.record_display("01d", 20, NOW)
     later = NOW + timedelta(minutes=30)
-    return display_freshness.should_update_display("01d", 20, later) is False
+    return display_freshness.should_update_display("01d", 20, later, MAX_STALE) is False
 
 
-def test_unchanged_past_hour_forces():
+def test_unchanged_past_max_stale_forces():
     _reset()
     display_freshness.record_display("01d", 20, NOW)
     later = NOW + timedelta(hours=1, minutes=1)
-    return display_freshness.should_update_display("01d", 20, later) is True
+    return display_freshness.should_update_display("01d", 20, later, MAX_STALE) is True
 
 
-def test_unchanged_exactly_one_hour_forces():
+def test_unchanged_exactly_max_stale_forces():
     _reset()
     display_freshness.record_display("01d", 20, NOW)
     later = NOW + timedelta(hours=1)
-    return display_freshness.should_update_display("01d", 20, later) is True
+    return display_freshness.should_update_display("01d", 20, later, MAX_STALE) is True
 
 
 def test_changed_icon_forces():
     _reset()
     display_freshness.record_display("01d", 20, NOW)
     later = NOW + timedelta(minutes=1)
-    return display_freshness.should_update_display("53d", 20, later) is True
+    return display_freshness.should_update_display("53d", 20, later, MAX_STALE) is True
 
 
 def test_changed_temp_forces():
     _reset()
     display_freshness.record_display("01d", 20, NOW)
     later = NOW + timedelta(minutes=1)
-    return display_freshness.should_update_display("01d", 21, later) is True
+    return display_freshness.should_update_display("01d", 21, later, MAX_STALE) is True
 
 
 def test_skipped_tick_does_not_reset_last_display_time():
     """A skip must not touch the stored state - only record_display() (an
-    actual push) should, or the hourly force would never fire during a
+    actual push) should, or the max-stale force would never fire during a
     long unchanged-weather stretch of repeated skipped ticks."""
     _reset()
     display_freshness.record_display("01d", 20, NOW)
     just_shy = NOW + timedelta(minutes=59)
-    if display_freshness.should_update_display("01d", 20, just_shy) is not False:
+    if display_freshness.should_update_display("01d", 20, just_shy, MAX_STALE) is not False:
         return False
-    past_hour_from_original = NOW + timedelta(hours=1, minutes=1)
-    return display_freshness.should_update_display("01d", 20, past_hour_from_original) is True
+    past_max_stale_from_original = NOW + timedelta(hours=1, minutes=1)
+    return display_freshness.should_update_display("01d", 20, past_max_stale_from_original, MAX_STALE) is True
 
 
 def test_corrupt_state_file_forces():
@@ -92,7 +93,7 @@ def test_corrupt_state_file_forces():
     os.makedirs(TMP_DIR, exist_ok=True)
     with open(display_freshness.STATE_PATH, "w") as f:
         f.write("not valid json{{{")
-    return display_freshness.should_update_display("01d", 20, NOW) is True
+    return display_freshness.should_update_display("01d", 20, NOW, MAX_STALE) is True
 
 
 def test_forced_refresh_sentinel_consumed_once():
@@ -104,16 +105,58 @@ def test_forced_refresh_sentinel_consumed_once():
     return (before, during, after) == (False, True, False)
 
 
+def test_zero_min_interval_always_runs_check():
+    _reset()
+    display_freshness.record_check(NOW)
+    return display_freshness.should_run_check(NOW, timedelta(0)) is True
+
+
+def test_check_within_min_interval_skips():
+    _reset()
+    display_freshness.record_check(NOW)
+    later = NOW + timedelta(minutes=5)
+    return display_freshness.should_run_check(later, timedelta(minutes=10)) is False
+
+
+def test_check_past_min_interval_runs():
+    _reset()
+    display_freshness.record_check(NOW)
+    later = NOW + timedelta(minutes=10)
+    return display_freshness.should_run_check(later, timedelta(minutes=10)) is True
+
+
+def test_first_check_always_runs():
+    _reset()
+    return display_freshness.should_run_check(NOW, timedelta(minutes=10)) is True
+
+
+def test_record_check_does_not_clobber_display_state():
+    """record_check() and record_display() write the same state file -
+    each must preserve the other's fields (read-modify-write), or e.g.
+    saving a min-interval setting would silently reset the max-stale
+    clock, and vice versa."""
+    _reset()
+    display_freshness.record_display("01d", 20, NOW)
+    display_freshness.record_check(NOW + timedelta(minutes=5))
+    still_unchanged = display_freshness.should_update_display("01d", 20, NOW + timedelta(minutes=10), MAX_STALE)
+    return still_unchanged is False
+
+
 TESTS = [
     test_first_run_always_updates,
-    test_unchanged_within_hour_skips,
-    test_unchanged_past_hour_forces,
-    test_unchanged_exactly_one_hour_forces,
+    test_unchanged_within_max_stale_skips,
+    test_unchanged_past_max_stale_forces,
+    test_unchanged_exactly_max_stale_forces,
     test_changed_icon_forces,
     test_changed_temp_forces,
     test_skipped_tick_does_not_reset_last_display_time,
     test_corrupt_state_file_forces,
     test_forced_refresh_sentinel_consumed_once,
+    test_zero_min_interval_always_runs_check,
+    test_check_within_min_interval_skips,
+    test_check_past_min_interval_runs,
+    test_first_check_always_runs,
+    test_record_check_does_not_clobber_display_state,
 ]
 
 

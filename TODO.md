@@ -52,23 +52,28 @@ reference docs this list feeds into.
 
 ## Config & settings
 
-- [ ] **`config.py`'s `refresh_interval_seconds` is dead**: not read anywhere in the codebase. The actual render cadence is `install/pi-weather-display.timer`'s hardcoded `OnUnitActiveSec` (10min), a completely separate value. Changing `refresh_interval_seconds` currently does nothing, which will mislead anyone who edits it expecting an effect. Either wire it into the installer (template the timer file from it) or remove the field. Found while writing `docs/settings.md`.
+- [x] **`config.py`'s `refresh_interval_seconds` is dead**: removed and replaced with two real, web-UI-exposed settings - `min_update_interval_minutes` (software-only throttle, checked before even fetching weather data) and `force_refresh_max_stale_minutes` (renamed from the old hardcoded `MAX_STALE`). The underlying systemd timer cadence itself stays fixed/root-only, deliberately - see [docs/settings.md](./docs/settings.md)'s "Display refresh cadence" section.
 - [ ] Imperial/standard unit rendering (rain axis label, temperature conversion) has only been tested with metric units so far.
 
 ## Display refresh cadence
 
-- [ ] **Deliberate tradeoff: slower-changing data can go up to 1h stale
-  on the physical display even though the underlying fetch happens every
-  10 min** - `display_freshness.py` only forces a real panel refresh when
-  the main icon/temperature changes, or an hour has passed. If the icon
-  and temp both happen to hold steady, forecast cards/the hourly chart/
-  humidity/wind/etc. can all be up to an hour old on-screen despite fresh
-  data existing. Confirmed as the intended behavior (2026-08-10), not a
-  bug - documented in `docs/settings.md`.
-- [ ] `MAX_STALE` (1 hour) and the underlying 10-minute timer cadence are
-  both hardcoded, not exposed as `config.py`/web-UI settings. Would be a
-  reasonable follow-up if the fixed 1-hour ceiling turns out to be wrong
-  for some users.
+- [ ] **Deliberate tradeoff: slower-changing data can go stale on the
+  physical display (up to `force_refresh_max_stale_minutes`, default 1h)
+  even though the underlying fetch happens every 10 min** -
+  `display_freshness.py` only forces a real panel refresh when the main
+  icon/temperature changes, or that window has elapsed. If the icon and
+  temp both happen to hold steady, forecast cards/the hourly chart/
+  humidity/wind/etc. can all be that old on-screen despite fresh data
+  existing. Confirmed as the intended behavior (2026-08-10), not a bug -
+  documented in `docs/settings.md`.
+- [x] `MAX_STALE` (1 hour) and the underlying 10-minute timer cadence
+  hardcoded, not exposed as `config.py`/web-UI settings: `MAX_STALE` is
+  now `force_refresh_max_stale_minutes`, a real config/web-UI setting.
+  The 10-minute systemd timer cadence itself stays fixed (rewriting it
+  from the web UI would need root and risks breaking the render
+  pipeline/`install.sh`'s idempotency) - instead added
+  `min_update_interval_minutes`, a software-only minimum spacing that
+  skips a tick before even fetching data.
 
 ## WiFi & web UI
 

@@ -54,6 +54,10 @@ def _valid_positive_int(v):
     return isinstance(v, int) and not isinstance(v, bool) and v > 0
 
 
+def _valid_nonnegative_int(v):
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
 def _valid_bool(v):
     return isinstance(v, bool)
 
@@ -75,7 +79,8 @@ FIELD_VALIDATORS = {
     "background_color": _valid_hex_color,
     "text_color": _valid_hex_color,
     "inky_saturation": _valid_saturation,
-    "refresh_interval_seconds": _valid_positive_int,
+    "min_update_interval_minutes": _valid_nonnegative_int,
+    "force_refresh_max_stale_minutes": _valid_positive_int,
 }
 
 

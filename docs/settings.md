@@ -12,41 +12,56 @@ its default changes - see the standing rule in [CLAUDE.md](../CLAUDE.md).
 
 ## Display refresh cadence (`display_freshness.py`)
 
-`install/pi-weather-display.timer` still fires every 10 minutes (fetching
-fresh weather data every time), but `main.py` only actually **pushes to the
-physical panel** when it's worth the wear/flash of a real e-paper refresh:
+`install/pi-weather-display.timer` still fires every 10 minutes (a fixed,
+root-owned systemd cadence, not configurable via `config.py`/the web UI -
+rewriting it from the web app would need root and risks breaking the
+render pipeline or `install.sh`'s "safe to rerun any time" idempotency).
+On top of that fixed tick, two independent, web-UI-configurable throttles
+decide how much actually happens:
 
-- The main current-conditions icon or the big temperature number changed
-  since the last refresh, **or**
-- More than an hour has passed since the last refresh (keeps slower-moving
-  details - forecast cards, the hourly chart, "Laatste update", sunrise/
-  sunset, moon phase - from going stale indefinitely during a long stretch
-  of unchanged weather), **or**
-- A screen-mode button press or a web-UI settings save requested an
-  immediate refresh (see below) - these always show up right away,
-  regardless of whether the icon/temperature changed.
+1. **`min_update_interval_minutes`** (default `0`) - checked first, before
+   even fetching weather data. `0` means no extra throttling beyond the
+   timer's own 10-minute cadence; a higher value skips a tick entirely -
+   no fetch, no render - until that many minutes have passed since the
+   last check. Use this to fetch/check less often than every 10 minutes
+   without touching the systemd timer itself.
+2. **`force_refresh_max_stale_minutes`** (default `60`) - once data has
+   been fetched, `main.py` only actually **pushes to the physical panel**
+   when it's worth the wear/flash of a real e-paper refresh:
+   - The main current-conditions icon or the big temperature number
+     changed since the last refresh, **or**
+   - More than `force_refresh_max_stale_minutes` has passed since the
+     last refresh (keeps slower-moving details - forecast cards, the
+     hourly chart, "Laatste update", sunrise/sunset, moon phase - from
+     going stale indefinitely during a long stretch of unchanged
+     weather), **or**
+   - A screen-mode button press or a web-UI settings save requested an
+     immediate refresh (see below) - these always show up right away,
+     regardless of whether the icon/temperature changed, and also bypass
+     `min_update_interval_minutes`.
 
-Otherwise the tick is skipped entirely - no canvas render, no display
-write, just a log line. State persists to
-`/var/lib/pi-weather-display/display_freshness.json` (same one-shot-job
-persistence pattern as `display_mode.py`): last-shown icon key,
-temperature, and refresh timestamp. A missing or corrupt state file is
-treated as "never refreshed" (always refreshes) rather than crashing the
-render pipeline.
+   Otherwise the tick is skipped entirely - no canvas render, no display
+   write, just a log line.
+
+State persists to `/var/lib/pi-weather-display/display_freshness.json`
+(same one-shot-job persistence pattern as `display_mode.py`): last-check
+timestamp, last-shown icon key, temperature, and last-display timestamp
+all share the one file (read-modify-write, so recording one doesn't
+clobber the other). A missing or corrupt state file is treated as "never
+checked/refreshed" (always proceeds) rather than crashing the render
+pipeline.
 
 Button presses (`button_listener.py`'s `switch_mode()`) and settings saves
 (`web/routes.py`'s `_trigger_rerender()`) both write a one-shot sentinel
 file (`display_freshness.request_forced_refresh()`) immediately before
-forcing the render service to start, so `main.py` knows to bypass the
-skip check for that one run - a user-triggered change is never silently
-dropped because the icon/temperature happened to be unchanged.
+forcing the render service to start, so `main.py` knows to bypass both
+throttles for that one run - a user-triggered change is never silently
+dropped because the icon/temperature happened to be unchanged or the
+minimum interval hadn't elapsed.
 
-This is **not** configurable via `config.py`/the web UI - the 10-minute
-fetch cadence and the 1-hour force-refresh ceiling are both hardcoded
-(`display_freshness.MAX_STALE`). `--mock-output` (local testing/preview)
-always renders, bypassing this check entirely - see
-`scripts/test_display_freshness.py` for deterministic coverage of every
-branch.
+`--mock-output` (local testing/preview) always renders, bypassing both
+throttles entirely - see `scripts/test_display_freshness.py` for
+deterministic coverage of every branch.
 
 ## Via the physical buttons (`button_listener.py`)
 
@@ -356,7 +371,8 @@ fields:
 | `background_color` | `"#ffffff"` | Canvas background (hex) |
 | `text_color` | `"#000000"` | Default text/line color (hex) |
 | `inky_saturation` | `0.0` | 0.0-1.0 blend between the panel's desaturated and fully-saturated native palettes (see [Color palette](#color-palette-widgetspalettepy) below) - **must** match `widgets/palette.py`'s hardcoded `PALETTE = Palette(saturation=0.0)` singleton, they aren't wired together |
-| `refresh_interval_seconds` | `600` | **Currently unused/vestigial** - not read anywhere in the codebase. The actual render cadence is `install/pi-weather-display.timer`'s `OnUnitActiveSec=10min`, a separately hardcoded value. Changing this field alone does nothing; see [Install-time settings](#install-time-settings) to actually change the cadence |
+| `min_update_interval_minutes` | `0` | Minimum minutes between checks, on top of the fixed 10-minute systemd timer cadence - `0` means no extra throttling. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
+| `force_refresh_max_stale_minutes` | `60` | How long the physical display can go unrefreshed while the main icon/temperature are unchanged before a refresh is forced anyway. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 
 ## Via CLI flags (`main.py`, local/dev use only)
 

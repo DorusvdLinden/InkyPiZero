@@ -390,7 +390,7 @@ track (confirmed against pollennieuws.nl's broader "Kruiden" category).
 
 ---
 
-### 23. Skip unchanged display refreshes, force one hourly — most recent
+### 23. Skip unchanged display refreshes, force one hourly
 Branch `skip-unchanged-refresh`
 
 `pi-weather-display.timer` still fires every 10 minutes and `main.py`
@@ -430,8 +430,44 @@ convention.
 **Active** - current design. Deliberate tradeoff, tracked in `TODO.md`:
 other data points can go up to an hour stale on the physical display even
 though the underlying fetch happens every 10 minutes, if the icon/temp
-both hold steady. The 10-minute/1-hour cadence is hardcoded, not exposed
-as a setting.
+both hold steady. The hardcoded 10-minute/1-hour cadence this entry
+shipped with is superseded by entry 24 - the hour ceiling is now a real
+setting (`force_refresh_max_stale_minutes`).
+
+### 24. Configurable refresh cadence — most recent
+Branch `configurable-refresh-cadence`
+
+Replaces the dead `config.py` field `refresh_interval_seconds` (never
+read anywhere) with two real, web-UI-exposed settings:
+`min_update_interval_minutes` (default `0`) and
+`force_refresh_max_stale_minutes` (default `60`, replacing entry 23's
+hardcoded `display_freshness.MAX_STALE`).
+
+The systemd timer's own 10-minute tick stays fixed and root-owned on
+purpose - rewriting it from the web app would need root and risks
+breaking the render pipeline or `install.sh`'s "safe to rerun any time"
+idempotency (the same tradeoff already weighed and deferred for the WiFi
+provisioning feature, entry 21). Instead, `min_update_interval_minutes`
+is a software-only throttle: `main.py` checks it first, before even
+fetching weather data, and skips the tick entirely if not enough time
+has passed. `force_refresh_max_stale_minutes` slots into the same
+`should_update_display` check entry 23 introduced, just parameterized
+instead of hardcoded.
+
+`display_freshness.py`'s state file gained a `last_check_time` field
+alongside the existing icon/temp/`last_display_time` ones; `record_check`/
+`record_display` now read-modify-write so recording one throttle's state
+never clobbers the other's. A forced refresh (button press, settings
+save) bypasses both throttles, matching entry 23's existing guarantee
+that user-triggered changes always show up immediately.
+
+New tests added to `scripts/test_display_freshness.py`: `should_run_check`
+first-run/within-interval/past-interval behavior, and a read-modify-write
+check confirming `record_check` doesn't clobber `record_display`'s state
+(and vice versa).
+
+**Active** - supersedes `refresh_interval_seconds`, entry 23's hardcoded
+`MAX_STALE`.
 
 ---
 

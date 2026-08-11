@@ -5,7 +5,7 @@ no Flask app, no playlist/plugin machinery, just fetch -> render -> display."""
 import argparse
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from config import DisplayConfig
 from weather_data import fetch_snapshot, WeatherSnapshot
@@ -54,11 +54,18 @@ def main():
         return
 
     forced = display_freshness.consume_forced_refresh()
+    now = datetime.now()
+    min_interval = timedelta(minutes=config.min_update_interval_minutes)
+    if not forced and not display_freshness.should_run_check(now, min_interval):
+        logger.info("Skipping check - min_update_interval_minutes not yet elapsed since the last check")
+        return
+    display_freshness.record_check(now)
+
     logger.info("Fetching weather data")
     data = fetch_snapshot(config)
-    now = datetime.now()
-    if not forced and not display_freshness.should_update_display(data.current_icon_key, data.current_temp, now):
-        logger.info("Skipping display update - icon/temp unchanged and last refresh was under an hour ago")
+    max_stale = timedelta(minutes=config.force_refresh_max_stale_minutes)
+    if not forced and not display_freshness.should_update_display(data.current_icon_key, data.current_temp, now, max_stale):
+        logger.info("Skipping display update - icon/temp unchanged and last refresh was under force_refresh_max_stale_minutes")
         return
 
     image = render_canvas(config, data, screen_mode=args.screen_mode, compact_style=args.compact_style)
