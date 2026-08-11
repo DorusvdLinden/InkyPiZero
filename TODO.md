@@ -6,7 +6,6 @@ them) once fixed. Grouped by area, open items first in each group. See also
 `docs/settings.md`, `docs/icons.md`, and `docs/changes.md` for the broader
 reference docs this list feeds into.
 
-
 ## Icons
 
 - [ ] **`02d`/`02n` icon keys are dead**: `scripts/generate_icons.py` still generates `assets/icons/02d.png`/`02n.png`, and `map_weather_code_to_icon`'s night-remap dict still has entries for them, but the day-mapping side of that function never actually outputs `"02d"` - WMO codes 1/2 map straight to the `022d` composite instead. Either find a real use for these two icons or remove the dead entries/generation. Found while writing `docs/icons.md`.
@@ -18,7 +17,6 @@ reference docs this list feeds into.
 
 ## Fonts & text
 
-- [x] **Bitter adopted as the default font (2026-08-11)**: after the earlier "all three rejected, keep Jost" conclusion, a further round pushed several more real-hardware comparisons (Literata, Charter, Bitter, Vollkorn, plus a local-only Georgia digital check - Bookerly couldn't be sourced at all, proprietary to Kindle) - Bitter won. `config.font_family` (`"jost"` | `"bitter"`, see `widgets/icons.py`'s `FONT_FAMILIES`) is now a real web UI setting, default `"bitter"`. Bitter ships as a single variable-weight file - `AssetStore.font()` selects its named Bold/Regular instance via `set_variation_by_name()`. Testing across the *full* app (not just isolated samples) found and fixed a real bug: Bitter is wider than Jost at the same point size, which clipped the "Kwaliteit & Pollen" label in the 6-cell (original/gridlines) data-point grid - `_draw_data_points` now uses the same `_fit_font` width-shrinking `_draw_compact_cell` already had.
 - [ ] **Chart gridline-mode max-value label can collide with the topmost tick label** - found (again) while testing Bitter on Ulaanbaatar's data, but confirmed with a same-data side-by-side render that it reproduces identically with Jost too, so it's font-independent, not new. Matches an earlier finding from imperial-unit testing (since removed along with imperial/standard support) that predicted this could also happen "in metric on the right data" - it can. No minimum-gap check between the axis-extreme label and the nearest gridline tick label in `widgets/chart.py`. Not fixed.
 - [ ] **Missing font glyph fallback**: `AssetStore.font()` only loads Latin-script fonts (Jost or Bitter, no CJK/other non-Latin glyphs). When a location name comes back in a non-Latin script (e.g. Tokyo's Nominatim result), PIL silently drops the unsupported characters instead of rendering anything - the header ends up with a blank gap where the city name should be. The old Chromium/CSS renderer didn't hit this because browsers do automatic per-character font fallback; Pillow's single-TTF loader doesn't. Found via `mock_display_output/pi_zero/pi_zero_render_tokyo_japan.png`. Fix likely needs a bundled fallback font (broad Unicode coverage) tried per-character when the active font can't render something.
 
@@ -29,8 +27,6 @@ reference docs this list feeds into.
 - [ ] **No real captive-portal DNS redirect** on the setup AP - joining it and opening any URL doesn't auto-redirect to the setup page like commercial IoT devices do; the user has to know/read the exact URL (`http://192.168.4.1`) shown on the e-paper display and type it manually. `dnsmasq-base` (already a dependency) could serve wildcard DNS for this later.
 - [ ] **No authentication anywhere in the web UI** - settings edits, WiFi credential changes, and shutdown are all reachable by anyone who can reach the device's IP or join its setup AP. Deliberate, matches button A's existing unauthenticated physical shutdown and the project's trusted-LAN-only threat model - documented explicitly in `docs/networking.md`, not an oversight, but would need revisiting if this device is ever exposed beyond a home LAN.
 - [ ] No QR code on the setup screen (would encode `WIFI:S:<ssid>;T:WPA;P:<password>;;` for one-tap phone connect) - would need a new `qrcode` dependency and more rendering work, scoped out of v1.
-
-
 
 ## General polish
 
