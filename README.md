@@ -163,6 +163,9 @@ whole visual layout in C.
 - [changes.md](./docs/changes.md) - numbered log of the project's larger
   changes, each tagged active/outdated/rejected
 - [development.md](./docs/development.md) - local (no-hardware) development
+- [manual_test_checklist.md](./docs/manual_test_checklist.md) - human
+  checklist for what the automated test suite can't cover (physical
+  buttons, real e-paper appearance, WiFi AP behavior, QR scanning)
 - [installation.md](./docs/installation.md) - detailed Raspberry Pi OS
   flashing steps
 - [troubleshooting.md](./docs/troubleshooting.md) - common issues and fixes

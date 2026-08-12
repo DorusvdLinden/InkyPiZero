@@ -83,3 +83,8 @@ the root [README.md](../README.md) for the full install
 (`install/install.sh`), which additionally installs the `inky` package and
 sets up the systemd timer. Local mock-driver testing should still be your
 first pass before deploying to real hardware.
+
+See [manual_test_checklist.md](./manual_test_checklist.md) for a
+human-followable checklist covering things the automated suite above
+can't reach on its own - real e-paper appearance, physical button
+presses, WiFi AP behavior, and phone QR scanning.
