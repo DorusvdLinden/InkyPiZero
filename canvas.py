@@ -51,12 +51,16 @@ class WeatherCanvas:
         return layout.inset_with_margin(image, self.bg)
 
     def _draw_header(self, draw, data: WeatherSnapshot):
-        font_date = self.assets.font("bold", 22)
         font_refresh = self.assets.font("bold", 14)
         date_text = data.current_date
         if data.location:
             date_text += f", {data.location}"
-        draw.text((layout.HEADER.x, layout.HEADER.bottom), date_text, font=font_date, fill=self.text_color, anchor="lb")
+        # data.location is API-sourced (Nominatim) and can come back in a
+        # non-Latin script neither Jost nor Bitter has glyphs for (e.g. a
+        # Japanese city name) - unlike every other label in the app, which
+        # is always Dutch/numeric, so only this call site needs fallback.
+        self.assets.draw_text_with_fallback(
+            draw, (layout.HEADER.x, layout.HEADER.bottom), date_text, "bold", 22, self.text_color, anchor="lb")
         draw.text((layout.HEADER.right - 4, layout.HEADER.y), f"Laatste update: {data.last_refresh_time}",
                    font=font_refresh, fill=PALETTE.text_muted, anchor="ra")
 

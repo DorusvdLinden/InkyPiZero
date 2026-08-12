@@ -1,5 +1,5 @@
 import os
-from PIL import Image, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 # width / height of the source humidity_drop_filled.png / humidity_drop_empty.png
 # assets (cropped from a pi4-app render - see pi_weather_display/TODO.md)
@@ -88,6 +88,27 @@ FONT_FAMILIES = {
 }
 BITTER_VARIATIONS = {"normal": "Regular", "bold": "Bold"}
 
+# Neither Jost nor Bitter has non-Latin glyphs (Cyrillic aside, for Jost) -
+# a location name that comes back from Nominatim in e.g. Japanese/Chinese
+# renders as a blank gap otherwise (Pillow's single-TTF loader does no
+# automatic per-character font substitution the way a browser would).
+# Noto Sans JP was picked over a narrower "just CJK" or "just Cyrillic"
+# font for its unusually broad combined coverage (Source Han Sans-based -
+# full CJK Unified Ideographs, Hiragana/Katakana, extensive Latin,
+# Cyrillic, Greek, and more in one file) - see draw_text_with_fallback().
+# Complex-script languages (Arabic, Thai, Devanagari-based, Hebrew) would
+# still render with correct *glyphs* but wrong shaping/ordering, since
+# Pillow's text() has no bidi/shaping engine - a real but separate
+# limitation from missing glyphs, not solved here.
+FALLBACK_FONT_FILE = "NotoSansJP-Variable.ttf"
+FALLBACK_FONT_VARIATIONS = {"normal": "Regular", "bold": "Bold"}
+# A private-use-area codepoint no real font legitimately maps - probing a
+# font with it reveals its shared .notdef glyph's bbox "fingerprint" (see
+# _has_glyph). PIL/FreeType have no direct "does this font have glyph X"
+# API; comparing against this reliably infers it without adding a cmap-
+# parsing dependency (fontTools isn't installed in this repo).
+_NOTDEF_PROBE_CHAR = ""
+
 
 class AssetStore:
     def __init__(self, icon_dir: str, font_dir: str, font_family: str = "jost"):
@@ -97,6 +118,8 @@ class AssetStore:
         self._icon_cache = {}
         self._resized_cache = {}
         self._font_cache = {}
+        self._fallback_font_cache = {}
+        self._notdef_bbox_cache = {}
 
     def icon(self, key: str, size: tuple[int, int] | None = None) -> Image.Image | None:
         img = self._icon_cache.get(key)
@@ -139,6 +162,65 @@ class AssetStore:
                 font.set_variation_by_name(BITTER_VARIATIONS[weight])
             self._font_cache[cache_key] = font
         return font
+
+    def fallback_font(self, weight: str, size_px: int) -> ImageFont.FreeTypeFont:
+        """Noto Sans JP, for characters `.font()`'s active family can't
+        render - see FALLBACK_FONT_FILE's module docstring comment."""
+        cache_key = (weight, size_px)
+        font = self._fallback_font_cache.get(cache_key)
+        if font is None:
+            font = ImageFont.truetype(os.path.join(self.font_dir, FALLBACK_FONT_FILE), size_px)
+            font.set_variation_by_name(FALLBACK_FONT_VARIATIONS[weight])
+            self._fallback_font_cache[cache_key] = font
+        return font
+
+    def _has_glyph(self, font: ImageFont.FreeTypeFont, char: str) -> bool:
+        """True if `font` has a real glyph for `char`, not its shared
+        .notdef fallback glyph - see _NOTDEF_PROBE_CHAR's module docstring
+        comment for how/why this works without a cmap-parsing dependency.
+        `font`'s notdef bbox is computed once and cached (keyed by the
+        font object itself - both AssetStore's own font caches already
+        guarantee one object per distinct family/weight/size)."""
+        notdef_bbox = self._notdef_bbox_cache.get(id(font))
+        if notdef_bbox is None:
+            notdef_bbox = font.getbbox(_NOTDEF_PROBE_CHAR)
+            self._notdef_bbox_cache[id(font)] = notdef_bbox
+        if char.isspace():
+            return True
+        return font.getbbox(char) != notdef_bbox
+
+    def draw_text_with_fallback(self, draw: ImageDraw.ImageDraw, xy: tuple[float, float], text: str,
+                                 weight: str, size_px: int, fill, anchor: str = "la"):
+        """Like `draw.text()`, but characters `.font()`'s active family
+        can't render (e.g. a Japanese/Chinese location name under Jost or
+        Bitter, neither of which has CJK glyphs) fall back to Noto Sans JP
+        instead of silently vanishing - see FALLBACK_FONT_FILE. Draws run
+        by run (consecutive characters sharing the same font) rather than
+        character by character, so each script's own glyph spacing/
+        kerning stays natural instead of every character getting isolated
+        advance widths.
+
+        Only left-anchored anchors ("l*") are supported - mixed-font text
+        can't be centered/right-aligned without rendering once already to
+        measure its total width, and every real call site left-aligns."""
+        if not anchor.startswith("l"):
+            raise ValueError(f"draw_text_with_fallback only supports left anchors, got {anchor!r}")
+        primary = self.font(weight, size_px)
+        fallback = self.fallback_font(weight, size_px)
+
+        runs = []
+        for char in text:
+            use_fallback = not self._has_glyph(primary, char)
+            if runs and runs[-1][0] == use_fallback:
+                runs[-1] = (use_fallback, runs[-1][1] + char)
+            else:
+                runs.append((use_fallback, char))
+
+        x, y = xy
+        for use_fallback, run in runs:
+            font = fallback if use_fallback else primary
+            draw.text((x, y), run, font=font, fill=fill, anchor=anchor)
+            x += font.getlength(run)
 
 
 def draw_humidity_drops(image: Image.Image, region, assets: AssetStore, filled_count: int, total: int = 5):
