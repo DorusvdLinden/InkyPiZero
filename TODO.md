@@ -15,9 +15,6 @@ reference docs this list feeds into.
 - [ ] 71d/73d/77d (light/moderate snow/snow-grains) all render as the exact same icon (`wi-day-snow`) - weather-icons doesn't have graduated snow-intensity variants the way the old per-condition Flaticon set implied. Similarly 51d/53d/09d (light/moderate/heavy rain) use different source icons but look very similar at small render sizes. Not wrong, just less differentiated than before.
 - [ ] `wi-night-clear` (icon `01n`) renders as a noticeably thinner/paler crescent than the `wi-moon-*` family used for moon phases - same fill color, different path weight in the source SVG. Cosmetic only.
 
-
-
-
 ## Display & hardware
 
 - [ ] **Blank-before-shutdown screen has a mild sprinkling of black dots on real hardware, not just solid white** - investigated (2026-08-12): rendered a synthetic pure-white image through the exact same `quantize_for_panel()` pipeline `blank_and_shutdown()` uses, at both `saturation=0.5` (the old hardcoded bug above) and `0.0` (the real configured default) - both produced a perfectly uniform single-color output, zero stray pixels. Rules out the software quantization pipeline as the cause. Very likely a genuine physical e-paper artifact (incomplete ink-particle clearing/ghosting from the previous image - a known characteristic of multi-color ACeP panels, especially since this screen doesn't do a full clear cycle first) rather than a software bug. Not fixed - would need a real clear-cycle before showing blank, a bigger and riskier hardware-level change than investigated here.
