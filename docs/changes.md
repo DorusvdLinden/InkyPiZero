@@ -723,10 +723,48 @@ first) rather than a software bug - a real hardware-level fix would be
 riskier/bigger than this session's scope.
 
 **Active** - current design for every item above except the deliberately
-untouched authentication question, still open in `TODO.md`. Not yet
-verified on real hardware as of this entry (Away-mode branch, pending
-review) - see `TODO.md` for the specific per-item verification gaps
-(shutdown-screen saturation, QR real-world scannability).
+untouched authentication question, still open in `TODO.md`. Deployed to
+the real Pi post-review (branch checked out, persistent services
+restarted, a forced refresh confirmed "Displaying image to Inky display"
+in `journalctl`) - real-hardware confirmation of the shutdown-screen
+saturation fix and the QR code's scannability is still outstanding, see
+`TODO.md`.
+
+### 31. Translate non-Netherlands location names to English
+Branch `todo-fonts-wifi-fixes`
+
+Follow-up to entry 30's font-fallback work: `weather_data.NOMINATIM_REVERSE_URL`
+was hardcoded to `accept-language=nl`, so any location outside the
+Netherlands got whatever Nominatim's Dutch-translation coverage happened
+to produce - often nothing, cascading to the location's own local
+name/script (the entry-30 Tokyo case, "杉並区, Japan", was this exact
+failure mode). `get_nearest_location_name()` now checks the reverse-geocode
+response's `address.country_code` first: for the Netherlands, behavior is
+unchanged (Dutch name, one request); for anywhere else, a second request
+asks for the English name instead, which has far broader Nominatim
+translation coverage - the same Tokyo coordinates now resolve to
+"Suginami, Japan". Entry 30's glyph-fallback mechanism stays in place
+underneath as a safety net for the rarer case where even an English name
+isn't available.
+
+The second request is deliberately spaced 1 second after the first
+(`time.sleep(1)`) - Nominatim's usage policy asks for max 1 request/second,
+and this is the only call site in the app that ever queries it twice for
+a single fetch; production usage (one location, once per 10-minute timer
+tick) never approaches this limit on its own. Confirmed the hard way
+while testing: firing this same lookup back-to-back across all 14 of the
+standing regression suite's locations (up to ~27 requests in a few
+seconds) reliably triggers Nominatim's rate limiting regardless of the
+1s inter-request spacing - `scripts/test_locations.py` now sleeps 1s
+between locations too, purely a test-script concern, not a production
+one.
+
+**Active** - current design. Verified directly against the original
+Tokyo bug case (confirmed "Suginami, Japan") and Sittard staying Dutch;
+a full re-run of the 14-location suite to confirm every location
+individually was deferred after repeated testing bursts tripped
+Nominatim's rate limit for a while - worth a clean single pass later
+once enough time has passed.
 
 ---
 

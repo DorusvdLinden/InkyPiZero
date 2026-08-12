@@ -13,6 +13,7 @@ rain/hail/snow/dry cases that live weather can't reliably guarantee.
 
 import os
 import sys
+import time
 import traceback
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -57,6 +58,13 @@ assets = AssetStore(ICON_DIR, FONT_DIR)
 results = []
 for name, lat, lon, tz, notes in LOCATIONS:
     config = DisplayConfig(latitude=lat, longitude=lon, timezone=tz)
+    # Non-Netherlands locations now make a second Nominatim request (English
+    # name fallback, see weather_data.get_nearest_location_name) - spacing
+    # locations out avoids tripping Nominatim's 1 request/second usage-policy
+    # limit across this script's 14 back-to-back locations (real production
+    # usage only ever fetches one location per 10-minute tick, so never hits
+    # this in practice).
+    time.sleep(1)
     try:
         data = fetch_snapshot(config)
         for mode in SCREEN_MODES:

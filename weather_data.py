@@ -4,6 +4,7 @@ for pi_weather_display.canvas to draw. Ported from src/plugins/weather/weather.p
 
 import logging
 import math
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, date
 
@@ -27,7 +28,7 @@ TEMP_UNIT = "°C"
 SPEED_UNIT = "m/s"
 DISTANCE_UNIT = "km"
 
-NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language=nl&zoom=14"
+NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language={lang}&zoom=14"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
 OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=european_aqi,uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm"
@@ -390,26 +391,50 @@ class WeatherSnapshot:
     precip_label: str = "Droog"  # chart's rotated axis label - "Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" / "Droog"
 
 
+def _reverse_geocode(lat: float, long: float, lang: str) -> dict:
+    response = requests.get(
+        NOMINATIM_REVERSE_URL.format(lat=lat, long=long, lang=lang),
+        headers={"User-Agent": "PiWeatherDisplay"},
+        timeout=10,
+    )
+    if not 200 <= response.status_code < 300:
+        logger.warning(f"Failed to get nearest location name: {response.content}")
+        return {}
+    return response.json().get("address", {})
+
+
+def _format_location_name(address: dict) -> str:
+    city = ""
+    for key in ("city", "town", "village", "municipality", "hamlet", "suburb", "county"):
+        if address.get(key):
+            city = address[key]
+            break
+    country = address.get("country", "")
+    if city and country:
+        return f"{city}, {country}"
+    return city or country
+
+
 def get_nearest_location_name(lat: float, long: float) -> str:
     try:
-        response = requests.get(
-            NOMINATIM_REVERSE_URL.format(lat=lat, long=long),
-            headers={"User-Agent": "PiWeatherDisplay"},
-            timeout=10,
-        )
-        if not 200 <= response.status_code < 300:
-            logger.warning(f"Failed to get nearest location name: {response.content}")
+        address = _reverse_geocode(lat, long, "nl")
+        if not address:
             return ""
-        address = response.json().get("address", {})
-        city = ""
-        for key in ("city", "town", "village", "municipality", "hamlet", "suburb", "county"):
-            if address.get(key):
-                city = address[key]
-                break
-        country = address.get("country", "")
-        if city and country:
-            return f"{city}, {country}"
-        return city or country
+        # Dutch is only requested/shown for the Netherlands itself - the
+        # app's other text (dates, data-point labels) is Dutch throughout,
+        # but Nominatim's Dutch translation coverage drops off fast outside
+        # NL (falls back to the location's own local name/script rather
+        # than a real Dutch translation, e.g. a Japanese ward name), so
+        # anywhere else re-queries for the English name instead, which has
+        # much broader translation coverage - see draw_text_with_fallback()
+        # for the remaining (rare) case where even English isn't available.
+        if address.get("country_code") == "nl":
+            return _format_location_name(address)
+        # Nominatim's usage policy asks for max 1 request/second - this is
+        # the only place in the app that ever calls it twice for one fetch.
+        time.sleep(1)
+        address_en = _reverse_geocode(lat, long, "en")
+        return _format_location_name(address_en or address)
     except Exception as e:
         logger.warning(f"Could not retrieve nearest location name: {e}")
         return ""
