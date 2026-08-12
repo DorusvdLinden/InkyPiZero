@@ -3,7 +3,7 @@
 A step-by-step checklist for a **human** to run against the real, deployed
 Pi - covers everything from the `todo-fonts-wifi-fixes` session (now
 merged to `main`) that the automated regression suite
-(`scripts/test_*.py`, see [development.md](./development.md)) can't check
+(`scripts/test_*.py`, see [development.md](./docs/development.md)) can't check
 on its own: physical button presses, real e-paper appearance, actual WiFi
 AP behavior, and phone-camera QR scanning. Run the automated suite first
 if you haven't already (`python scripts/test_locations.py` etc.) - this
