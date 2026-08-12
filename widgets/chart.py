@@ -103,15 +103,22 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         # the whole visible range, instead of calling out the day's actual
         # min/max. Each line gets its value labeled at the left axis
         # (before the line, matching the axis-extreme labels' own
-        # position/style) - skipped when a line exactly coincides with
-        # min_temp/max_temp, since those are already labeled there.
+        # position/style) - skipped when a line is close enough to
+        # min_temp/max_temp that its label would collide with the
+        # axis-extreme label already drawn there (below) - not just an
+        # *exact* coincidence, a near-miss (e.g. max_temp=21, a v=20 tick)
+        # still overlaps into illegible garbled text at this font size.
+        label_bbox = font_bold.getbbox("0123456789°C-")
+        min_label_gap = (label_bbox[3] - label_bbox[1]) * 1.2
+        max_temp_y, min_temp_y = y_temp(max_temp), y_temp(min_temp)
         grid_start = math.ceil(min_temp / 10) * 10
         grid_end = math.floor(max_temp / 10) * 10
         v = grid_start
         while v <= grid_end:
             y = y_temp(v)
             _dotted_horizontal(draw, y, plot_x0, plot_x1, PALETTE.chart_zero_line)
-            if v != min_temp and v != max_temp:
+            too_close_to_extreme = abs(y - max_temp_y) < min_label_gap or abs(y - min_temp_y) < min_label_gap
+            if not too_close_to_extreme:
                 # shifted left by the pixel width of the axis-extreme labels'
                 # unit suffix ("C", not present here) so the numbers
                 # themselves line up in a column - a space character isn't
