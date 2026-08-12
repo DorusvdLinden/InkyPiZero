@@ -615,7 +615,7 @@ text section and the two plan docs' Status lines for the summary.
 **Outdated**: this entry's own "keep Jost" conclusion didn't hold - a
 further round of comparisons (entry 29) landed on Bitter after all.
 
-### 29. Adopt Bitter as the default font — most recent
+### 29. Adopt Bitter as the default font
 Branch `font-family-jost-bitter`
 
 Supersedes entry 28's "keep Jost" conclusion. One more real-hardware
@@ -651,6 +651,82 @@ tracked separately in `TODO.md`.
 **Active** - current design. `docs/attribution.md` updated (Bitter's
 entry promoted from "candidate, not wired in" to the actual default;
 Jost's entry now notes it's the selectable alternative).
+
+### 30. Away-mode sweep: font fallback, chart collision, WiFi gaps, shutdown-screen saturation — most recent
+Branch `todo-fonts-wifi-fixes`, built autonomously (Mode 3/Away) while
+closing out `TODO.md`'s "Fonts & text" and "WiFi & web UI" sections plus
+a hardware bug reported the same session.
+
+**Missing font glyph fallback** (`widgets/icons.py`) - Bitter/Jost both
+lack CJK/broader coverage (originally surfaced by a real API-sourced
+location string, "杉並区, Japan"). New `AssetStore.fallback_font()`/
+`draw_text_with_fallback()` fall back per-character to a bundled Noto
+Sans JP (Latin/Cyrillic/Greek/CJK) when the active family has no real
+glyph for a character, wired into `canvas.py`'s header - the only call
+site that draws unpredictable API-sourced text. Glyph-coverage detection
+needed a small trick since PIL/FreeType has no direct "has this glyph"
+API: a missing codepoint silently resolves to the font's shared
+`.notdef` glyph, whose `getbbox()` is a fixed per-font fingerprint (but
+differs font to font, so it can't be a hardcoded constant) - comparing a
+candidate character's bbox against a guaranteed-absent probe codepoint's
+(`U+E000`) bbox reliably infers coverage without a cmap-parsing
+dependency. Verified against the original Tokyo case through the real
+render + quantization pipeline. Known residual limitation, not solved
+here: complex-script languages (Arabic/Thai/Devanagari/Hebrew) would
+render correct glyphs but wrong shaping/ordering - Pillow's `text()` has
+no bidi/shaping engine.
+
+**Chart gridline-mode max-value label collision** (`widgets/chart.py`) -
+the gridline loop previously only skipped a tick at the *exact* same
+value as the axis-extreme label; now skips any tick within one measured
+label-height (`font_bold.getbbox()`, not a guessed constant) of the
+max/min label. Verified against the original Ulaanbaatar repro and the
+full 14-location suite.
+
+**WiFi/web UI gaps closed**, all in `wifi_manager.py`/`web_app.py`/
+`web/` (see [networking.md](./networking.md) for full design/evidence
+on each): SSID rename (`edit_network()` now takes an optional
+`new_ssid`, one `nmcli connection modify` call, no remove+re-add;
+password field made independently optional too), a periodic background
+reconnect check (`web_app.py`'s `_periodic_reconnect_check`, 60s
+interval, falls back to the setup AP after 3 consecutive failures -
+debounced against momentary router blips), a captive-portal-style
+wildcard DNS entry on the setup AP's dnsmasq config (`address=/#/<AP_IP>`
+- DNS-only, no OS-level captive-portal popup, HTTPS still fails TLS
+validation against the bare IP), and a `WIFI:S:...;T:WPA;P:...;;` QR
+code on the setup screen (new `qrcode` dependency, `setup_screen.py`
+restructured into a two-column text+QR layout) for one-tap phone
+joining alongside the existing text instructions.
+
+**Deliberately not changed**: web UI authentication. Reverses an
+explicit, already-documented design decision (trusted-LAN-only threat
+model, matches button A's own unauthenticated physical shutdown) - Mode
+3 rules require this kind of decision be queued as an explicit yes/no
+rather than acted on unilaterally, even though every other item in the
+same TODO section was closed out. Still unchecked in `TODO.md`.
+
+**Also fixed, found via a live hardware report**: `button_listener.py`'s
+`blank_and_shutdown()` called `InkyDriver()` with no `saturation`
+argument, always quantizing at the class's hardcoded default (`0.5`)
+instead of the actually-configured `inky_saturation` (default `0.0`) -
+now reads `settings_store.load_config().inky_saturation` first, matching
+the pattern `main.py`/`web_app.py` already used correctly. Investigated
+further, root-cause-with-evidence style: the *reported* symptom (a mild
+sprinkling of black dots on the supposedly-blank screen) was NOT
+reproduced by rendering a synthetic pure-white image through the same
+`quantize_for_panel()` pipeline at either saturation value - both
+produced a perfectly uniform single-color output, ruling out the
+software pipeline. Left unfixed, tracked in `TODO.md`: very likely a
+genuine physical e-paper artifact (incomplete ink-particle clearing from
+the previous image, since this screen doesn't do a full clear cycle
+first) rather than a software bug - a real hardware-level fix would be
+riskier/bigger than this session's scope.
+
+**Active** - current design for every item above except the deliberately
+untouched authentication question, still open in `TODO.md`. Not yet
+verified on real hardware as of this entry (Away-mode branch, pending
+review) - see `TODO.md` for the specific per-item verification gaps
+(shutdown-screen saturation, QR real-world scannability).
 
 ---
 

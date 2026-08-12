@@ -97,6 +97,56 @@ fighting the custom-named `pi-weather-hostapd.service` for the radio -
 `install.sh` also explicitly disables it as a defensive measure in case a
 future OS image ships it unmasked.
 
+## Saved-network SSID rename
+
+`wifi_manager.edit_network(profile, password, new_ssid=None)` renames a
+saved network in place - updates both the NetworkManager connection
+profile's display name and its actual broadcast SSID together in one
+`nmcli connection modify` call, since `add_network()` always keeps these
+equal at creation time. No remove + re-add needed. This is for when the
+*real-world router's* SSID changed and the saved profile needs to match
+it - not a purely cosmetic rename. The `/wifi` page's edit form has a
+"nieuwe SSID" field alongside the password field, both independently
+optional (a blank field leaves that part unchanged).
+
+## Periodic reconnect check
+
+`web_app.py`'s original connectivity check (`_ensure_network_ready()`)
+only ever ran once, at `pi-weather-web.service` startup - if a
+previously-good station connection dropped later at runtime (router
+reboot, device moved out of range), the Pi stayed disconnected until the
+service was manually restarted. A background daemon thread
+(`_periodic_reconnect_check()`, started in `main()` alongside `app.run()`)
+now re-checks every `RECONNECT_CHECK_INTERVAL_SECONDS` (60s) and falls
+back to the setup AP after `RECONNECT_FAILURES_BEFORE_FALLBACK` (3)
+*consecutive* failed checks - debounced on purpose, so a momentary
+router blip doesn't flip the panel into AP mode and force an unwanted
+setup-screen render over whatever weather render was showing.
+
+## Captive-portal DNS redirect on the setup AP
+
+The dedicated AP dnsmasq config (`_write_dnsmasq_ap_config()`) adds
+`address=/#/<AP_IP>` - a wildcard DNS entry that resolves *every* domain
+to the device's own IP while the setup AP is active. Combined with the
+existing DHCP option 6 (this device as the DNS server), a client that
+joins the AP and opens any plain HTTP URL in a browser lands on the
+setup page automatically, without needing to know/type the exact
+`http://192.168.4.1` URL. This is DNS-only, not a full captive portal -
+there's no 802.11u/OS-level "sign in to network" popup, and an HTTPS
+request will fail TLS validation against the device's bare IP (browsers
+generally fall back to an error page a user can still click through, but
+it's not seamless). Good enough for the plain-HTTP case the setup screen
+itself already tells people to use.
+
+## QR code on the setup screen
+
+`setup_screen.py` renders a `WIFI:S:<ssid>;T:WPA;P:<password>;;` QR code
+(the standard URI scheme phones' native camera apps recognize for
+one-tap network joining) alongside the existing text instructions, via
+the new `qrcode` dependency. Doesn't replace the text - a QR code alone
+isn't readable/verifiable by eye, and the random-generated AP password
+still needs to be readable for anyone typing it in by hand instead.
+
 ## Security posture - explicit, not accidental
 
 Nothing in this feature has authentication: settings edits, WiFi credential

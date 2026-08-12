@@ -333,7 +333,7 @@ existing unauthenticated-shutdown precedent) - trusted-LAN-only by design.
 |---|---|
 | `/` | Status overview (current WiFi mode, current screen mode) + links |
 | `/settings` | Every `config.py`/`DisplayConfig` field below, as a form |
-| `/wifi` | Add/edit/remove saved WiFi networks (never auto-removes existing ones) |
+| `/wifi` | Add/edit (password and/or SSID rename)/remove saved WiFi networks (never auto-removes existing ones) |
 | `/shutdown` | Same action as physical button A, with a confirmation step |
 
 Settings saved here are written to

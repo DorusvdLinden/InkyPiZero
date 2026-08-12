@@ -6,6 +6,7 @@ This project uses various fonts and icons, each with specific licensing terms. B
 |---------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
 [Bitter by Sol Matas](https://github.com/solmatas/BitterPro) | [SIL OFL v1.1](https://github.com/solmatas/BitterPro/blob/master/OFL.txt) - default font (`config.font_family`, since 2026-08-11) |
 [Jost by Owen Earl](https://fonts.google.com/specimen/Jost) | [SIL OFL v1.1](https://fonts.google.com/specimen/Jost/license) - alternate font, selectable via `config.font_family`/the web UI |
+[Noto Sans JP by Google/Adobe](https://fonts.google.com/noto/specimen/Noto+Sans+JP) | [SIL OFL v1.1](https://github.com/google/fonts/blob/main/ofl/notosansjp/OFL.txt) - fallback font for characters Bitter/Jost can't render (broad Latin/Cyrillic/Greek/CJK coverage), `widgets/icons.py`'s `AssetStore.draw_text_with_fallback()` |
 
 ## Icons
 

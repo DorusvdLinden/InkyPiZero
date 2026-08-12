@@ -112,8 +112,9 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
   `display/mock_driver.py` saves to a file instead, for testing without
   hardware
 - `assets/` - the icon PNGs and font files it actually uses (Bitter,
-  Jost - selectable via `config.font_family`/the web UI, see
-  [attribution.md](./docs/attribution.md))
+  Jost - selectable via `config.font_family`/the web UI; Noto Sans JP as
+  an automatic per-character fallback for glyphs neither of those cover,
+  see [attribution.md](./docs/attribution.md))
 - `config.py` - a plain dataclass (location, screen mode, etc.) of
   hard-coded defaults; `settings_store.py` overlays a saved
   `settings.json` on top of it (written by the web UI) - see
