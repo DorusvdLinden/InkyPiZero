@@ -33,9 +33,9 @@ you saw instead.
 renders at your actually-configured `inky_saturation` (default `0.0`)
 instead of a hardcoded `0.5`.
 
-1. [ ] Note the panel's current image (anything already displayed).
-2. [ ] Press **button A** on the back of the display.
-3. [ ] Watch the panel blank, then the Pi should power off (you'll need
+1. [X] Note the panel's current image (anything already displayed).
+2. [X] Press **button A** on the back of the display.
+3. [X] Watch the panel blank, then the Pi should power off (you'll need
    to power it back on via the physical power connector to continue
    testing - or skip the actual power-off by testing via the web UI's
    `/shutdown` route instead, which calls the same code path).
@@ -44,7 +44,7 @@ instead of a hardcoded `0.5`.
 color you'd see on a normal render's background (not a visibly different
 shade than usual).
 
-4. [ ] **Also check for the known, separately-tracked issue**: look
+4. [X] **Also check for the known, separately-tracked issue**: look
    closely at the blank screen for a faint sprinkling of black dots. This
    was investigated (`TODO.md`) and is believed to be a physical e-paper
    ghosting artifact, not a software bug - if you still see it, that's
@@ -59,11 +59,11 @@ shade than usual).
 **What changed**: in **gridlines** screen mode, a tick label right next
 to the topmost/bottommost temperature line no longer overlaps it.
 
-1. [ ] Switch to gridlines mode (**button C**, or confirm it's already
-   active - it's the default).
+1. [X] Switch to gridlines mode (**button C**, or confirm it's already
+   aXtive - it's the default).
 2. [ ] Force a render: `sudo systemctl start pi-weather-display.service`
    on the Pi (or wait for the next 10-minute tick).
-3. [ ] Look at the chart's left-side temperature axis labels (e.g. "10°",
+3. [X] Look at the chart's left-side temperature axis labels (e.g. "10°",
    "20°"), specifically near the top/bottom of the temperature line's own
    range.
 
