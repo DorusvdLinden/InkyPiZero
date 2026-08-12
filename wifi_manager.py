@@ -207,6 +207,17 @@ def _write_dnsmasq_ap_config():
         f"dhcp-range={range_start},{range_end},255.255.255.0,24h\n"
         f"dhcp-option=3,{AP_IP}\n"
         f"dhcp-option=6,{AP_IP}\n"
+        # Wildcard DNS - resolves *every* domain to this device's own IP
+        # while the setup AP is active, so opening any URL in a browser
+        # (not just AP_SETUP_URL) lands on the setup page, matching
+        # commercial IoT captive-portal behavior. Combined with the DHCP
+        # option 6 above (this device as the DNS server), clients get
+        # this automatically - no extra client-side config. Not a *real*
+        # captive-portal redirect (no 802.11u/OS-level "sign in to
+        # network" popup, no HTTP redirect for HTTPS requests, which will
+        # just fail TLS validation against this device's IP) - just DNS,
+        # which is enough for a manually-opened plain HTTP URL.
+        f"address=/#/{AP_IP}\n"
     )
     with open(DNSMASQ_AP_CONF_PATH, "w") as f:
         f.write(conf)
@@ -278,11 +289,27 @@ def add_network(ssid: str, password: str | None) -> None:
     _nmcli(*args)
 
 
-def edit_network(profile: str, password: str) -> None:
-    """Updates an existing saved network's password (SSID rename isn't
-    supported - remove + re-add for that)."""
-    _validate_password(password)
-    _nmcli("connection", "modify", profile, "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", password)
+def edit_network(profile: str, password: str, new_ssid: str | None = None) -> None:
+    """Updates an existing saved network's password and/or SSID, both
+    independently optional - a blank password leaves the existing one
+    untouched (doesn't overwrite it with an empty psk), and `new_ssid`
+    renames in place: updates both the connection profile's display name
+    and its actual broadcast SSID (add_network always keeps these equal,
+    so this stays consistent with new profiles) via a single `connection
+    modify` - no remove + re-add needed. For when the real-world router's
+    SSID changed and the saved profile needs to match, not just a
+    cosmetic rename."""
+    if new_ssid is not None:
+        new_ssid = new_ssid.strip()
+    if not password and not new_ssid:
+        return
+    args = ["connection", "modify", profile]
+    if password:
+        _validate_password(password)
+        args += ["wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", password]
+    if new_ssid and new_ssid != profile:
+        args += ["802-11-wireless.ssid", new_ssid, "connection.id", new_ssid]
+    _nmcli(*args)
 
 
 def remove_network(profile: str) -> None:

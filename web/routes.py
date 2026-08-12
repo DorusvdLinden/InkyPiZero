@@ -137,22 +137,27 @@ def wifi_add():
 @bp.route("/wifi/<profile>/edit", methods=["POST"])
 def wifi_edit(profile):
     password = request.form.get("password", "")
+    new_ssid = request.form.get("new_ssid", "").strip()
     try:
-        wifi_manager.edit_network(profile, password)
+        wifi_manager.edit_network(profile, password, new_ssid or None)
     except (ValueError, RuntimeError) as e:
         flash(f"Bijwerken mislukt: {e}", "error")
         return redirect(url_for("web.wifi"))
 
-    is_active = any(n["name"] == profile and n["active"] for n in wifi_manager.list_networks())
+    # A successful rename changes the profile's own name (edit_network
+    # keeps con-name/SSID equal, same as add_network) - every lookup
+    # below needs the new name, the old `profile` value no longer exists.
+    current_name = new_ssid if new_ssid and new_ssid != profile else profile
+    is_active = any(n["name"] == current_name and n["active"] for n in wifi_manager.list_networks())
     if is_active:
         # re-authenticate immediately with the new password rather than
         # waiting for the router to eventually reject the stale one
-        if wifi_manager.connect(profile):
-            flash(f"{profile} bijgewerkt en opnieuw verbonden.", "success")
+        if wifi_manager.connect(current_name):
+            flash(f"{current_name} bijgewerkt en opnieuw verbonden.", "success")
         else:
-            flash(f"{profile} bijgewerkt, maar opnieuw verbinden is mislukt.", "error")
+            flash(f"{current_name} bijgewerkt, maar opnieuw verbinden is mislukt.", "error")
     else:
-        flash(f"{profile} bijgewerkt.", "success")
+        flash(f"{current_name} bijgewerkt.", "success")
     return redirect(url_for("web.wifi"))
 
 

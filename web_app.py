@@ -8,6 +8,8 @@ without needing to know which network mode is currently active."""
 import logging
 import os
 import secrets
+import threading
+import time
 
 from flask import Flask
 
@@ -19,6 +21,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# How often the background thread re-checks connectivity, and how many
+# consecutive failed checks in a row are required before actually falling
+# back to the setup AP - a single momentary drop (e.g. the router
+# rebooting for a few seconds) shouldn't flip the device into AP mode and
+# force a setup-screen render; a sustained loss (the actual "moved out of
+# range" / "router replaced" scenario this exists for) should.
+RECONNECT_CHECK_INTERVAL_SECONDS = 60
+RECONNECT_FAILURES_BEFORE_FALLBACK = 3
 
 
 def create_app() -> Flask:
@@ -68,8 +79,39 @@ def _ensure_network_ready():
         logger.exception("Startup connectivity/AP check failed - continuing anyway")
 
 
+def _periodic_reconnect_check():
+    """Runs forever in a background daemon thread once the service is up.
+    _ensure_network_ready() above only ever ran once, at process startup -
+    if a previously-good station connection dropped later at runtime
+    (router reboot, moved out of range), the device stayed disconnected
+    until pi-weather-web.service was manually restarted. Debounced across
+    RECONNECT_FAILURES_BEFORE_FALLBACK consecutive checks (see that
+    constant) so a momentary blip doesn't flip the panel into AP mode."""
+    consecutive_failures = 0
+    while True:
+        time.sleep(RECONNECT_CHECK_INTERVAL_SECONDS)
+        try:
+            if wifi_manager.current_mode() == "ap":
+                consecutive_failures = 0  # already in fallback, nothing to debounce
+                continue
+            if wifi_manager.is_connected():
+                consecutive_failures = 0
+                continue
+            consecutive_failures += 1
+            logger.warning("Periodic check: WiFi not connected (%d/%d consecutive)",
+                            consecutive_failures, RECONNECT_FAILURES_BEFORE_FALLBACK)
+            if consecutive_failures >= RECONNECT_FAILURES_BEFORE_FALLBACK:
+                logger.info("WiFi connection lost - activating setup AP")
+                ssid, password = wifi_manager.ensure_ap_mode()
+                _show_setup_screen(settings_store.load_config(), ssid, password)
+                consecutive_failures = 0
+        except Exception:
+            logger.exception("Periodic reconnect check failed - will retry next interval")
+
+
 def main():
     _ensure_network_ready()
+    threading.Thread(target=_periodic_reconnect_check, daemon=True).start()
     app = create_app()
     # Not debug/reloader mode - that forks a second watcher process, doubling
     # RAM for no benefit on this headless, non-hot-reloaded target (Pi Zero W
