@@ -30,6 +30,7 @@ from PIL import Image
 import layout
 import display_freshness
 import display_mode
+import settings_store
 from display.inky_driver import InkyDriver
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -42,7 +43,8 @@ DEBOUNCE_MS = 50
 def blank_and_shutdown():
     logger.info("Button A pressed - blanking display and shutting down.")
     blank = Image.new("RGB", layout.CANVAS_SIZE, "white")
-    InkyDriver().show(blank)
+    saturation = settings_store.load_config().inky_saturation
+    InkyDriver(saturation=saturation).show(blank)
     subprocess.run(["poweroff"], check=True)
 
 
