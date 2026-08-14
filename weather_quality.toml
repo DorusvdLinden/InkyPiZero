@@ -1,0 +1,63 @@
+# Forecast card "weather quality" border color - edit these ranges/colors
+# freely. Re-read fresh on every render tick (main.py is a one-shot job),
+# so an edit takes effect on the next scheduled render with no restart
+# needed - same as config.py.
+#
+# Colors must be one of this e-paper panel's 7 fixed inks: black, white,
+# green, blue, red, yellow, orange - anything else won't render as a flat
+# color (see widgets/palette.py). If this file is missing, unreadable, or
+# has an invalid tier/color reference, the app logs a warning and falls
+# back to the defaults shown here rather than failing to render.
+
+[tiers]
+# Declaration order = severity, best first. A day's final color is
+# whichever of its temperature/precipitation tiers below is worse.
+Goed = "green"
+Matig = "yellow"
+Slecht = "orange"
+"Zeer slecht" = "red"
+
+# Temperature bands, by the day's forecast high (deg C), ascending order.
+# "max" is exclusive (the band applies while high < max); the last band
+# (no "max") catches everything above the previous one.
+[[temperature]]
+max = -5
+tier = "Zeer slecht"
+
+[[temperature]]
+max = 0
+tier = "Slecht"
+
+[[temperature]]
+max = 15
+tier = "Matig"
+
+[[temperature]]
+max = 26
+tier = "Goed"
+
+[[temperature]]
+max = 32
+tier = "Slecht"
+
+[[temperature]]
+tier = "Zeer slecht"
+
+# Precipitation bands, by the day's total expected rain (mm), ascending
+# order. Same max-exclusive convention as above. The first band's "max"
+# also doubles as the forecast card's "is rain expected" cutoff for
+# showing the mm amount next to the icon.
+[[precipitation]]
+max = 0.2
+tier = "Goed"
+
+[[precipitation]]
+max = 5
+tier = "Matig"
+
+[[precipitation]]
+max = 15
+tier = "Slecht"
+
+[[precipitation]]
+tier = "Zeer slecht"

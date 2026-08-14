@@ -389,52 +389,72 @@ things beyond the icon and high/low temperature, added 2026-08-14:
   temperature and precipitation combined, worst-of-both-wins, the same
   `max()` combining idiom the "Kwaliteit & Pollen" gauge above uses.
 
-#### Input 1: temperature tier
+#### Editable in `weather_quality.toml`, not hardcoded
 
-Based on the day's `high` (°C), symmetric hot/cold bands - `15-25°C` is
-the pleasant middle, both extremes degrade the tier
-(`weather_data._temp_quality_tier`):
+The temperature/precipitation ranges and their colors live in
+**`weather_quality.toml`** (repo root), not in Python - edit it directly
+to change the scheme (confirmed with the user 2026-08-15, keeping the
+values below as the shipped defaults for now). It's re-read fresh on
+every render tick (`main.py` is already a one-shot process per tick, same
+as `config.py`), so an edit takes effect on the very next scheduled
+render - no restart needed.
 
-| Range | Tier |
-|---|---|
-| < -5°C (strenge vorst) | Zeer slecht |
-| -5 to 0°C (vorst) | Slecht |
-| 0 to 14°C (koud/koel) | Matig |
-| 15 to 25°C (aangenaam) | **Goed** |
-| 26 to 31°C (warm) | Slecht |
-| ≥ 32°C (hittegolf) | Zeer slecht |
+Schema: an ordered `[tiers]` table (name -> color, **declaration order is
+the severity order**, best first) plus two ordered band lists, each entry
+a `{max, tier}` pair walked top-to-bottom - the first band whose `max`
+the value is under wins, and the last band (no `max`) catches everything
+above the previous one:
 
-#### Input 2: precipitation tier
+```toml
+[tiers]
+Goed = "green"
+Matig = "yellow"
+Slecht = "orange"
+"Zeer slecht" = "red"
 
-Based on Open-Meteo's daily `precipitation_sum` (mm, rain+showers+snowfall
-water-equivalent - added to `OPEN_METEO_FORECAST_URL`'s `daily=` list
-specifically for this feature) - `weather_data._precip_quality_tier`:
+[[temperature]]   # by the day's forecast high, deg C
+max = -5
+tier = "Zeer slecht"
+# ...
 
-| Range | Tier |
-|---|---|
-| < 0.2mm | Droog → **Goed** |
-| 0.2 to 5mm | Lichte neerslag → Matig |
-| 5 to 15mm | Neerslag → Slecht |
-| ≥ 15mm | Zware neerslag → Zeer slecht |
-
-The 0.2mm cutoff doubles as the "is rain expected" gate for the mm text
-(`DayForecast.rain_expected`) - a single definition of "raining" shared by
-both features on the card, rather than two.
-
-#### Combining into one 4-tier scale
-
-A fresh, small scale - deliberately not `COMBINED_TIERS` (that's AQI/
-pollen's own 5-tier scale, a different concern):
-
-```python
-FORECAST_QUALITY_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
-quality_tier_index = max(_temp_quality_tier(high), _precip_quality_tier(precip_mm))
+[[precipitation]]   # by the day's precipitation_sum, mm
+max = 0.2
+tier = "Goed"
+# ...
 ```
 
-`widgets/forecast.py` maps the result straight to the card's outline color
-(green/yellow/orange/red - `PALETTE.forecast_border_good/fair/poor/bad`) -
-a colored **border**, not a filled background, so the card interior stays
-white and nothing about existing icon/text rendering had to change.
+Colors must be one of the panel's 7 fixed inks (black/white/green/blue/
+red/yellow/orange - see "Color palette" below); anything else won't
+render as a flat color. The shipped defaults:
+
+| Temperature range | Tier | | Precipitation range | Tier |
+|---|---|---|---|---|
+| < -5°C (strenge vorst) | Zeer slecht | | < 0.2mm (droog) | **Goed** |
+| -5 to 0°C (vorst) | Slecht | | 0.2 to 5mm (lichte neerslag) | Matig |
+| 0 to 14°C (koud/koel) | Matig | | 5 to 15mm (neerslag) | Slecht |
+| 15 to 25°C (aangenaam) | **Goed** | | ≥ 15mm (zware neerslag) | Zeer slecht |
+| 26 to 31°C (warm) | Slecht | | | |
+| ≥ 32°C (hittegolf) | Zeer slecht | | | |
+
+The precipitation table's first band's `max` doubles as the "is rain
+expected" gate for the mm text (`DayForecast.rain_expected`) - editing it
+updates both the border color and the mm-text gate together, one number
+instead of two that could drift apart.
+
+**Combining**: `weather_data._quality_tier_and_color` takes the worse of
+the day's temperature and precipitation tiers (by the `[tiers]` table's
+declaration order) - same worst-of-both-wins `max()` idiom the "Kwaliteit
+& Pollen" gauge above uses, on a scale deliberately separate from
+`COMBINED_TIERS` (that one's AQI/pollen's own, a different concern). The
+result renders as the card's outline color - a colored **border**, not a
+filled background, so the card interior stays white and nothing about
+existing icon/text rendering had to change.
+
+**Fails soft**: a missing file, unparseable TOML, or a tier/color
+reference that doesn't resolve (e.g. a typo'd color name) falls back to
+a hardcoded copy of the defaults above - logging a warning, not crashing
+the render - same leniency `settings_store.load_config()` already
+applies to a corrupted `settings.json`.
 
 #### Worked examples
 
@@ -448,10 +468,10 @@ white and nothing about existing icon/text rendering had to change.
 
 See `scripts/test_forecast_quality_scenarios.py` for these and more as
 executable, deterministic assertions (every tier, both boundary edges
-exactly, the two inputs disagreeing in opposite directions, and the
-mm-text on/off gate) - live weather won't reliably hit an exact boundary
-value or a rare combination (a heatwave day that's also drenched) on any
-given test run.
+exactly, the two inputs disagreeing in opposite directions, the mm-text
+on/off gate, and `weather_quality.toml`'s fail-soft fallback) - live
+weather won't reliably hit an exact boundary value or a rare combination
+(a heatwave day that's also drenched) on any given test run.
 
 The mm text's font shrinks to fit the card width if needed
 (`widgets/forecast.py::_fit_font`, same shrink-to-fit approach

@@ -1,7 +1,6 @@
 from PIL import ImageDraw
 
 from widgets.icons import thicken_icon
-from widgets.palette import PALETTE
 
 
 def _fit_font(assets, text: str, max_size: int, max_width: float, min_size: int = 8):
@@ -20,16 +19,12 @@ def _fit_font(assets, text: str, max_size: int, max_width: float, min_size: int 
 
 def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
     draw = ImageDraw.Draw(image)
-    # Fresh lookup on every call (not cached at module scope) so a
-    # mid-session PALETTE.set_saturation() call is always reflected -
-    # matches widgets/gauge.py's render_aqi_gauge band-list pattern.
-    quality_border_colors = [
-        PALETTE.forecast_border_good, PALETTE.forecast_border_fair,
-        PALETTE.forecast_border_poor, PALETTE.forecast_border_bad,
-    ]
+    # day.quality_border_color is already a resolved RGB tuple (see
+    # weather_data._quality_tier_and_color) - user-editable via
+    # weather_quality.toml, nothing left to look up here.
     draw.rounded_rectangle(
         [region.x, region.y, region.right - 1, region.bottom - 1],
-        radius=8, outline=quality_border_colors[day.quality_tier_index], width=3,
+        radius=8, outline=day.quality_border_color, width=3,
     )
 
     icon_size = int(min(region.w * 0.85, region.h * 0.45))

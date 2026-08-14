@@ -945,6 +945,89 @@ own flagged case) confirming the text now omits cleanly instead of
 overflowing; and the exact boundary values (-0.3°C, -5.7°C) the review
 traced through `_temp_quality_tier` by hand to confirm the truncation fix.
 
+### 34. Forecast-card quality tiers move to an editable weather_quality.toml
+Branch `feature/forecast-quality-border-color`
+
+Entry 33's temperature/precipitation ranges and colors were hardcoded
+Python (`_temp_quality_tier`/`_precip_quality_tier`/
+`FORECAST_QUALITY_TIERS`). The user wants to edit the scheme themselves
+without touching code - confirmed keeping today's exact values for now
+("keep the existing color system, I will edit later"), so this is purely
+a mechanism change, not a redesign. New `weather_quality.toml` (repo
+root) holds an ordered `[tiers]` table (name -> color, declaration order
+*is* severity order) plus two ordered `{max, tier}` band lists for
+temperature and precipitation - an exact re-encoding of the previous
+hardcoded bands. TOML over YAML/JSON: Python's stdlib `tomllib` (shipped
+since 3.11, confirmed available - the deployed Pi runs 3.13.5) needs no
+new dependency, and unlike JSON it supports comments, which matters since
+the file's whole purpose is being hand-edited later without reading
+`weather_data.py` to understand it.
+
+`weather_data._load_weather_quality_config()` re-reads the file fresh on
+every render tick (no caching - `main.py` is already a one-shot process
+per tick, matching `config.py`/`settings_store.py`'s own re-read-every-run
+pattern) - an edit takes effect on the very next scheduled render, no
+restart needed. **Fails soft** on any problem (missing file, unparseable
+TOML, a tier/color reference that doesn't resolve) by falling back to a
+hardcoded copy of the shipped defaults, logging a warning rather than
+crashing the render - the same leniency `settings_store.load_config()`
+already applies to a corrupted `settings.json`, needed here for exactly
+the same reason: a hand-edited file is exactly what typos happen to.
+
+`DayForecast.quality_tier_index` (an int into `FORECAST_QUALITY_TIERS`)
+became `quality_border_color` (the resolved RGB tuple) -
+`weather_data._quality_tier_and_color()` now does the full temperature/
+precipitation-tier lookup *and* the tier-name-to-color resolution in one
+place, so `widgets/forecast.py` just uses the value directly as the
+border's `outline=` color with no lookup of its own. This also let
+`widgets/palette.py`'s `forecast_border_good/fair/poor/bad` fields and
+the `PALETTE` import in `widgets/forecast.py` go away entirely -
+`native_colors()` (already used for exactly this name-to-RGB resolution
+elsewhere) is now called from `weather_data.py` directly instead of
+being wrapped in dedicated `Palette` fields, and nothing else needed
+them. `rain_expected` now derives from the same config's precipitation
+table instead of a separate `FORECAST_DRY_MM_THRESHOLD` constant, so the
+border color and the mm-text gate can't drift out of sync from two
+separately-hand-edited numbers.
+
+**A fresh-context review (per this repo's Mode 2 rule) caught four real
+gaps before merge, all fixed**: (1) the border color was resolved via the
+shared `PALETTE.saturation`, but `fetch_snapshot()` (which computes it)
+always runs *before* `WeatherCanvas.__init__` ever calls
+`PALETTE.set_saturation(config.inky_saturation)` for that render - so
+anyone with a non-default `inky_saturation` got the 0.0 module-load
+default's colors instead, a reintroduction of the exact bug class entry
+26 already fixed once. Fixed by threading `config.inky_saturation`
+through `_parse_forecast`/`_quality_tier_and_color` explicitly instead of
+reading the timing-dependent singleton - confirmed the same bug still
+exists, unfixed, for `get_uv_color()` (pre-existing, unrelated to this
+branch), logged to `TODO.md` rather than fixed here. (2)
+`_validate_weather_quality_config` didn't require the last
+temperature/precipitation band to be a catch-all (no `max`) - a config
+missing one would silently score an out-of-range extreme value (e.g. a
+45°C day) as the *best* tier instead of the worst, via `_band_tier`'s
+defensive fallback. (3) it also didn't check that a band's `max` was
+actually numeric - a quoted value (`max = "cold"`) passed validation and
+then crashed `_band_tier`'s `<` comparison, contradicting the whole
+fail-soft premise. (4) `_load_weather_quality_config`'s exception handler
+didn't catch `UnicodeDecodeError`, so a non-UTF-8 hand-edit (a realistic
+mishap for a file explicitly meant to be edited by hand) crashed the
+render instead of falling back.
+
+**Active** - current design. Verified: zero behavior change confirmed by
+diffing a live render taken immediately before and after switching to
+the file-driven path (identical colors, same location/day); an
+edit-takes-effect check (changed `Matig`'s color to blue in the TOML
+file, re-rendered with no code change, confirmed blue appeared, then
+reverted); `scripts/test_forecast_quality_scenarios.py` (rewritten to
+assert resolved RGB colors instead of tier indices, plus 6 fail-soft
+scenarios - missing file, invalid color, unparseable TOML, non-UTF-8
+bytes, a missing catch-all band, and a non-numeric `max` - and a
+dedicated saturation-threading scenario reproducing finding (1) against
+a non-default `inky_saturation`); and a full 14-location
+`scripts/test_locations.py` regression, run both before and after the
+review fixes.
+
 ---
 
 ## Pruned branches

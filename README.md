@@ -20,8 +20,9 @@ Pi Zero W) that can't comfortably run a headless browser.
 - Current conditions, an hourly temperature/rain chart, and a multi-day
   forecast, all hand-drawn with Pillow. Each forecast card's border is
   colored by how pleasant that day's weather is (temperature + rain
-  combined), and shows the expected rain amount next to the icon on wet
-  days - see [settings.md](./docs/settings.md)
+  combined, ranges/colors editable in `weather_quality.toml`), and shows
+  the expected rain amount next to the icon on wet days - see
+  [settings.md](./docs/settings.md)
 - "Kwaliteit & Pollen" detail combines air quality (RIVM's official Dutch
   LKI index) and pollen (hay fever/Hooikoorts, for European locations in
   season) into one reading - shows the worse of the two on a combined
@@ -111,6 +112,9 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 - `weather_data.py` - fetches and parses Open-Meteo data (current, hourly,
   daily forecast, UV, pollen) plus RIVM/luchtmeetnet.nl air quality (LKI)
   into typed dataclasses
+- `weather_quality.toml` - user-editable ranges/colors for the forecast
+  cards' weather-quality border (temperature/precipitation -> tier ->
+  color) - re-read fresh every render, no restart needed to take effect
 - `layout.py` - fixed pixel regions for the 800x480 canvas
 - `canvas.py` - orchestrates one full render (`WeatherCanvas.render()`)
 - `widgets/` - gauge (wind/pressure/UV/AQI - AQI's gauge doubles as the

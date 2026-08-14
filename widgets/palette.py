@@ -67,15 +67,12 @@ class Palette:
         self.chart_cool = c["blue"]
         self.chart_zero_line = c["black"]
 
-        # forecast cards (widgets/forecast.py) - card_border is now unused
-        # by forecast cards (each card's outline is one of the 4 colors
-        # below instead, per FORECAST_QUALITY_TIERS/weather_data.py), kept
-        # in case something else wants a neutral border later.
+        # forecast cards (widgets/forecast.py) - card_border is currently
+        # unused by forecast cards themselves (each card's border color is
+        # resolved from weather_quality.toml instead, see
+        # weather_data._quality_tier_and_color), kept in case something
+        # else wants a neutral border later.
         self.card_border = c["black"]
-        self.forecast_border_good = c["green"]
-        self.forecast_border_fair = c["yellow"]
-        self.forecast_border_poor = c["orange"]
-        self.forecast_border_bad = c["red"]
 
         # header (canvas.py) - was a soft dark gray (51,51,51) for visual
         # hierarchy vs. the main text, but the panel has no native gray, so
