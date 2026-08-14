@@ -3,19 +3,21 @@
 get_combined_rotation) - not part of the app. test_locations.py exercises
 real live weather, but live data can't reliably guarantee every combined
 tier (or the no-data fallback) on any given test run - Open-Meteo's pollen
-coverage is Europe-only and null outside each species' active season, and
-a real AQI+pollen combination worth testing (e.g. AQI good but pollen
-severe) is even less guaranteed live. This script fakes only the
-Open-Meteo *air quality* fetch (the same endpoint pollen shares with
-UV/AQI) with crafted hourly pollen and european_aqi values for each
-scenario, then runs the real fetch_snapshot -> classify -> render pipeline
-unmodified on top of it (the forecast fetch and location-name lookup
-still hit the real network).
+coverage is Europe-only and null outside each species' active season, RIVM's
+LKI (see weather_data._get_rivm_current_lki) is Netherlands-only, and a real
+LKI+pollen combination worth testing (e.g. LKI good but pollen severe) is
+even less guaranteed live. This script fakes the Open-Meteo *air quality*
+fetch (pollen/UV only now - see weather_data.OPEN_METEO_AIR_QUALITY_URL)
+with crafted hourly pollen values, and separately fakes
+weather_data._get_rivm_current_lki with a plain LKI int/None, then runs the
+real fetch_snapshot -> classify -> render pipeline unmodified on top of
+both (the forecast fetch and location-name lookup still hit the real
+network).
 
 Renders each scenario in all three screen modes and saves to
 mock_display_output/pollen_scenario_test/. Run alongside test_locations.py
 and test_precip_scenarios.py after any change to weather_data.py's pollen/
-AQI classification or to canvas.py's/layout.py's compact-grid code - see
+LKI classification or to canvas.py's/layout.py's compact-grid code - see
 CLAUDE.md.
 """
 
@@ -43,19 +45,16 @@ SCREEN_MODES = sorted(display_mode.VALID_MODES)
 HOURS = 48
 
 
-def _make_payload(pollen_values: dict, aqi_value: float | None = None) -> dict:
+def _make_payload(pollen_values: dict) -> dict:
     """pollen_values maps a subset of weather_data.POLLEN_SPECIES_NL's keys
     to a constant grains/m3 value held across the whole window; species not
-    included stay null (as Open-Meteo returns outside their season).
-    aqi_value, if given, is held constant across the whole window too;
-    None leaves european_aqi null (as if AQI data were unavailable)."""
+    included stay null (as Open-Meteo returns outside their season)."""
     now = datetime.now().replace(minute=0, second=0, microsecond=0)
     hourly_times = [(now + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(HOURS)]
     hourly = {"time": hourly_times}
     for species in weather_data.POLLEN_SPECIES_NL:
         value = pollen_values.get(species)
         hourly[species] = [value] * HOURS if value is not None else [None] * HOURS
-    hourly["european_aqi"] = [aqi_value] * HOURS if aqi_value is not None else [None] * HOURS
     return {"hourly": hourly}
 
 
@@ -77,45 +76,51 @@ def _make_daily_peak_dip_payload() -> dict:
             grass.append(9.0)  # peak later today
         else:
             grass.append(2.0)
-    hourly = {"time": hourly_times, "grass_pollen": grass, "european_aqi": [None] * HOURS}
+    hourly = {"time": hourly_times, "grass_pollen": grass}
     for species in weather_data.POLLEN_SPECIES_NL:
         if species != "grass_pollen":
             hourly[species] = [None] * HOURS
     return {"hourly": hourly}
 
 
+# Each scenario is (pollen payload, lki value or None).
 SCENARIOS = {
-    "no_data": lambda: _make_payload({}),
-    # pure-pollen scenarios (AQI unavailable) - combined tier/species should
-    # follow pollen's own tier_index 1:1 (see COMBINED_TIERS)
-    "pollen_laag": lambda: _make_payload({"grass_pollen": 3}),
-    "pollen_matig": lambda: _make_payload({"birch_pollen": 50}),
-    "pollen_hoog": lambda: _make_payload({"ragweed_pollen": 40}),
-    "pollen_zeer_hoog": lambda: _make_payload({"birch_pollen": 2000}),
+    "no_data": (_make_payload({}), None),
+    # pure-pollen scenarios (LKI unavailable) - combined tier/species should
+    # follow pollen's own tier folded through POLLEN_TIER_TO_COMBINED.
+    "pollen_laag": (_make_payload({"grass_pollen": 3}), None),
+    "pollen_matig": (_make_payload({"birch_pollen": 50}), None),
+    # regression for POLLEN_TIER_TO_COMBINED's round-toward-worse fold:
+    # "Hoog" pollen alone must land on "Slecht", never "Onvoldoende" -
+    # pollen has no tier of its own that maps to "Onvoldoende" (see
+    # weather_data.py's POLLEN_TIER_TO_COMBINED comment).
+    "pollen_hoog": (_make_payload({"ragweed_pollen": 40}), None),
+    "pollen_zeer_hoog": (_make_payload({"birch_pollen": 2000}), None),
     # tie-break: worst tier across species should win, not the first one seen
-    "mixed_worst_wins": lambda: _make_payload({"grass_pollen": 3, "birch_pollen": 2000}),
+    "mixed_worst_wins": (_make_payload({"grass_pollen": 3, "birch_pollen": 2000}), None),
     # regression for a real bug: Open-Meteo reports an off-season species as
     # a flat 0.0 (not null), and it's first in POLLEN_SPECIES_NL's dict
     # order - a same-tier tie must not let that 0.0 species win over a
     # genuinely active one just by iteration order.
-    "zero_species_tie": lambda: _make_payload({"alder_pollen": 0.0, "grass_pollen": 4.9}),
+    "zero_species_tie": (_make_payload({"alder_pollen": 0.0, "grass_pollen": 4.9}), None),
     # regression for a real bug: classifying off the exact current hour
     # missed a day that peaked well above the current dip (confirmed
     # against pollennieuws.nl).
-    "daily_peak_not_current_hour": _make_daily_peak_dip_payload,
-    # combining: AQI alone, pollen unavailable
-    "aqi_only": lambda: _make_payload({}, aqi_value=50),  # tier 2 (Matig) -> combined 1
-    # combining: AQI is the worse of the two - no species should be named
-    "aqi_worse_than_pollen": lambda: _make_payload({"grass_pollen": 3}, aqi_value=90),  # AQI tier 4 -> combined 3
+    "daily_peak_not_current_hour": (_make_daily_peak_dip_payload(), None),
+    # LKI alone, pollen unavailable - also the only way to reach
+    # "Onvoldoende" (LKI 7-8), since pollen's own fold skips that tier.
+    "lki_onvoldoende_only": (_make_payload({}), 7),
+    # combining: LKI is the worse of the two - no species should be named
+    "lki_worse_than_pollen": (_make_payload({"grass_pollen": 3}), 11),  # LKI tier 4 (Zeer slecht)
     # combining: pollen is the worse of the two - species should be named
-    "pollen_worse_than_aqi": lambda: _make_payload({"birch_pollen": 2000}, aqi_value=10),  # AQI tier 0 -> combined 0
+    "pollen_worse_than_lki": (_make_payload({"birch_pollen": 2000}), 2),  # LKI tier 0 (Goed)
     # combining: tied at "Goed" (pollen is Laag) - category dropped even
-    # though pollen_tier_index >= aqi_combined, since Laag isn't worth
-    # naming a cause for.
-    "tied_tier_pollen_laag": lambda: _make_payload({"grass_pollen": 3}, aqi_value=30),  # AQI tier 1 -> combined 0
+    # though pollen's mapped tier ties LKI's, since Laag isn't worth naming
+    # a cause for.
+    "tied_tier_pollen_laag": (_make_payload({"grass_pollen": 3}), 2),  # LKI tier 0 (Goed)
     # combining: tied at "Matig" (pollen is genuinely elevated) - category
     # still shown, unlike the Laag tie above.
-    "tied_tier_pollen_elevated": lambda: _make_payload({"grass_pollen": 15}, aqi_value=45),  # AQI tier 2 -> combined 1
+    "tied_tier_pollen_elevated": (_make_payload({"grass_pollen": 15}), 5),  # LKI tier 1 (Matig)
 }
 
 # (expected combined measurement, expected unit/species) or None for the
@@ -132,9 +137,9 @@ EXPECTED = {
     "mixed_worst_wins": ("Zeer slecht", "Boom"),
     "zero_species_tie": ("Goed", ""),
     "daily_peak_not_current_hour": ("Matig", "Gras"),
-    "aqi_only": ("Matig", ""),
-    "aqi_worse_than_pollen": ("Zeer slecht", ""),
-    "pollen_worse_than_aqi": ("Zeer slecht", "Boom"),
+    "lki_onvoldoende_only": ("Onvoldoende", ""),
+    "lki_worse_than_pollen": ("Zeer slecht", ""),
+    "pollen_worse_than_lki": ("Zeer slecht", "Boom"),
     "tied_tier_pollen_laag": ("Goed", ""),
     "tied_tier_pollen_elevated": ("Matig", "Gras"),
 }
@@ -145,14 +150,16 @@ def main():
     config = DisplayConfig()
     results = []
 
-    for name, make_payload in SCENARIOS.items():
-        payload = make_payload()
-        orig_fetch = weather_data._get_open_meteo_air_quality
+    for name, (payload, lki_value) in SCENARIOS.items():
+        orig_fetch_aqi = weather_data._get_open_meteo_air_quality
+        orig_fetch_lki = weather_data._get_rivm_current_lki
         weather_data._get_open_meteo_air_quality = lambda *a, **k: payload
+        weather_data._get_rivm_current_lki = lambda *a, **k: lki_value
         try:
             data = weather_data.fetch_snapshot(config)
         finally:
-            weather_data._get_open_meteo_air_quality = orig_fetch
+            weather_data._get_open_meteo_air_quality = orig_fetch_aqi
+            weather_data._get_rivm_current_lki = orig_fetch_lki
 
         aqi_points = [dp for dp in data.data_points if dp["kind"] == "aqi"]
         has_visibility = any(dp["kind"] == "visibility" for dp in data.data_points)

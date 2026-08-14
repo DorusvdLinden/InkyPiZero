@@ -149,10 +149,11 @@ def render_aqi_gauge(rotation_deg: float) -> Image.Image:
     draw = ImageDraw.Draw(img)
     cx, cy, r = 100, 120, 75
     bands = [
-        (180, 225, PALETTE.aqi_band_very_high),
-        (225, 270, PALETTE.aqi_band_high),
-        (270, 315, PALETTE.aqi_band_moderate),
-        (315, 360, PALETTE.aqi_band_low),
+        (180, 216, PALETTE.aqi_band_extreme),
+        (216, 252, PALETTE.aqi_band_very_high),
+        (252, 288, PALETTE.aqi_band_high),
+        (288, 324, PALETTE.aqi_band_moderate),
+        (324, 360, PALETTE.aqi_band_low),
     ]
     for start, end, color in bands:
         draw.arc([cx - r, cy - r, cx + r, cy + r], start, end, fill=color, width=28)
@@ -161,6 +162,6 @@ def render_aqi_gauge(rotation_deg: float) -> Image.Image:
         [(100, 114), (140, 114), (140, 102), (168, 120), (140, 138), (140, 126), (100, 126)],
         (cx, cy), rotation_deg,
     )
-    draw.polygon(needle, fill=PALETTE.aqi_needle)
-    draw.ellipse([cx - 12, cy - 12, cx + 12, cy + 12], fill=PALETTE.aqi_needle)
+    draw.polygon(needle, fill=PALETTE.aqi_needle, outline=PALETTE.aqi_needle_outline, width=3)
+    draw.ellipse([cx - 12, cy - 12, cx + 12, cy + 12], fill=PALETTE.aqi_needle, outline=PALETTE.aqi_needle_outline, width=3)
     return img

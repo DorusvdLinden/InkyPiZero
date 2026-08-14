@@ -2,8 +2,10 @@
 for pi_weather_display.canvas to draw. Ported from src/plugins/weather/weather.py
 (Open-Meteo path only - no OpenWeatherMap, no other plugin machinery)."""
 
+import json
 import logging
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, date
@@ -30,8 +32,27 @@ DISTANCE_UNIT = "km"
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language={lang}&zoom=14"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
-OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=european_aqi,uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
+OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm"
+
+# RIVM/luchtmeetnet.nl (Dutch national air-quality network) - replaces
+# Open-Meteo's european_aqi (see COMBINED_TIERS below for why): a keyless,
+# fair-use (100 req/5min) public API. No geo-filter query param exists, so
+# finding the nearest station means listing every station and fetching each
+# one's geometry - see _resolve_rivm_station.
+RIVM_STATIONS_URL = "https://api.luchtmeetnet.nl/open_api/stations?page={page}&organisation_id="
+RIVM_STATION_URL_TEMPLATE = "https://api.luchtmeetnet.nl/open_api/stations/{number}/"
+RIVM_LKI_URL_TEMPLATE = "https://api.luchtmeetnet.nl/open_api/lki?station_number={number}&order_by=timestamp_measured&order_direction=desc"
+RIVM_STATION_CACHE_PATH = "/var/lib/pi-weather-display/rivm_station_cache.json"
+# RIVM only measures within the Netherlands - without this cutoff,
+# _resolve_rivm_station would still "succeed" for any location worldwide by
+# returning whichever Dutch station happens to be globally nearest (e.g.
+# ~9000km away for Tokyo), giving a meaningless reading instead of the
+# correct N/A. Generously covers the whole country (NL's longest diagonal
+# is ~300km, but stations are dense enough that anywhere within/near the
+# border is normally under 50km from one) while safely excluding anywhere
+# actually outside it.
+RIVM_MAX_STATION_DISTANCE_KM = 150
 
 
 def format_date_nl(dt: datetime) -> str:
@@ -170,37 +191,46 @@ def get_aqi_rotation_from_fraction(fraction_good: float) -> float:
     return -180 + (180 * fraction_good)
 
 
-# Combined "Kwaliteit & Pollen" data point: worst of European AQI (6 tiers)
-# and pollen (4 tiers, see _classify_pollen) on one new 4-tier scale, chosen
-# so both inputs can reach every tier symmetrically (unlike reusing either
-# side's native scale outright) - confirmed with the user 2026-08-10.
-COMBINED_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
-# AQI's 6-tier index (Goed/Redelijk/Matig/Slecht/Zeer slecht/Extreem, i.e.
-# min(current_aqi // 20, 5)) folded onto COMBINED_TIERS's 4:
-_AQI_TIER_TO_COMBINED = [0, 0, 1, 2, 3, 3]
+# Combined "Kwaliteit & Pollen" data point: worst of RIVM's LKI (5 tiers,
+# see _lki_tier_index) and pollen (4 tiers, see _classify_pollen), on LKI's
+# own 5-tier scale. LKI maps onto it directly, 1:1, since it's the scale's
+# native source (see _lki_tier_index) - pollen's narrower 4 tiers fold onto
+# it instead (see POLLEN_TIER_TO_COMBINED). Replaces the earlier
+# fresh-4-tier-scale design (2026-08-10) after live testing against
+# longfonds.nl/RIVM showed Open-Meteo's european_aqi disagreeing with
+# RIVM's own ground-station reading for the configured location - confirmed
+# with the user 2026-08-14.
+COMBINED_TIERS = ["Goed", "Matig", "Onvoldoende", "Slecht", "Zeer slecht"]
+# Pollen's 4 tiers (Laag/Matig/Hoog/Zeer hoog) folded onto COMBINED_TIERS's
+# 5, rounding toward worse (Hoog -> Slecht, skipping Onvoldoende entirely)
+# rather than better - pollen alone can never produce "Onvoldoende", only
+# LKI can, which is fine since max()-combining below doesn't require both
+# inputs to cover the same range, only that neither's contribution gets
+# understated.
+POLLEN_TIER_TO_COMBINED = [0, 1, 3, 4]
 
 
-def _combine_aqi_pollen_tier(aqi_tier_index: int | None, pollen_tier_index: int | None) -> int | None:
-    """pollen_tier_index is already 0-3 (POLLEN_TIERS is a 1:1 match for
-    COMBINED_TIERS). Returns None only when neither input has data."""
-    candidates = []
-    if aqi_tier_index is not None:
-        candidates.append(_AQI_TIER_TO_COMBINED[aqi_tier_index])
-    if pollen_tier_index is not None:
-        candidates.append(pollen_tier_index)
+def _combine_aqi_pollen_tier(lki_tier_index: int | None, pollen_combined_index: int | None) -> int | None:
+    """Both inputs are expected already mapped into COMBINED_TIERS's 0-4
+    space (lki_tier_index via _lki_tier_index, pollen_combined_index via
+    POLLEN_TIER_TO_COMBINED) - this just takes the worse of whichever are
+    present. Returns None only when neither input has data."""
+    candidates = [c for c in (lki_tier_index, pollen_combined_index) if c is not None]
     return max(candidates) if candidates else None
 
 
 def get_combined_rotation(combined_tier_index: int | None) -> float:
-    """Reuses render_aqi_gauge's 4 existing color bands (very_high/high/
+    """Reuses render_aqi_gauge's color bands (extreme/very_high/high/
     moderate/low) unchanged - the needle centers in the band matching
-    combined_tier_index (0=Goed/low band .. 3=Zeer slecht/very_high band),
-    same math get_aqi_rotation_from_fraction always used, just driven by a
-    tier index instead of a literal 0-100 AQI value."""
+    combined_tier_index (0=Goed/low band .. len(COMBINED_TIERS)-1=Zeer
+    slecht/extreme band), same math get_aqi_rotation_from_fraction always
+    used, just driven by a tier index instead of a literal 0-100 AQI
+    value."""
     if combined_tier_index is None:
         return get_aqi_rotation_from_fraction(0.5)
-    tier_from_worst = 3 - combined_tier_index
-    return get_aqi_rotation_from_fraction((tier_from_worst + 0.5) / 4)
+    tier_count = len(COMBINED_TIERS)
+    tier_from_worst = (tier_count - 1) - combined_tier_index
+    return get_aqi_rotation_from_fraction((tier_from_worst + 0.5) / tier_count)
 
 
 def get_uv_fraction(uv_index) -> float:
@@ -456,6 +486,141 @@ def _get_open_meteo_air_quality(lat, long):
     return response.json()
 
 
+def _load_rivm_station_cache() -> dict:
+    """A missing/corrupt cache is "no prior state" rather than an error,
+    matching display_freshness.py's own defensive-default convention."""
+    try:
+        with open(RIVM_STATION_CACHE_PATH) as f:
+            cache = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("Ignoring unreadable RIVM station cache %s: %s", RIVM_STATION_CACHE_PATH, e)
+        return {}
+    return cache if isinstance(cache, dict) else {}
+
+
+def _save_rivm_station_cache(lat: float, long: float, station_number: str) -> None:
+    os.makedirs(os.path.dirname(RIVM_STATION_CACHE_PATH), exist_ok=True)
+    tmp_path = f"{RIVM_STATION_CACHE_PATH}.tmp"
+    with open(tmp_path, "w") as f:
+        json.dump({"latitude": lat, "longitude": long, "station_number": station_number}, f)
+    os.replace(tmp_path, RIVM_STATION_CACHE_PATH)
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    p = math.radians(1)
+    a = 0.5 - math.cos((lat2 - lat1) * p) / 2 + math.cos(lat1 * p) * math.cos(lat2 * p) * (1 - math.cos((lon2 - lon1) * p)) / 2
+    return 12742 * math.asin(math.sqrt(a))
+
+
+def _rivm_station_lki_value(number: str) -> int | None:
+    """Latest LKI reading for a station, or None if unavailable - either a
+    request/parse failure, or a station that simply doesn't publish LKI
+    (some are traffic-only sensors), which the resolver below relies on to
+    skip past nearest-by-distance-alone candidates."""
+    try:
+        response = requests.get(RIVM_LKI_URL_TEMPLATE.format(number=number), timeout=10)
+        if not 200 <= response.status_code < 300:
+            return None
+        rows = response.json().get("data", [])
+        return int(rows[0]["value"]) if rows else None
+    except (requests.RequestException, ValueError, KeyError, IndexError):
+        return None
+
+
+def _resolve_rivm_station(lat: float, long: float) -> tuple[str, int] | None:
+    """Finds the nearest luchtmeetnet.nl station that actually publishes an
+    LKI reading and is within RIVM_MAX_STATION_DISTANCE_KM, returning
+    (station_number, its current LKI value) - the value is returned
+    alongside the number (rather than just the number) so the caller can
+    use this same reading instead of immediately re-fetching it. luchtmeetnet
+    has no geo-filter query param, so this lists every station (paginated)
+    and fetches each one's geometry to compute distance - roughly 130
+    requests total, only ever run once per location (see
+    _get_rivm_current_lki's caching), same nearest-station approach the
+    pyluchtmeetnet reference client uses. Fails soft (None) on any request
+    error or when nothing is within range, same as _reverse_geocode - a
+    resolution failure just leaves the AQI arm of "Kwaliteit & Pollen"
+    absent for that render tick, retried fresh (no cache was written) on
+    the next one."""
+    try:
+        numbers = []
+        page = 1
+        while True:
+            response = requests.get(RIVM_STATIONS_URL.format(page=page), timeout=15)
+            if not 200 <= response.status_code < 300:
+                break
+            payload = response.json()
+            numbers.extend(s["number"] for s in payload.get("data", []))
+            next_page = payload.get("pagination", {}).get("next_page")
+            if not next_page or next_page == page:
+                break
+            page = next_page
+
+        candidates = []
+        for number in numbers:
+            response = requests.get(RIVM_STATION_URL_TEMPLATE.format(number=number), timeout=15)
+            if not 200 <= response.status_code < 300:
+                continue
+            coords = response.json().get("data", {}).get("geometry", {}).get("coordinates")
+            if not coords:
+                continue
+            station_long, station_lat = coords
+            candidates.append((_haversine_km(lat, long, station_lat, station_long), number))
+        candidates.sort(key=lambda c: c[0])
+
+        for distance, number in candidates:
+            if distance > RIVM_MAX_STATION_DISTANCE_KM:
+                break
+            value = _rivm_station_lki_value(number)
+            if value is not None:
+                return number, value
+        return None
+    except (requests.RequestException, ValueError, KeyError) as e:
+        logger.warning("Could not resolve nearest RIVM station: %s", e)
+        return None
+
+
+def _get_rivm_current_lki(lat: float, long: float) -> int | None:
+    """Current LKI (1-11) for the nearest RIVM/luchtmeetnet station to
+    (lat, long). Resolves and caches the station number on first use, or
+    whenever the configured location no longer matches the cache (see
+    docs/settings.md) - every other call is a single cheap request. Fails
+    soft throughout, same as _resolve_rivm_station - including a cache
+    write failure (e.g. a read-only SD card), which is logged but doesn't
+    discard an LKI reading already in hand."""
+    cache = _load_rivm_station_cache()
+    station_number = cache.get("station_number")
+    if cache.get("latitude") != lat or cache.get("longitude") != long or not station_number:
+        resolved = _resolve_rivm_station(lat, long)
+        if resolved is None:
+            return None
+        station_number, lki_value = resolved
+        try:
+            _save_rivm_station_cache(lat, long, station_number)
+        except OSError as e:
+            logger.warning("Could not save RIVM station cache: %s", e)
+        return lki_value
+
+    return _rivm_station_lki_value(station_number)
+
+
+def _lki_tier_index(lki: int) -> int:
+    """1-11 -> COMBINED_TIERS's 0-4, per RIVM/luchtmeetnet.nl's own
+    published bands: 1-3 Goed, 4-6 Matig, 7-8 Onvoldoende, 9-10 Slecht, 11
+    Zeer slecht - a direct 1:1 match, no fold table needed on this side."""
+    if lki <= 3:
+        return 0
+    elif lki <= 6:
+        return 1
+    elif lki <= 8:
+        return 2
+    elif lki <= 10:
+        return 3
+    return 4
+
+
 def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
@@ -656,7 +821,7 @@ def _value_max_today(times, values, tz, current_date):
     return best
 
 
-def _parse_data_points(weather_data, aqi_data, tz) -> list[dict]:
+def _parse_data_points(weather_data, aqi_data, current_lki, tz) -> list[dict]:
     data_points = []
     current_data = weather_data.get("current", {})
     hourly_data = weather_data.get("hourly", {})
@@ -713,22 +878,20 @@ def _parse_data_points(weather_data, aqi_data, tz) -> list[dict]:
         "kind": "visibility", "label": "Zicht", "measurement": visibility_str, "unit": DISTANCE_UNIT,
     })
 
-    aqi_times = aqi_data.get("hourly", {}).get("time", [])
-    aqi_values = aqi_data.get("hourly", {}).get("european_aqi", [])
-    current_aqi = _value_at_current_hour(aqi_times, aqi_values, tz, current_time)
-    aqi_tier_index = min(int(current_aqi // 20), 5) if current_aqi is not None else None
+    lki_tier_index = _lki_tier_index(current_lki) if current_lki is not None else None
 
     pollen = _classify_pollen(aqi_data.get("hourly", {}), tz, current_time)
     pollen_tier_index = pollen["tier_index"] if pollen is not None else None
+    pollen_combined_index = POLLEN_TIER_TO_COMBINED[pollen_tier_index] if pollen_tier_index is not None else None
 
-    combined_index = _combine_aqi_pollen_tier(aqi_tier_index, pollen_tier_index)
+    combined_index = _combine_aqi_pollen_tier(lki_tier_index, pollen_combined_index)
     cause_category = ""
     if pollen is not None and combined_index is not None:
-        aqi_combined = _AQI_TIER_TO_COMBINED[aqi_tier_index] if aqi_tier_index is not None else -1
+        lki_combined = lki_tier_index if lki_tier_index is not None else -1
         # pollen_tier_index > 0 excludes "Laag" (good/negligible pollen) even
-        # when it ties or beats AQI's contribution - not worth naming a
+        # when it ties or beats LKI's contribution - not worth naming a
         # species that isn't actually elevated.
-        if pollen_tier_index > 0 and pollen_tier_index >= aqi_combined:
+        if pollen_tier_index > 0 and pollen_combined_index >= lki_combined:
             cause_category = pollen["category_nl"]
     data_points.append({
         "kind": "aqi", "label": "Kwaliteit & Pollen",
@@ -744,6 +907,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     """Fetches current Open-Meteo data and returns a fully-parsed WeatherSnapshot."""
     weather_data = _get_open_meteo_data(config.latitude, config.longitude, config.forecast_days + 1)
     aqi_data = _get_open_meteo_air_quality(config.latitude, config.longitude)
+    current_lki = _get_rivm_current_lki(config.latitude, config.longitude)
 
     weather_timezone = weather_data.get("timezone")
     tz = pytz.timezone(weather_timezone) if weather_timezone else pytz.timezone(config.timezone)
@@ -756,7 +920,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     current_icon_key = map_weather_code_to_icon(weather_code, is_day)
 
     daily_forecast = _parse_forecast(daily, tz, config.latitude)
-    data_points = _parse_data_points(weather_data, aqi_data, tz)
+    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz)
     hourly, sun_events, precip_label = _parse_hourly(
         weather_data.get("hourly", {}), tz, config.time_format,
         daily.get("sunrise", []), daily.get("sunset", []),

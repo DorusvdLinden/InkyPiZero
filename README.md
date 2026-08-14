@@ -19,10 +19,11 @@ Pi Zero W) that can't comfortably run a headless browser.
 **Features**:
 - Current conditions, an hourly temperature/rain chart, and a multi-day
   forecast, all hand-drawn with Pillow
-- "Kwaliteit & Pollen" detail combines air quality and pollen (hay fever/
-  Hooikoorts, for European locations in season) into one reading - shows
-  the worse of the two on a combined Goed/Matig/Slecht/Zeer slecht scale -
-  see [settings.md](./docs/settings.md)
+- "Kwaliteit & Pollen" detail combines air quality (RIVM's official Dutch
+  LKI index) and pollen (hay fever/Hooikoorts, for European locations in
+  season) into one reading - shows the worse of the two on a combined
+  Goed/Matig/Onvoldoende/Slecht/Zeer slecht scale - see
+  [settings.md](./docs/settings.md)
 - No plugins, no playlist scheduling - the *rendering* is a periodic
   `systemd` timer job (e.g. every 10 minutes), not a persistent service.
   The physical panel itself only actually refreshes when the current
@@ -34,7 +35,10 @@ Pi Zero W) that can't comfortably run a headless browser.
 - If it can't reach a known WiFi network, the device hosts its own setup AP
   and shows the connect details directly on the e-paper display - see
   [networking.md](./docs/networking.md)
-- Weather data from [Open-Meteo](https://open-meteo.com/) - no API key needed
+- Weather, UV, and pollen data from [Open-Meteo](https://open-meteo.com/);
+  air quality (for "Kwaliteit & Pollen", above) from
+  [RIVM/luchtmeetnet.nl](https://www.luchtmeetnet.nl/) - neither needs an
+  API key
 - Press button A on the back of the Inky Impression to blank the screen and
   safely shut the Pi down (also available from the web UI)
 
@@ -102,7 +106,8 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 ## Architecture
 
 - `weather_data.py` - fetches and parses Open-Meteo data (current, hourly,
-  daily forecast, air quality/UV) into typed dataclasses
+  daily forecast, UV, pollen) plus RIVM/luchtmeetnet.nl air quality (LKI)
+  into typed dataclasses
 - `layout.py` - fixed pixel regions for the 800x480 canvas
 - `canvas.py` - orchestrates one full render (`WeatherCanvas.render()`)
 - `widgets/` - gauge (wind/pressure/UV/AQI - AQI's gauge doubles as the

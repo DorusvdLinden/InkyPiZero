@@ -102,40 +102,80 @@ If the state file is missing or contains something outside `VALID_MODES`,
 ### Kwaliteit & Pollen (combined air quality + pollen)
 
 One data point (`kind: "aqi"` internally, unchanged) shows the **worst of**
-European AQI and pollen severity, using the AQI gauge icon in both screen
-families. Confirmed with the user 2026-08-10 after finding the separate
-pollen indicator (see `docs/changes.md` entry 22) was too easy to read as
-"fine" on a day pollennieuws.nl rated unfavorable, when AQI itself was
-actually fine and pollen was the real story, or vice versa - a single
+RIVM's official Dutch air-quality index and pollen severity, using the AQI
+gauge icon in both screen families. Originally built on Open-Meteo's
+`european_aqi` (confirmed with the user 2026-08-10) after finding the
+separate pollen indicator (see `docs/changes.md` entry 22) was too easy to
+read as "fine" on a day pollennieuws.nl rated unfavorable, when AQI itself
+was actually fine and pollen was the real story, or vice versa - a single
 combined "how bad is the air for you right now" reading is more useful
-than two cards that can disagree. This section documents exactly how each
+than two cards that can disagree. The AQI *source* changed 2026-08-14:
+comparing a live reading against
+[longfonds.nl/gezondelucht](https://www.longfonds.nl/gezondelucht) (which
+uses RIVM's own ground-station data) showed Open-Meteo's modeled
+`european_aqi` disagreeing with RIVM's own measurement for the configured
+location - Open-Meteo's AQI is a coarse-resolution model (Copernicus CAMS),
+not a real Dutch sensor reading. Swapped to RIVM's own measurement network
+(luchtmeetnet.nl's open API) instead. Pollen stays on Open-Meteo - RIVM
+doesn't publish pollen data. This section documents exactly how each
 input's raw number becomes a tier, and how the two tiers combine into one.
 
-#### Input 1: AQI's scale
+#### Input 1: RIVM's LKI scale
 
-Open-Meteo's `european_aqi` is already a composite 0-100+ index (it
-folds several pollutants into one number upstream - InkyPiZero doesn't
-compute AQI itself, only buckets the value Open-Meteo returns). Read at
-the **current hour** (`_value_at_current_hour`, same live-instant pattern
-UV/humidity use - unlike pollen, see below). Bucketed into 20-point bands:
+`weather_data._get_rivm_current_lki` reads the current **LKI**
+(Luchtkwaliteitsindex, RIVM's own national air-quality index) from
+[luchtmeetnet.nl](https://www.luchtmeetnet.nl/) - a keyless, fair-use
+public API (the API itself reports a 300 requests/5 minutes limit, seen
+directly in its own 429 response during testing). LKI is a real
+ground-station measurement, 1-11, with 5 official named bands:
 
 ```python
-aqi_tier_index = min(int(current_aqi // 20), 5)
+def _lki_tier_index(lki: int) -> int:
+    if lki <= 3: return 0
+    elif lki <= 6: return 1
+    elif lki <= 8: return 2
+    elif lki <= 10: return 3
+    return 4
 ```
 
-| `current_aqi` range | `aqi_tier_index` | AQI's own tier name (NL) |
+| LKI range | `_lki_tier_index` | Category (NL) |
 |---|---|---|
-| 0-19 | 0 | Goed |
-| 20-39 | 1 | Redelijk |
-| 40-59 | 2 | Matig |
-| 60-79 | 3 | Slecht |
-| 80-99 | 4 | Zeer slecht |
-| 100+ | 5 | Extreem |
+| 1-3 | 0 | Goed |
+| 4-6 | 1 | Matig |
+| 7-8 | 2 | Onvoldoende |
+| 9-10 | 3 | Slecht |
+| 11 | 4 | Zeer slecht |
 
-`min(..., 5)` clamps anything ≥100 into the last bucket rather than
-indexing out of range - AQI values above 100 are possible but rare.
-`current_aqi is None` (data unavailable) leaves `aqi_tier_index = None`,
-handled explicitly further down rather than defaulting to a fake tier.
+**Finding the right station.** luchtmeetnet has no geo-filter query
+param, so `_resolve_rivm_station` lists every station (paginated) and
+fetches each one's geometry to compute distance to the configured
+coordinates - not every station publishes LKI (some are traffic-only
+sensors), so the nearest candidate that actually has LKI data wins, capped
+at `RIVM_MAX_STATION_DISTANCE_KM` (150km, generously covering all of NL)
+so a non-Dutch location correctly falls back to no data instead of
+"succeeding" with whatever Dutch station happens to be globally nearest.
+For the repo's default coordinates this resolves to `NL50003`
+(Geleen-Asterstraat, ~5.7km away).
+
+That's roughly 130 requests, run only once per location and then cached to
+`/var/lib/pi-weather-display/rivm_station_cache.json`
+(`{"latitude", "longitude", "station_number"}`) - every other call is a
+single cheap LKI request. The cache is re-resolved whenever the configured
+`latitude`/`longitude` no longer match it, which happens promptly (not
+just eventually) when the location is changed via the settings web UI:
+saving new coordinates already calls `_trigger_rerender()`
+(`web/routes.py`), forcing an immediate re-render rather than waiting for
+the next scheduled timer tick - and that forced render is exactly when the
+cache mismatch gets detected and the station re-resolved.
+
+**Fails soft throughout**, same as `_reverse_geocode`'s existing pattern: a
+resolution failure, a rate-limited/unreachable API, or no station within
+range just leaves the LKI arm absent for that render tick (pollen alone
+decides the combined tier, or "N/A" if pollen's also unavailable) rather
+than aborting the whole render.
+
+Read once per render, not per hour - LKI has no forecast, only a current
+reading (unlike Open-Meteo's hourly-array pattern UV/humidity/pollen use).
 
 #### Input 2: pollen's scale
 
@@ -184,52 +224,58 @@ comparison, alphabetically/insertion-first species like alder would win
 compared by tier alone, a tie at "Laag" would fall to whichever species
 happened to be checked first).
 
-The winning species' tier index (0-3) feeds the combined scale below
-directly - `POLLEN_TIERS` is a deliberate 1:1 index match for
-`COMBINED_TIERS`. Its species also collapses to one of 3 broad categories
-for the on-screen cause label (`_pollen_category_nl`, confirmed with the
-user 2026-08-10): **Boom** (alder/birch/olive), **Gras** (grass), or
-**Ambrosia** (mugwort/ragweed - named for the more severe of the two weed
-species, not a literal per-species mapping).
+The winning species' tier index (0-3) feeds the combined scale below via
+`POLLEN_TIER_TO_COMBINED` (pollen's 4 tiers no longer match `COMBINED_TIERS`
+1:1 now that it's 5 tiers - see below). Its species also collapses to one
+of 3 broad categories for the on-screen cause label (`_pollen_category_nl`,
+confirmed with the user 2026-08-10): **Boom** (alder/birch/olive), **Gras**
+(grass), or **Ambrosia** (mugwort/ragweed - named for the more severe of
+the two weed species, not a literal per-species mapping).
 
 If every species is null all day (out of season, or a non-European
 location), `_classify_pollen` returns `None`.
 
-#### Combining the two into one 4-tier scale
+#### Combining the two into one 5-tier scale
 
-Rather than reuse either input's native scale outright (AQI's 6, pollen's
-4), both map onto a **fresh 4-tier scale** chosen so both inputs can reach
-every tier symmetrically - confirmed with the user 2026-08-10:
+Since LKI is itself a direct, 5-tier "how bad is the air" index (see
+above), `COMBINED_TIERS` adopts LKI's own scale and names verbatim rather
+than inventing a fresh one - LKI maps onto it **1:1**, no fold table, no
+rounding judgment call needed on that side:
 
 ```python
-COMBINED_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
+COMBINED_TIERS = ["Goed", "Matig", "Onvoldoende", "Slecht", "Zeer slecht"]
 ```
 
-AQI's 6 tiers fold onto it via a fixed lookup table:
+Pollen's narrower 4 tiers don't align 1:1 with 5, so *they* need the fold
+now (the reverse of the old Open-Meteo-AQI design, where AQI needed the
+fold and pollen matched 1:1):
 
-| `aqi_tier_index` | AQI tier name | `_AQI_TIER_TO_COMBINED` | Combined tier |
+```python
+POLLEN_TIER_TO_COMBINED = [0, 1, 3, 4]  # Laag, Matig, Hoog, Zeer hoog
+```
+
+| `tier_index` (from `_classify_pollen`) | Pollen tier name | `POLLEN_TIER_TO_COMBINED` | Combined tier |
 |---|---|---|---|
-| 0 | Goed | 0 | Goed |
-| 1 | Redelijk | 0 | Goed |
-| 2 | Matig | 1 | Matig |
-| 3 | Slecht | 2 | Slecht |
-| 4 | Zeer slecht | 3 | Zeer slecht |
-| 5 | Extreem | 3 | Zeer slecht |
+| 0 | Laag | 0 | Goed |
+| 1 | Matig | 1 | Matig |
+| 2 | Hoog | 3 | **Slecht** |
+| 3 | Zeer hoog | 4 | Zeer slecht |
 
-Pollen's 4 tiers need no lookup table - they already match 1:1:
-
-| `tier_index` (from `_classify_pollen`) | Pollen tier name | Combined tier |
-|---|---|---|
-| 0 | Laag | Goed |
-| 1 | Matig | Matig |
-| 2 | Hoog | Slecht |
-| 3 | Zeer hoog | Zeer slecht |
+"Hoog" pollen rounds *up* to "Slecht", skipping "Onvoldoende" entirely,
+rather than rounding down into it - a deliberate round-toward-worse choice
+(the whole motivation for this change was that the old AQI mapping
+under-stated severity, e.g. Open-Meteo's "Redelijk" collapsing into
+"Goed"; the new mapping shouldn't reintroduce that in a different form).
+One consequence: pollen alone can never produce "Onvoldoende" - only LKI
+can. That's fine, since `max()`-combining below doesn't require both
+inputs to cover the same range, only that neither's contribution gets
+understated.
 
 The final tier is simply the worse of the two mapped values -
 `_combine_aqi_pollen_tier`:
 
 ```python
-combined_index = max(aqi_combined, pollen_tier_index)  # whichever inputs are present
+combined_index = max(lki_tier_index, pollen_combined_index)  # whichever inputs are present
 ```
 
 - Both present -> worse of the two wins.
@@ -241,73 +287,84 @@ The driving pollen **category** (Boom/Gras/Ambrosia) is appended after a
 colon (e.g. "Zeer slecht: Boom") only when **both** of these hold
 (confirmed with the user 2026-08-10):
 - `pollen_tier_index > 0` - pollen is at least Matig, not Laag. Even if
-  pollen ties or beats AQI's contribution, "Laag" isn't worth naming a
+  pollen ties or beats LKI's contribution, "Laag" isn't worth naming a
   cause for - the measurement alone ("Goed") already says everything's
   fine.
-- `pollen_tier_index >= aqi_combined` - pollen's contribution is at or
-  above AQI's.
+- `pollen_combined_index >= lki_combined` - pollen's (mapped) contribution
+  is at or above LKI's.
 
-When either doesn't hold - AQI is the bigger driver, or pollen is
+When either doesn't hold - LKI is the bigger driver, or pollen is
 Laag/absent - no category is named, and the measurement displays alone
 with no trailing colon (`WeatherCanvas._data_point_value_text`'s
 `unit_separator` field controls the `": "` - a per-data-point override,
 every other data point still uses a plain space before its unit).
 
-#### Gauge needle: reusing the same 4 color bands
+#### Gauge needle: 5 color bands
 
-`render_aqi_gauge` draws 4 fixed 45°-wide colored arc bands
-(`widgets/gauge.py:151-156`) - unchanged from before pollen existed, this
-is the exact same dial the standalone AQI cell always used:
+`render_aqi_gauge` draws 5 fixed 36°-wide colored arc bands
+(`widgets/gauge.py`), worst-to-best as the angle increases:
 
-| Arc angle range | Band | Color | Combined tier it now represents |
+| Arc angle range | Band | Color | Combined tier it represents |
 |---|---|---|---|
-| 180°-225° | `aqi_band_very_high` | red | Zeer slecht (3) |
-| 225°-270° | `aqi_band_high` | orange | Slecht (2) |
-| 270°-315° | `aqi_band_moderate` | yellow | Matig (1) |
-| 315°-360° | `aqi_band_low` | green | Goed (0) |
+| 180°-216° | `aqi_band_extreme` | black | Zeer slecht (4) |
+| 216°-252° | `aqi_band_very_high` | red | Slecht (3) |
+| 252°-288° | `aqi_band_high` | orange | Onvoldoende (2) |
+| 288°-324° | `aqi_band_moderate` | yellow | Matig (1) |
+| 324°-360° | `aqi_band_low` | green | Goed (0) |
 
-Previously the needle's rotation came from a literal 0-100 AQI value
-(linear across the full arc). Now `get_combined_rotation(combined_index)`
-instead centers the needle in the band matching the **tier index**:
+Only 4 rungs (green/yellow/orange/red) fit before running into the
+display's fixed 7-color limit, so the 5th/worst band reuses black - same
+precedent the UV icon already established for its own "Extreem" tier
+(`widgets/palette.py`). A black band means the needle needs a light
+outline to stay visible when pointing into it - `aqi_needle_outline`
+(white), the same needle+outline technique the pressure gauge already
+uses.
+
+`get_combined_rotation(combined_index)` centers the needle in the band
+matching the **tier index**, generalized to whatever `COMBINED_TIERS`'s
+length is rather than a hardcoded band count:
 
 ```python
-tier_from_worst = 3 - combined_tier_index
-rotation_deg = get_aqi_rotation_from_fraction((tier_from_worst + 0.5) / 4)
+tier_count = len(COMBINED_TIERS)
+tier_from_worst = (tier_count - 1) - combined_tier_index
+rotation_deg = get_aqi_rotation_from_fraction((tier_from_worst + 0.5) / tier_count)
 ```
 
 | `combined_index` | Combined tier | Needle rotation | Lands in band |
 |---|---|---|---|
-| 0 | Goed | -22.5° | low/green (center) |
-| 1 | Matig | -67.5° | moderate/yellow (center) |
-| 2 | Slecht | -112.5° | high/orange (center) |
-| 3 | Zeer slecht | -157.5° | very_high/red (center) |
+| 0 | Goed | -18° | low/green (center) |
+| 1 | Matig | -54° | moderate/yellow (center) |
+| 2 | Onvoldoende | -90° | high/orange (center) |
+| 3 | Slecht | -126° | very_high/red (center) |
+| 4 | Zeer slecht | -162° | extreme/black (center) |
 
-This is deliberate: if the needle still came from a literal AQI number,
-it would point to a "fine" position even when the *displayed text* says
-"Zeer slecht" because pollen (not AQI) is driving the reading - a
+This is deliberate: if the needle still came from a literal LKI number, it
+would point to a "fine" position even when the *displayed text* says
+"Zeer slecht" because pollen (not LKI) is driving the reading - a
 misleading mismatch. Driving the needle from the tier index instead keeps
 icon and text always consistent, whichever input is worse.
 `combined_index is None` (neither input has data) falls back to a neutral
 middle rotation (`fraction_good = 0.5`, needle pointing straight down,
-between the moderate and high bands) rather than defaulting toward either
+between the moderate/orange bands) rather than defaulting toward either
 extreme.
 
 #### Worked examples
 
-| AQI | Pollen | Displayed | Why |
+| LKI | Pollen | Displayed | Why |
 |---|---|---|---|
-| 15 (Goed) | no data | "Goed" | AQI alone decides |
-| 50 (Matig) | no data | "Matig" | AQI alone decides |
-| 90 (Zeer slecht, combined 3) | grass 3 grains/m³ (Laag, combined 0) | "Zeer slecht" | AQI is the bigger driver (3 > 0) |
-| 10 (Goed, combined 0) | birch 2000 grains/m³ (Zeer hoog, combined 3) | "Zeer slecht: Boom" | pollen is the bigger driver (3 > 0) |
-| 45 (Matig, combined 1) | grass 15 grains/m³ (Matig, combined 1) | "Matig: Gras" | tied at combined 1, and pollen is genuinely elevated (tier > 0) |
-| 30 (Redelijk, combined 0) | grass 3 grains/m³ (Laag, combined 0) | "Goed" | tied at combined 0, but pollen is only Laag - no category named |
+| 2 (Goed) | no data | "Goed" | LKI alone decides |
+| 5 (Matig) | no data | "Matig" | LKI alone decides |
+| 7 (Onvoldoende, combined 2) | 10.4 grains/m³ grass (Matig, combined 1) | "Onvoldoende" | LKI is the bigger driver (2 > 1) - a real 2026-08-14 Sittard reading |
+| 11 (Zeer slecht, combined 4) | grass 3 grains/m³ (Laag, combined 0) | "Zeer slecht" | LKI is the bigger driver (4 > 0) |
+| 2 (Goed, combined 0) | birch 2000 grains/m³ (Zeer hoog, combined 4) | "Zeer slecht: Boom" | pollen is the bigger driver (4 > 0) |
+| 5 (Matig, combined 1) | grass 15 grains/m³ (Matig, combined 1) | "Matig: Gras" | tied at combined 1, and pollen is genuinely elevated (tier > 0) |
+| 2 (Goed, combined 0) | grass 3 grains/m³ (Laag, combined 0) | "Goed" | tied at combined 0, but pollen is only Laag - no category named |
 | no data | no data | "N/A" | neither input available |
 
 See `scripts/test_pollen_scenarios.py` for these and more as executable,
 deterministic assertions (every combined tier, tie-breaking, the
 daily-peak-vs-current-hour behavior, and the no-data fallback) - live
-weather can't reliably guarantee a specific AQI+pollen combination on any
+weather can't reliably guarantee a specific LKI+pollen combination on any
 given run.
 
 No standalone pollen icon or cell exists anymore - visibility is shown
@@ -366,7 +423,7 @@ specific to those unit systems (`TODO.md`), rather than being fixed.
 
 | Field | Default | Effect |
 |---|---|---|
-| `latitude`, `longitude` | Sittard, NL (51.0004365, 5.8993687) | Location passed to every Open-Meteo/Nominatim request. The header's location name is Dutch inside the Netherlands, English everywhere else (`weather_data.get_nearest_location_name`) |
+| `latitude`, `longitude` | Sittard, NL (51.0004365, 5.8993687) | Location passed to every Open-Meteo/Nominatim request, and used to resolve/cache the nearest RIVM station for "Kwaliteit & Pollen" (see above - re-resolved automatically when this changes). The header's location name is Dutch inside the Netherlands, English everywhere else (`weather_data.get_nearest_location_name`) |
 | `timezone` | `"Europe/Amsterdam"` | IANA tz name; only used as a fallback if Open-Meteo's response omits its own `timezone` field |
 | `time_format` | `"24h"` | `"24h"` \| `"12h"` - hour labels on the chart and the header's "Laatste update" time |
 | `forecast_days` | `7` | Number of forecast cards shown in the bottom row (today is excluded from the row itself; `fetch_snapshot` internally requests `forecast_days + 1` days from Open-Meteo) |
