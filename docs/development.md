@@ -55,6 +55,12 @@ python main.py --mock-output output.png
   fallback) via crafted pollen fixtures (Open-Meteo) and a mocked RIVM LKI
   value, since live weather can't reliably guarantee season/hemisphere
   coverage or a specific LKI+pollen combination on any given run.
+- `python scripts/test_forecast_quality_scenarios.py` - covers the
+  multi-day forecast cards' weather-quality border tier and rain-mm text
+  (see [settings.md](./settings.md)'s "Forecast cards" section) via
+  crafted daily high-temp/precipitation fixtures, since live weather can't
+  reliably guarantee an exact tier boundary or two inputs disagreeing in
+  opposite directions on any given run.
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
   skip/force decision (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.
@@ -63,7 +69,7 @@ python main.py --mock-output output.png
   specifies (see [settings.md](./settings.md)'s "Color palette" section) -
   no network/hardware needed.
 
-The first three save their renders to `mock_display_output/` for visual
+The first four save their renders to `mock_display_output/` for visual
 review - see [icons.md](./icons.md) and [changes.md](./changes.md) for the
 rest of the project's reference docs.
 

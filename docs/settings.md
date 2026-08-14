@@ -378,6 +378,87 @@ weeds not modeled here, e.g. nettle/sorrel/plantain) under a broader
 Netherlands-focused service reports even when both are working correctly -
 a real, permanent data-source gap (see `TODO.md`), not a bug.
 
+### Forecast cards: rain amount + weather-quality border
+
+Each card in the multi-day forecast row (`widgets/forecast.py`) shows two
+things beyond the icon and high/low temperature, added 2026-08-14:
+
+- **Rain amount** ("3mm", "0.6mm", etc.) drawn next to the icon, only on
+  days where rain is actually expected.
+- **A colored border** coding how pleasant that day's weather is overall -
+  temperature and precipitation combined, worst-of-both-wins, the same
+  `max()` combining idiom the "Kwaliteit & Pollen" gauge above uses.
+
+#### Input 1: temperature tier
+
+Based on the day's `high` (°C), symmetric hot/cold bands - `15-25°C` is
+the pleasant middle, both extremes degrade the tier
+(`weather_data._temp_quality_tier`):
+
+| Range | Tier |
+|---|---|
+| < -5°C (strenge vorst) | Zeer slecht |
+| -5 to 0°C (vorst) | Slecht |
+| 0 to 14°C (koud/koel) | Matig |
+| 15 to 25°C (aangenaam) | **Goed** |
+| 26 to 31°C (warm) | Slecht |
+| ≥ 32°C (hittegolf) | Zeer slecht |
+
+#### Input 2: precipitation tier
+
+Based on Open-Meteo's daily `precipitation_sum` (mm, rain+showers+snowfall
+water-equivalent - added to `OPEN_METEO_FORECAST_URL`'s `daily=` list
+specifically for this feature) - `weather_data._precip_quality_tier`:
+
+| Range | Tier |
+|---|---|
+| < 0.2mm | Droog → **Goed** |
+| 0.2 to 5mm | Lichte neerslag → Matig |
+| 5 to 15mm | Neerslag → Slecht |
+| ≥ 15mm | Zware neerslag → Zeer slecht |
+
+The 0.2mm cutoff doubles as the "is rain expected" gate for the mm text
+(`DayForecast.rain_expected`) - a single definition of "raining" shared by
+both features on the card, rather than two.
+
+#### Combining into one 4-tier scale
+
+A fresh, small scale - deliberately not `COMBINED_TIERS` (that's AQI/
+pollen's own 5-tier scale, a different concern):
+
+```python
+FORECAST_QUALITY_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
+quality_tier_index = max(_temp_quality_tier(high), _precip_quality_tier(precip_mm))
+```
+
+`widgets/forecast.py` maps the result straight to the card's outline color
+(green/yellow/orange/red - `PALETTE.forecast_border_good/fair/poor/bad`) -
+a colored **border**, not a filled background, so the card interior stays
+white and nothing about existing icon/text rendering had to change.
+
+#### Worked examples
+
+| High | Precip | Tier | Why |
+|---|---|---|---|
+| 20°C (Goed) | 0mm (Goed) | Goed | both inputs agree |
+| 5°C (Matig) | 0mm (Goed) | Matig | dry but cold - still just "fair" |
+| 28°C (Slecht) | 0mm (Goed) | Slecht | heat is the bigger driver |
+| 20°C (Goed) | 20mm (Zeer slecht) | Zeer slecht | heavy rain is the bigger driver |
+| -2°C (Slecht) | 20mm (Zeer slecht) | Zeer slecht | both inputs bad, worse of the two wins |
+
+See `scripts/test_forecast_quality_scenarios.py` for these and more as
+executable, deterministic assertions (every tier, both boundary edges
+exactly, the two inputs disagreeing in opposite directions, and the
+mm-text on/off gate) - live weather won't reliably hit an exact boundary
+value or a rare combination (a heatwave day that's also drenched) on any
+given test run.
+
+The mm text's font shrinks to fit the card width if needed
+(`widgets/forecast.py::_fit_font`, same shrink-to-fit approach
+`WeatherCanvas._fit_font` in `canvas.py` already uses for compact-mode
+data-point labels) - narrower cards at a higher `forecast_days` setting
+would otherwise let a longer amount like "0.6mm" overflow the border.
+
 ## Via the web UI (`web_app.py`, always-on)
 
 A small always-on Flask service (`pi-weather-web.service`), reachable at

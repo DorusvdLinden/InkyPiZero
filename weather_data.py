@@ -31,7 +31,7 @@ SPEED_UNIT = "m/s"
 DISTANCE_UNIT = "km"
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language={lang}&zoom=14"
-OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
 OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm"
 
@@ -400,6 +400,9 @@ class DayForecast:
     low: int
     moon_phase_pct: str
     moon_icon_key: str
+    precip_mm: float
+    rain_expected: bool
+    quality_tier_index: int
 
 
 @dataclass
@@ -636,11 +639,51 @@ def _lki_tier_index(lki: int) -> int:
     return 4
 
 
+# Multi-day forecast card border color: a "how nice is this day" score
+# combining temperature and precipitation, worst-of-both-wins via max()
+# (same combining idiom as _combine_aqi_pollen_tier) - a fresh small scale
+# deliberately not reusing COMBINED_TIERS, which is AQI/pollen's own and a
+# different concern. Confirmed with the user 2026-08-14.
+FORECAST_QUALITY_TIERS = ["Goed", "Matig", "Slecht", "Zeer slecht"]
+# Also the forecast card's "is rain expected" gate for its mm text - below
+# this, a day counts as dry and no amount is shown.
+FORECAST_DRY_MM_THRESHOLD = 0.2
+
+
+def _temp_quality_tier(high_c: float) -> int:
+    """Symmetric hot/cold bands - 15-25 C is the pleasant middle, both
+    extremes degrade quality. See docs/settings.md."""
+    if high_c < -5:
+        return 3
+    elif high_c < 0:
+        return 2
+    elif high_c < 15:
+        return 1
+    elif high_c <= 25:
+        return 0
+    elif high_c < 32:
+        return 2
+    return 3
+
+
+def _precip_quality_tier(mm: float) -> int:
+    """See FORECAST_DRY_MM_THRESHOLD for the dry/not-dry boundary this
+    shares with the forecast card's mm-text gate."""
+    if mm < FORECAST_DRY_MM_THRESHOLD:
+        return 0
+    elif mm < 5:
+        return 1
+    elif mm < 15:
+        return 2
+    return 3
+
+
 def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
     temp_max = daily_data.get("temperature_2m_max", [])
     temp_min = daily_data.get("temperature_2m_min", [])
+    precip_sums = daily_data.get("precipitation_sum", [])
 
     forecast = []
     for i in range(len(times)):
@@ -661,13 +704,24 @@ def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
             phase_name = "newmoon"
         moon_icon_key = get_moon_phase_icon_key(phase_name, lat)
 
+        high_raw = float(temp_max[i]) if i < len(temp_max) else 0.0
+        high = int(high_raw)
+        precip_mm = float(precip_sums[i]) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
+        # Tier from the raw (un-truncated) high, not the display-rounded
+        # int above - int() truncates toward zero, so e.g. -0.3 -> 0 would
+        # otherwise land a real "-5 to 0 C" day one tier too nice.
+        quality_tier_index = max(_temp_quality_tier(high_raw), _precip_quality_tier(precip_mm))
+
         forecast.append(DayForecast(
             day_label=format_day_abbr_nl(dt),
             icon_key=icon_key,
-            high=int(temp_max[i]) if i < len(temp_max) else 0,
+            high=high,
             low=int(temp_min[i]) if i < len(temp_min) else 0,
             moon_phase_pct=f"{illum_pct:.0f}",
             moon_icon_key=moon_icon_key,
+            precip_mm=precip_mm,
+            rain_expected=precip_mm >= FORECAST_DRY_MM_THRESHOLD,
+            quality_tier_index=quality_tier_index,
         ))
     return forecast
 
