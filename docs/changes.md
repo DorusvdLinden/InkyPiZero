@@ -876,74 +876,59 @@ along the way, see `RIVM_MAX_STATION_DISTANCE_KM` above); and all 5 gauge
 states rendered directly to confirm the new black "Zeer slecht" band and
 its needle stay visually distinct.
 
-### 33. Forecast cards: rain amount + weather-quality border color
+### 33. Forecast cards: rain amount next to the icon
 Branch `feature/forecast-rain-quality-cards`
 
-Two additions to the multi-day forecast row, requested together since
-both need the same new daily-precipitation data: (1) the expected rain
-amount ("3mm", "0.6mm") drawn next to each day's icon, only when rain is
-actually expected; (2) each card's border colored by how pleasant that
-day's weather is overall (temperature + precipitation combined), using
-the same worst-of-both-wins `max()` idiom entry 32's "Kwaliteit & Pollen"
-gauge already established. See [settings.md](./settings.md)'s new
-"Forecast cards" section for the full tier tables.
+The multi-day forecast row now shows the expected rain amount ("3mm",
+"0.6mm") next to each day's icon, drawn only when rain is actually
+expected. `OPEN_METEO_FORECAST_URL`'s `daily=` list gained
+`precipitation_sum` - Open-Meteo's own rain+showers+snowfall
+water-equivalent sum, already in mm since `precipitation_unit=mm` was
+already fixed for the whole request. `DayForecast` gained
+`precip_mm`/`rain_expected`, computed once in `_parse_forecast()` per
+this codebase's established separation (classification lives in
+`weather_data.py`; widgets only draw what they're handed). See
+[settings.md](./settings.md)'s "Forecast cards" section.
 
-`OPEN_METEO_FORECAST_URL`'s `daily=` list gained `precipitation_sum` -
-Open-Meteo's own rain+showers+snowfall water-equivalent sum, already in
-mm since `precipitation_unit=mm` was already fixed for the whole request.
-`DayForecast` gained `precip_mm`/`rain_expected`/`quality_tier_index`,
-all computed once in `_parse_forecast()` per this codebase's established
-separation (classification lives in `weather_data.py`; widgets only draw
-what they're handed). A fresh small `FORECAST_QUALITY_TIERS` scale
-(`["Goed", "Matig", "Slecht", "Zeer slecht"]`) - deliberately not
-`COMBINED_TIERS`, which is entry 32's own 5-tier AQI/pollen scale, a
-different concern.
+**Originally built alongside a second feature - each card's border
+colored by overall weather quality** (temperature + precipitation
+combined, worst-of-both-wins, the same `max()` idiom entry 32's
+"Kwaliteit & Pollen" gauge established), including a mid-build switch
+from a filled background to a colored border (sidestepping contrast and
+cloud-icon questions a fill would have raised) and two real bugs a
+fresh-context review caught before merge (a font-overflow edge case at
+high `forecast_days`, and a truncation bug misclassifying some sub-zero
+fractional temperatures). **Reverted back to a plain black border at the
+user's request** after seeing both live on the real Pi - the colored
+version is fully preserved, un-merged, on
+`feature/forecast-quality-border-color` for later, including all of the
+above; nothing about the rain-mm half needed to change to revert it, they
+shared data but not rendering code.
 
-**Changed mid-build from a filled card background to a colored border**
-(confirmed with the user) - simpler, and it sidesteps two questions a
-filled background would have raised: text/icon contrast against a
-saturated fill, and a hardcoded-white "cloud interior" icon element
-(`widgets/palette.py`'s `cloud_interior`, baked into the icon PNGs at
-generation time) no longer reading as "paper showing through" against a
-non-white card. With the border-only approach neither applies - the card
-interior stays exactly as it always was.
+**A real layout bug caught by rendering, not reasoning about it** (this
+part stayed relevant after the revert, since the mm text is still
+variable-width): at a higher `forecast_days` setting, cards are narrower
+but the icon stays the same height-bound size, so a longer rain amount
+like "0.6mm" at a fixed font size overflowed past the card's border -
+visible once actually rendered at `forecast_days=10`, not obvious from
+the numbers alone. Fixed by giving `widgets/forecast.py` its own
+`_fit_font` shrink-to-fit helper, mirroring `WeatherCanvas._fit_font`
+(`canvas.py`, entry 22) - can't reuse that one directly (widgets never
+import from `canvas.py` - the dependency runs the other way). A
+fresh-context review later found this first fix still had an artificial
+10px floor on the available width, silently reintroducing the same
+overflow at a high enough `forecast_days` (verified at 12, where only 6px
+is genuinely available) - removed the floor and instead skip the mm text
+entirely when even the smallest font still doesn't fit, same as a dry
+day, rather than ever drawing something that overflows.
 
-**A real layout bug caught by rendering, not reasoning about it**: at a
-higher `forecast_days` setting, cards are narrower but the icon stays the
-same height-bound size, so a longer rain amount like "0.6mm" at a fixed
-font size overflowed past the card's border - visible once actually
-rendered at `forecast_days=10`, not obvious from the numbers alone. Fixed
-by giving `widgets/forecast.py` its own `_fit_font` shrink-to-fit helper,
-mirroring `WeatherCanvas._fit_font` (`canvas.py`, entry 22) - can't reuse
-that one directly (widgets never import from `canvas.py` - the dependency
-runs the other way), so this is a small intentional duplication of the
-same two-line pattern rather than a cross-module refactor for it.
-
-**A fresh-context review (per this repo's Mode 2 rule) caught two more
-gaps before merge, both fixed**: (1) the first `_fit_font` fix still had
-an artificial 10px floor on the available width, so it silently
-reintroduced the same overflow at a high enough `forecast_days` (verified
-at 12, where only 6px is genuinely available) - removed the floor and
-instead skip the mm text entirely when even the smallest font still
-doesn't fit, same as a dry day, rather than ever drawing something that
-overflows; (2) `_temp_quality_tier` was fed the already-int-truncated
-`high` used for display, and `int()` truncates toward zero, so a real
-high of e.g. -0.3°C became `0` and landed a tier too nice ("Matig"
-instead of "Slecht") - fixed by classifying off the raw float before
-truncation, leaving the display value untouched.
-
-**Active** - current design. Verified: `scripts/test_forecast_quality_scenarios.py`
-(new, 12 scenarios - every tier, both boundary edges exactly at 0.2mm/26°C,
-the two inputs disagreeing in opposite directions, the mm-text on/off
-gate); a full 14-location `scripts/test_locations.py` regression (no
-crashes, run twice - before and after the review fixes); direct visual
-checks of a real live render (a 36°C day correctly red, rainy days
-correctly yellow/orange with sensible mm amounts next to real rain-cloud
-icons), the `forecast_days=10` + `show_moon_phase=True` tight-layout case
-that caught the first overflow bug, and `forecast_days=12` (the review's
-own flagged case) confirming the text now omits cleanly instead of
-overflowing; and the exact boundary values (-0.3°C, -5.7°C) the review
-traced through `_temp_quality_tier` by hand to confirm the truncation fix.
+**Active** - current design. Verified: `scripts/test_forecast_rain_scenarios.py`
+(rewritten after the revert to cover just the rain-mm gate - dry, both
+sides of the 0.2mm boundary exactly, sub-1mm decimal formatting, a
+2-digit whole-mm amount); a full 14-location `scripts/test_locations.py`
+regression; and a direct visual check of a real live render confirming
+black borders are back and the mm text still renders correctly next to
+real rain-cloud icons.
 
 ---
 
