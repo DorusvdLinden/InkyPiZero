@@ -88,13 +88,21 @@ class Palette:
         self.pressure_needle = c["black"]
         self.pressure_needle_outline = c["white"]
 
-        # AQI gauge (widgets/gauge.py) - band order matches the european_aqi
-        # scale's own Goed->Extreem ramp (weather_data.py)
+        # AQI gauge (widgets/gauge.py) - band order matches COMBINED_TIERS's
+        # own Goed->Zeer slecht ramp (weather_data.py). Only 4 rungs
+        # (green/yellow/orange/red) fit before running into the display's
+        # fixed 7-color limit, so the 5th/worst band reuses black - same
+        # precedent as uv_extreme just below.
         self.aqi_band_low = c["green"]
         self.aqi_band_moderate = c["yellow"]
         self.aqi_band_high = c["orange"]
         self.aqi_band_very_high = c["red"]
+        self.aqi_band_extreme = c["black"]
         self.aqi_needle = c["black"]
+        # A black-on-black needle would vanish when pointing into the new
+        # extreme band above, so it gets the same needle+outline treatment
+        # pressure_needle/pressure_needle_outline already use.
+        self.aqi_needle_outline = c["white"]
 
         # UV icon (weather_data.get_uv_color / widgets/gauge.render_uv_icon) -
         # discrete per the same tiers get_uv_rating_nl already shows as text

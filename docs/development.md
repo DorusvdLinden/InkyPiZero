@@ -37,7 +37,8 @@ python main.py --mock-output output.png
   --screen-mode compact`. See [settings.md](./settings.md) for every
   option, and what the physical buttons do.
 - **Debug data parsing** - `weather_data.fetch_snapshot()` hits the live
-  Open-Meteo API directly; add a `print()`/breakpoint and rerun
+  Open-Meteo and RIVM/luchtmeetnet.nl APIs directly; add a
+  `print()`/breakpoint and rerun
 
 ## Regression testing
 
@@ -51,9 +52,9 @@ python main.py --mock-output output.png
   especially) on any given run.
 - `python scripts/test_pollen_scenarios.py` - covers the combined "Kwaliteit
   & Pollen" data point's tiers (which input wins, tie-breaking, the no-data
-  fallback) via crafted air-quality fixtures, since live weather can't
-  reliably guarantee season/hemisphere coverage or a specific AQI+pollen
-  combination on any given run.
+  fallback) via crafted pollen fixtures (Open-Meteo) and a mocked RIVM LKI
+  value, since live weather can't reliably guarantee season/hemisphere
+  coverage or a specific LKI+pollen combination on any given run.
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
   skip/force decision (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.

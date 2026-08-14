@@ -385,11 +385,17 @@ still uses a plain space), and only when pollen is genuinely elevated
 tied "Goed" (pollen merely Laag) no longer names a category, since "Goed"
 alone already says everything's fine. Confirmed with the user 2026-08-10.
 
-**Active** - current design. Known permanent limitations, tracked in
-`TODO.md`: pollen's contribution is Europe-only/seasonal (an Open-Meteo
-data limitation, not a bug, falls back to AQI alone or "N/A"), and
-Open-Meteo/CAMS models fewer herb/weed species than Dutch pollen services
-track (confirmed against pollennieuws.nl's broader "Kruiden" category).
+**Outdated in one respect**: the AQI *source* (Open-Meteo `european_aqi`)
+and the 4-tier `COMBINED_TIERS`/`_AQI_TIER_TO_COMBINED` fold described
+above are superseded by entry 32 (RIVM/luchtmeetnet.nl, 5-tier scale). The
+combined-data-point architecture itself - one "Kwaliteit & Pollen" cell,
+worst-of-both-inputs, the cause-label rules, `_fit_font`, pollen's own
+classification - is unchanged and still current. Known permanent
+limitations, tracked in `TODO.md`: pollen's contribution is Europe-only/
+seasonal (an Open-Meteo data limitation, not a bug, falls back to AQI
+alone or "N/A"), and Open-Meteo/CAMS models fewer herb/weed species than
+Dutch pollen services track (confirmed against pollennieuws.nl's broader
+"Kruiden" category).
 
 ---
 
@@ -765,6 +771,110 @@ a full re-run of the 14-location suite to confirm every location
 individually was deferred after repeated testing bursts tripped
 Nominatim's rate limit for a while - worth a clean single pass later
 once enough time has passed.
+
+### 32. Swap AQI source from Open-Meteo to RIVM/luchtmeetnet.nl, combined scale grows to 5 tiers
+Branch `feature/rivm-air-quality`
+
+The "Kwaliteit & Pollen" data point's AQI half (entry 22) came from
+Open-Meteo's `european_aqi` - a modeled/interpolated value (Copernicus
+CAMS), not a real Dutch measurement. Comparing a live reading against
+[longfonds.nl/gezondelucht](https://www.longfonds.nl/gezondelucht) (RIVM's
+own ground-station data) surfaced a real gap for the configured location:
+Open-Meteo said 37/100 ("Redelijk", displayed as "Goed" under the old
+fold), while RIVM's actual nearest station (`NL50003`, Geleen-Asterstraat,
+~5.7km away) reported LKI 7 ("Onvoldoende" - much closer to Longfonds'
+"Slecht"). Swapped to RIVM's own network via luchtmeetnet.nl's open API
+(keyless, 300 requests/5min fair-use, confirmed via its own 429 response).
+Pollen stays on Open-Meteo entirely unchanged - RIVM doesn't publish
+pollen data.
+
+**Finding the right station** required brute-forcing it: luchtmeetnet has
+no geo-filter query param, so `weather_data._resolve_rivm_station` lists
+every station (~130 requests total) and picks the nearest one that
+actually publishes LKI (not every station does), capped at
+`RIVM_MAX_STATION_DISTANCE_KM` (150km) so a non-Dutch location correctly
+falls back to no data instead of "succeeding" with whatever Dutch station
+happens to be globally nearest - caught live during testing, when a Tokyo/
+Dubai fixture in `scripts/test_locations.py` initially resolved to a
+real (but ~9000km-away) Dutch station before this cutoff was added.
+Resolution only runs once per location and is cached to
+`/var/lib/pi-weather-display/rivm_station_cache.json`, re-resolved
+whenever the configured `latitude`/`longitude` no longer match the
+cache - which happens promptly on a settings-page location change, since
+saving new coordinates already forces an immediate re-render
+(`web/routes.py:_trigger_rerender`) and that's exactly when the mismatch
+gets detected. AQI fetch failures are now fail-soft (log + `None`,
+matching `_reverse_geocode`'s existing pattern) rather than aborting the
+whole render - previously AQI was bundled into the same Open-Meteo call as
+pollen/UV and a bad response there took down the entire render tick.
+
+**Combined scale grows from 4 tiers to 5**, adopting LKI's own bands
+(`COMBINED_TIERS = ["Goed", "Matig", "Onvoldoende", "Slecht", "Zeer
+slecht"]`) rather than folding LKI down into the old 4-tier scale - doing
+that fold would have reintroduced the exact kind of severity-understating
+rounding (Open-Meteo's "Redelijk" -> "Goed") that motivated this whole
+change. LKI now maps onto `COMBINED_TIERS` 1:1; it's *pollen's* narrower 4
+tiers that need a fold now (`POLLEN_TIER_TO_COMBINED = [0, 1, 3, 4]`),
+rounding "Hoog" pollen up to "Slecht" rather than down to "Onvoldoende" -
+same round-toward-worse principle, just applied to the side that needs it
+now. One consequence: pollen alone can never produce "Onvoldoende", only
+LKI can - expected, since `max()`-combining doesn't require both inputs to
+cover the same range. The AQI gauge (`widgets/gauge.py:render_aqi_gauge`)
+gained a 5th arc band reusing black (same precedent the UV icon's
+"Extreem" tier already established, `widgets/palette.py`), which in turn
+needed a white needle outline (`aqi_needle_outline`, matching the pressure
+gauge's existing needle+outline technique) so the needle stays visible
+pointing into the new black band instead of vanishing black-on-black -
+caught by rendering all 5 gauge states directly during testing.
+
+A fresh-context review (per this repo's Mode 2 rule for multi-file/logic
+changes) caught two real gaps before merge, both fixed: `_get_rivm_current_lki`
+called `_save_rivm_station_cache` (filesystem I/O) with no try/except,
+contradicting the "fails soft throughout" claim - a write failure (e.g. a
+read-only SD card) would have aborted the render instead of just skipping
+the cache write; and station resolution fetched each candidate's LKI twice
+- once to check it publishes LKI at all, then again moments later to read
+the actual value - now a single `_rivm_station_lki_value` call serves both,
+saving one wasted request per resolution right when ~130 others were just
+spent (relevant given the real 300-req/5min limit this session's own
+testing tripped more than once).
+
+Deploying to the real Pi (behind the same home IP/NAT as the dev machine
+used for the testing above, so sharing luchtmeetnet's rate-limit budget)
+surfaced one more real gap: when *every* request in a resolution attempt
+gets rate-limited, each one fails as an ordinary non-2xx HTTP response, not
+an exception - so the original code's `break`/`continue`-on-bad-status
+loops returned `None` completely silently, no log line anywhere, making a
+real production rate-limit stretch indistinguishable from "no station
+exists" without attaching a debugger. Added explicit warnings at each
+early-exit point (station-list fetch failed, per-station geometry lookups
+failed, no candidate within range, no in-range candidate returned an LKI
+value) - diagnosed the hard way while chasing exactly this symptom on
+`pizero`.
+
+**Active** - current design. Verified end-to-end: a real `main.py
+--mock-output` render against the configured location resolves and caches
+`NL50003` (~5.7km away) and shows "Onvoldoende" (LKI 7 beating grass
+pollen's Matig) - a live illustration of the exact discrepancy that
+motivated this change; a repeat run reuses the cache with a single request
+instead of re-running the ~130-request resolution; changing the location
+via the settings web UI (`web_app.py`) correctly re-resolves to a
+different, genuinely-nearest station (Amsterdam coordinates -> `NL49019`)
+on the very next render, then back to `NL50003` when reverted. Also
+confirmed the fail-soft design under real pressure: this session's own
+repeated testing tripped luchtmeetnet's 300-req/5min limit more than
+once, and each time resolution failed clean (`None`, cache left
+untouched, no crash) rather than corrupting state or aborting the render -
+not a concern in normal operation, which only ever resolves once per
+actual location change. Also verified: the full 13-scenario
+`scripts/test_pollen_scenarios.py` suite (rewritten for the 5-tier scale,
+two new scenarios covering the Onvoldoende-only-via-LKI and
+Hoog-pollen-folds-to-Slecht cases); a full 14-location
+`scripts/test_locations.py` regression (no crashes, non-Dutch locations
+correctly degrade to "N/A" for the AQI arm - caught and fixed a real bug
+along the way, see `RIVM_MAX_STATION_DISTANCE_KM` above); and all 5 gauge
+states rendered directly to confirm the new black "Zeer slecht" band and
+its needle stay visually distinct.
 
 ---
 
