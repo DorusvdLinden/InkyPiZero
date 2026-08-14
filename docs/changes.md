@@ -839,6 +839,19 @@ saving one wasted request per resolution right when ~130 others were just
 spent (relevant given the real 300-req/5min limit this session's own
 testing tripped more than once).
 
+Deploying to the real Pi (behind the same home IP/NAT as the dev machine
+used for the testing above, so sharing luchtmeetnet's rate-limit budget)
+surfaced one more real gap: when *every* request in a resolution attempt
+gets rate-limited, each one fails as an ordinary non-2xx HTTP response, not
+an exception - so the original code's `break`/`continue`-on-bad-status
+loops returned `None` completely silently, no log line anywhere, making a
+real production rate-limit stretch indistinguishable from "no station
+exists" without attaching a debugger. Added explicit warnings at each
+early-exit point (station-list fetch failed, per-station geometry lookups
+failed, no candidate within range, no in-range candidate returned an LKI
+value) - diagnosed the hard way while chasing exactly this symptom on
+`pizero`.
+
 **Active** - current design. Verified end-to-end: a real `main.py
 --mock-output` render against the configured location resolves and caches
 `NL50003` (~5.7km away) and shows "Onvoldoende" (LKI 7 beating grass

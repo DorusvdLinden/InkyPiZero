@@ -550,6 +550,10 @@ def _resolve_rivm_station(lat: float, long: float) -> tuple[str, int] | None:
         while True:
             response = requests.get(RIVM_STATIONS_URL.format(page=page), timeout=15)
             if not 200 <= response.status_code < 300:
+                logger.warning(
+                    "RIVM station list page %s returned %s (rate-limited? unreachable?): %s",
+                    page, response.status_code, response.content,
+                )
                 break
             payload = response.json()
             numbers.extend(s["number"] for s in payload.get("data", []))
@@ -559,9 +563,11 @@ def _resolve_rivm_station(lat: float, long: float) -> tuple[str, int] | None:
             page = next_page
 
         candidates = []
+        skipped = 0
         for number in numbers:
             response = requests.get(RIVM_STATION_URL_TEMPLATE.format(number=number), timeout=15)
             if not 200 <= response.status_code < 300:
+                skipped += 1
                 continue
             coords = response.json().get("data", {}).get("geometry", {}).get("coordinates")
             if not coords:
@@ -569,13 +575,22 @@ def _resolve_rivm_station(lat: float, long: float) -> tuple[str, int] | None:
             station_long, station_lat = coords
             candidates.append((_haversine_km(lat, long, station_lat, station_long), number))
         candidates.sort(key=lambda c: c[0])
+        if skipped:
+            logger.warning("RIVM station geometry lookup failed for %d/%d stations (rate-limited? unreachable?)",
+                            skipped, len(numbers))
 
         for distance, number in candidates:
             if distance > RIVM_MAX_STATION_DISTANCE_KM:
+                logger.warning("No RIVM station with LKI data within %skm of (%s, %s) - nearest candidate was %skm away",
+                                RIVM_MAX_STATION_DISTANCE_KM, lat, long, round(distance, 1))
                 break
             value = _rivm_station_lki_value(number)
             if value is not None:
                 return number, value
+        else:
+            if candidates:
+                logger.warning("None of %d nearby RIVM candidates returned an LKI value (rate-limited? unreachable?)",
+                                len(candidates))
         return None
     except (requests.RequestException, ValueError, KeyError) as e:
         logger.warning("Could not resolve nearest RIVM station: %s", e)
