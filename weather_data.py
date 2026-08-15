@@ -31,7 +31,7 @@ SPEED_UNIT = "m/s"
 DISTANCE_UNIT = "km"
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language={lang}&zoom=14"
-OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
 OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm"
 
@@ -414,6 +414,8 @@ class DayForecast:
     low: int
     moon_phase_pct: str
     moon_icon_key: str
+    precip_mm: float
+    rain_expected: bool
 
 
 @dataclass
@@ -650,11 +652,17 @@ def _lki_tier_index(lki: int) -> int:
     return 4
 
 
+# Forecast card mm-rain text: below this daily precipitation_sum (mm), a
+# day counts as dry and no amount is shown next to its icon.
+FORECAST_DRY_MM_THRESHOLD = 0.2
+
+
 def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
     temp_max = daily_data.get("temperature_2m_max", [])
     temp_min = daily_data.get("temperature_2m_min", [])
+    precip_sums = daily_data.get("precipitation_sum", [])
 
     forecast = []
     for i in range(len(times)):
@@ -675,6 +683,8 @@ def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
             phase_name = "newmoon"
         moon_icon_key = get_moon_phase_icon_key(phase_name, lat)
 
+        precip_mm = float(precip_sums[i]) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
+
         forecast.append(DayForecast(
             day_label=format_day_abbr_nl(dt),
             icon_key=icon_key,
@@ -682,6 +692,8 @@ def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
             low=int(temp_min[i]) if i < len(temp_min) else 0,
             moon_phase_pct=f"{illum_pct:.0f}",
             moon_icon_key=moon_icon_key,
+            precip_mm=precip_mm,
+            rain_expected=precip_mm >= FORECAST_DRY_MM_THRESHOLD,
         ))
     return forecast
 

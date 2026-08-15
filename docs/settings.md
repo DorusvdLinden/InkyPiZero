@@ -378,6 +378,37 @@ weeds not modeled here, e.g. nettle/sorrel/plantain) under a broader
 Netherlands-focused service reports even when both are working correctly -
 a real, permanent data-source gap, not a bug.
 
+### Forecast cards: rain amount
+
+Each card in the multi-day forecast row (`widgets/forecast.py`) shows the
+expected rain amount ("3mm", "0.6mm", etc.) next to its icon, added
+2026-08-14, drawn only on days where rain is actually expected -
+`DayForecast.rain_expected` is `True` when Open-Meteo's daily
+`precipitation_sum` (mm, rain+showers+snowfall water-equivalent - added to
+`OPEN_METEO_FORECAST_URL`'s `daily=` list specifically for this feature)
+is at least `weather_data.FORECAST_DRY_MM_THRESHOLD` (0.2mm). Amounts
+under 1mm keep a decimal ("0.6mm") rather than rounding to a
+contradictory "0mm" next to an icon that's flagging rain.
+
+The mm text's font shrinks to fit the remaining card width if needed
+(`widgets/forecast.py::_fit_font`, same shrink-to-fit approach
+`WeatherCanvas._fit_font` in `canvas.py` already uses for compact-mode
+data-point labels) - narrower cards at a higher `forecast_days` setting
+would otherwise let a longer amount like "0.6mm" overflow the card's
+border. If even the smallest font genuinely doesn't fit, the text is
+omitted entirely (same as a dry day) rather than ever drawn overflowing.
+
+See `scripts/test_forecast_rain_scenarios.py` for this as executable,
+deterministic assertions (dry, both sides of the 0.2mm boundary exactly,
+sub-1mm decimal formatting, and a 2-digit whole-mm amount) - live weather
+won't reliably hit an exact boundary value on any given test run.
+
+A colored per-day border coding overall weather quality (temperature +
+precipitation combined) was also built and demoed, then reverted back to
+a plain black border at the user's request (2026-08-14) - preserved
+un-merged on `feature/forecast-quality-border-color` for later, not part
+of `main`.
+
 ## Via the web UI (`web_app.py`, always-on)
 
 A small always-on Flask service (`pi-weather-web.service`), reachable at

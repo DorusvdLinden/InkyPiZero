@@ -934,6 +934,60 @@ very_high/extreme` were now dead attributes (nothing reads them since
 comment that claimed otherwise, and `weather_data.py`'s `PALETTE` import
 was now unused. Both removed.
 
+### 34. Forecast cards: rain amount next to the icon
+Branch `feature/forecast-rain-quality-cards`
+
+The multi-day forecast row now shows the expected rain amount ("3mm",
+"0.6mm") next to each day's icon, drawn only when rain is actually
+expected. `OPEN_METEO_FORECAST_URL`'s `daily=` list gained
+`precipitation_sum` - Open-Meteo's own rain+showers+snowfall
+water-equivalent sum, already in mm since `precipitation_unit=mm` was
+already fixed for the whole request. `DayForecast` gained
+`precip_mm`/`rain_expected`, computed once in `_parse_forecast()` per
+this codebase's established separation (classification lives in
+`weather_data.py`; widgets only draw what they're handed). See
+[settings.md](./settings.md)'s "Forecast cards" section.
+
+**Originally built alongside a second feature - each card's border
+colored by overall weather quality** (temperature + precipitation
+combined, worst-of-both-wins, the same `max()` idiom entry 32's
+"Kwaliteit & Pollen" gauge established), including a mid-build switch
+from a filled background to a colored border (sidestepping contrast and
+cloud-icon questions a fill would have raised) and two real bugs a
+fresh-context review caught before merge (a font-overflow edge case at
+high `forecast_days`, and a truncation bug misclassifying some sub-zero
+fractional temperatures). **Reverted back to a plain black border at the
+user's request** after seeing both live on the real Pi - the colored
+version is fully preserved, un-merged, on
+`feature/forecast-quality-border-color` for later, including all of the
+above; nothing about the rain-mm half needed to change to revert it, they
+shared data but not rendering code.
+
+**A real layout bug caught by rendering, not reasoning about it** (this
+part stayed relevant after the revert, since the mm text is still
+variable-width): at a higher `forecast_days` setting, cards are narrower
+but the icon stays the same height-bound size, so a longer rain amount
+like "0.6mm" at a fixed font size overflowed past the card's border -
+visible once actually rendered at `forecast_days=10`, not obvious from
+the numbers alone. Fixed by giving `widgets/forecast.py` its own
+`_fit_font` shrink-to-fit helper, mirroring `WeatherCanvas._fit_font`
+(`canvas.py`, entry 22) - can't reuse that one directly (widgets never
+import from `canvas.py` - the dependency runs the other way). A
+fresh-context review later found this first fix still had an artificial
+10px floor on the available width, silently reintroducing the same
+overflow at a high enough `forecast_days` (verified at 12, where only 6px
+is genuinely available) - removed the floor and instead skip the mm text
+entirely when even the smallest font still doesn't fit, same as a dry
+day, rather than ever drawing something that overflows.
+
+**Active** - current design. Verified: `scripts/test_forecast_rain_scenarios.py`
+(rewritten after the revert to cover just the rain-mm gate - dry, both
+sides of the 0.2mm boundary exactly, sub-1mm decimal formatting, a
+2-digit whole-mm amount); a full 14-location `scripts/test_locations.py`
+regression; and a direct visual check of a real live render confirming
+black borders are back and the mm text still renders correctly next to
+real rain-cloud icons.
+
 ---
 
 ## Pruned branches
