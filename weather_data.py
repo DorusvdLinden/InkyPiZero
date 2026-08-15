@@ -132,11 +132,13 @@ def map_weather_code_to_icon(weather_code: int, is_day: int) -> str:
         icon = "13d"
     elif weather_code in [77]:
         icon = "77d"
-    elif weather_code in [95, 96, 99]:
+    elif weather_code in [95]:
         icon = "11d"
+    elif weather_code in [96, 99]:
+        icon = "96d"
 
     if is_day == 0:
-        icon = {"01d": "01n", "022d": "022n", "02d": "02n", "10d": "10n"}.get(icon, icon)
+        icon = {"01d": "01n", "022d": "022n", "10d": "10n"}.get(icon, icon)
     return icon
 
 
@@ -670,6 +672,12 @@ def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
         code = weather_codes[i] if i < len(weather_codes) else 0
         icon_key = map_weather_code_to_icon(code, is_day=1)
 
+        # +1: the phase for the night *following* this card's daytime date,
+        # not the phase at midnight of that date itself - verified against
+        # public reference dates 2026-08-15 (Icon-Plan.md item 3): the +1
+        # target_date matched the published 2026-09-10 new moon and
+        # 2026-09-26 full moon within 0.34/0.04 days, vs. 2.20/0.97 days
+        # unshifted.
         target_date: date = dt.date() + timedelta(days=1)
         try:
             phase_age = moon.phase(target_date)
