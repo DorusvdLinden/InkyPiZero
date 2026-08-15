@@ -1024,6 +1024,63 @@ addition rendered byte-identical; visually inspected the regenerated
 `docs/images/icon_overview.png` gallery; the full `scripts/test_locations.py`
 (14 locations, 3 modes) regression passed.
 
+### 36. Icon-Plan.md item 5: bake extra thickening into `01n`
+Branch `feature/icon-plan-01n-thicken`
+
+`01n` (`wi-night-clear`) read noticeably thinner than the `wi-moon-*`
+phase icons it sits next to at the same render size, despite sharing
+`PALETTE.moon` - a source-SVG stroke-weight mismatch. Added
+`EXTRA_THICKEN = {"01n": 1.0}` to `generate_icons.py`'s main icon loop
+(the only icon special-cased outside `COMPOSITE_ICONS`): loads via the
+existing `_render_svg()` helper, applies `thicken_icon(..., strength=1.0)`,
+saves - every other icon still takes the original raw-`resvg_py.svg_to_bytes`
+fast path unchanged.
+
+The plan's own `0.75` "middle-ground" starting guess turned out wrong.
+A pixel-level check - the fraction of `01n`'s alpha-channel pixels that
+are semi-transparent ("ambiguous", the ones dithering actually struggles
+with) rather than either fully opaque or fully transparent - at strengths
+`[0.0, 0.25, 0.5, 0.75, 1.0]` measured `[0.117, 0.228, 0.232, 0.229,
+0.101]`. Every *partial* strength roughly doubles the ambiguous-edge
+fraction relative to either endpoint: `thicken_icon`'s `MaxFilter` blend
+(`strength` interpolates between the original and a full 1px dilation)
+bakes in its own soft edge on top of the SVG's original antialiasing,
+rather than avoiding it. Only a full 1px dilation (`strength=1.0`) is
+simultaneously bolder and cleaner - which is exactly why the `022d`/`022n`
+composite's back layer already uses `1.0` rather than a partial value
+(entry 13), not a coincidence worth re-guessing past.
+
+**Scope correction, caught by fresh-context review**: an initial pass at
+this fix claimed it made `01n` "hold up fine" next to the `wi-moon-*`
+phase icons. That overclaimed what thickening alone can do. A
+matched-size, matched-treatment side-by-side (both `01n` and each phase
+icon run through their own real `thicken_icon()` call, `AssetStore`-loaded
+at 30px) showed `01n` reading as a visibly chunkier, denser ring shape
+next to the phase icons' cleaner, mostly-solid crescent/disc silhouettes.
+Root cause: `wi-night-clear` is a **hollow ring outline**, a fundamentally
+different SVG topology from most `wi-moon-*` icons, which are
+**solid-filled** shapes - no stroke-weight adjustment closes a topology
+gap. Tried `_solid_fill()` (already used on the `022d`/`022n` composite's
+cloud layer) as a fix for *that*: filling `01n`'s hollow ring solid
+produces a near-full disc with a small notch, not a crescent - moves
+further from the phase family's look, not closer. Rejected.
+
+**Active** - current design, scope narrowed to match what was actually
+verified: this fixes the literal complaint ("`01n` reads thin/pale, an
+antialiased-edge-heavy outline that dithers poorly"), not a full
+silhouette match to the `wi-moon-*` family (a harder problem needing a
+different source SVG or a custom glyph - left open). Verified: regeneration
+touched only `assets/icons/01n.png` (confirmed via `git status`); visually
+compared `docs/images/icon_overview.png` and an `AssetStore`-pipeline
+side-by-side against `newmoon`/`waningcrescent`/`firstquarter`/`fullmoon`
+(first at mismatched treatment, which is what caught the overclaim above,
+then matched); confirmed `01n` still reads as a legible, bold crescent in
+isolation at both the 102px current-conditions size (no runtime thickening
+there) and the 30px chart-strip size (runtime thickening stacks on top) -
+improved over the pre-fix thin/pale version, not silhouette-matched to its
+siblings; full `scripts/test_locations.py` (14 locations, 3 modes)
+regression passed.
+
 ---
 
 ## Pruned branches

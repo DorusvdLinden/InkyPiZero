@@ -20,7 +20,7 @@ recolored.*
 
 | File(s) | Category |
 |---|---|
-| `01d.png` / `01n.png` | Clear sky (day/night) |
+| `01d.png` / `01n.png` | Clear sky (day/night) - `01n` gets extra generation-time thickening, see below |
 | `022d.png` / `022n.png` | "Half cloudy" composite (day/night) - hand-built, see below |
 | `04d.png` | Overcast |
 | `50d.png`, `48d.png` | Fog |
@@ -93,7 +93,30 @@ separately-colored layers, built by `_composite_icon()`:
    `022d`; `(5, -30)` back / `(0, 70)` front for `022n`) on a 300x300 canvas.
 
 Everything else in `assets/icons/` is a plain single-color render (one
-weather-icons SVG + one flat `PALETTE` color, no compositing).
+weather-icons SVG + one flat `PALETTE` color, no compositing), except
+`01n` (`wi-night-clear`), which also gets a generation-time
+`thicken_icon(..., strength=1.0)` pass (`EXTRA_THICKEN` in
+`generate_icons.py`) - its crescent read noticeably thin/pale (an
+antialiased-edge-heavy hollow outline that dithers poorly) compared to
+other icons. Full strength, not a partial blend, matching the `022d`/`022n`
+composite above: a pixel-level check of the fraction of semi-transparent
+"ambiguous" edge pixels at each candidate strength found every partial
+value (0.25-0.75) roughly *doubles* that fraction relative to either
+endpoint - `thicken_icon`'s `MaxFilter` blend bakes in its own soft edge on
+top of the original antialiasing. Only a full 1px dilation is both bolder
+and cleaner.
+
+**This fixes the thin/pale-edge problem, not a silhouette match to
+`wi-moon-*`.** `01n` is a hollow ring outline; most `wi-moon-*` phase icons
+are solid-filled shapes - a different SVG topology no amount of stroke
+thickening closes. A matched-size/matched-treatment side-by-side still
+shows `01n` reading as a denser ring next to the phase icons' cleaner
+disc/crescent silhouettes. `_solid_fill()` (the same helper the `022d`/
+`022n` composite's cloud layer uses) was tried and rejected as a fix for
+*that* specifically - it turns `01n`'s hollow ring into a near-full disc
+with a notch, further from "crescent", not closer. Left open; would need a
+different source SVG (see [Known gaps](#known-gaps)) or a custom glyph, not
+a `thicken_icon()` tweak.
 
 ### Regenerating icons
 
@@ -190,6 +213,13 @@ Only drawn on forecast cards, gated by `config.show_moon_phase` (default
 
 ## Known gaps
 
-None currently tracked - see `Icon-Plan.md` items 4-5 for accepted-as-is /
-not-yet-scheduled cosmetic gaps (snow-intensity icon differentiation,
-`01n` stroke weight vs. the `wi-moon-*` family).
+- **`01n`'s silhouette doesn't match the `wi-moon-*` family.** The
+  thin/pale-edge dithering problem is fixed (see above), but `01n` is
+  still a structurally different shape (hollow ring outline) from most
+  phase icons (solid-filled) - reads as a denser ring next to them, not a
+  matching crescent. Would need a different source SVG or a custom-drawn
+  glyph to actually close, not a `thicken_icon()` adjustment - see
+  `Icon-Plan.md` item 5.
+- **Snow-intensity icons aren't differentiated** (`71d`/`73d`/`77d` all
+  render as the identical `wi-day-snow`) - accepted as-is, no source-SVG
+  alternative exists. See `Icon-Plan.md` item 4.
