@@ -423,11 +423,109 @@ deterministic assertions (dry, both sides of the 0.2mm boundary exactly,
 sub-1mm decimal formatting, and a 2-digit whole-mm amount) - live weather
 won't reliably hit an exact boundary value on any given test run.
 
-A colored per-day border coding overall weather quality (temperature +
-precipitation combined) was also built and demoed, then reverted back to
-a plain black border at the user's request (2026-08-14) - preserved
-un-merged on `feature/forecast-quality-border-color` for later, not part
-of `main`.
+#### Weather-quality classification, computed but not currently drawn
+
+A separate weather-quality classification - how pleasant a day's weather
+is overall, temperature and precipitation combined, worst-of-both-wins,
+the same `max()` combining idiom the "Kwaliteit & Pollen" gauge above
+uses - is fully implemented and still computed every render
+(`weather_data._quality_tier_and_color`, exposed on
+`DayForecast.quality_border_color`), but the card doesn't currently draw
+it anywhere. Kept in place deliberately (confirmed with the user
+2026-08-15) rather than removed, for a different visual treatment later
+than the colored-border version this was originally built as.
+
+#### Editable in `weather_quality.toml`, not hardcoded
+
+The temperature/precipitation ranges and their colors live in
+**`weather_quality.toml`** (repo root), not in Python - edit it directly
+to change the scheme (confirmed with the user 2026-08-15, keeping the
+values below as the shipped defaults for now). It's re-read fresh on
+every render tick (`main.py` is already a one-shot process per tick, same
+as `config.py`), so an edit takes effect on the very next scheduled
+render - no restart needed. The resolved tier/color aren't drawn
+anywhere yet (see above), but every edit here is still live in
+`DayForecast.quality_border_color` for whenever that changes.
+
+Schema: an ordered `[tiers]` table (name -> color, **declaration order is
+the severity order**, best first) plus two ordered band lists, each entry
+a `{max, tier}` pair walked top-to-bottom - the first band whose `max`
+the value is under wins, and the last band (no `max`) catches everything
+above the previous one:
+
+```toml
+[tiers]
+Goed = "green"
+Matig = "yellow"
+Slecht = "orange"
+"Zeer slecht" = "red"
+
+[[temperature]]   # by the day's forecast high, deg C
+max = -5
+tier = "Zeer slecht"
+# ...
+
+[[precipitation]]   # by the day's precipitation_sum, mm
+max = 0.2
+tier = "Goed"
+# ...
+```
+
+Colors must be one of the panel's 7 fixed inks (black/white/green/blue/
+red/yellow/orange - see "Color palette" below); anything else won't
+render as a flat color. The shipped defaults:
+
+| Temperature range | Tier | | Precipitation range | Tier |
+|---|---|---|---|---|
+| < -5°C (strenge vorst) | Zeer slecht | | < 0.2mm (droog) | **Goed** |
+| -5 to 0°C (vorst) | Slecht | | 0.2 to 5mm (lichte neerslag) | Matig |
+| 0 to 14°C (koud/koel) | Matig | | 5 to 15mm (neerslag) | Slecht |
+| 15 to 25°C (aangenaam) | **Goed** | | ≥ 15mm (zware neerslag) | Zeer slecht |
+| 26 to 31°C (warm) | Slecht | | | |
+| ≥ 32°C (hittegolf) | Zeer slecht | | | |
+
+The precipitation table's first band's `max` is **not** the same knob as
+`weather_data.FORECAST_DRY_MM_THRESHOLD` above (the mm-text's actual
+dry/wet gate) - they happen to share the same 0.2mm value today, but
+editing this file only changes the (currently unused)
+`quality_border_color` classification, not whether the mm text shows.
+Kept deliberately separate rather than merged into one knob, since the
+classification is inert for now and shouldn't silently change something
+actually visible.
+
+**Combining**: `weather_data._quality_tier_and_color` takes the worse of
+the day's temperature and precipitation tiers (by the `[tiers]` table's
+declaration order) - same worst-of-both-wins `max()` idiom the "Kwaliteit
+& Pollen" gauge above uses, on a scale deliberately separate from
+`COMBINED_TIERS` (that one's AQI/pollen's own, a different concern). The
+resolved `(tier, color)` is stored on `DayForecast.quality_border_color`
+but not currently drawn - originally rendered as the card's outline color
+(a colored **border**, not a filled background, so the card interior
+stayed white), reverted to a plain black border 2026-08-15 while keeping
+the classification itself intact for a future use.
+
+**Fails soft**: a missing file, unparseable TOML, or a tier/color
+reference that doesn't resolve (e.g. a typo'd color name) falls back to
+a hardcoded copy of the defaults above - logging a warning, not crashing
+the render - same leniency `settings_store.load_config()` already
+applies to a corrupted `settings.json`.
+
+#### Worked examples
+
+| High | Precip | Tier | Why |
+|---|---|---|---|
+| 20°C (Goed) | 0mm (Goed) | Goed | both inputs agree |
+| 5°C (Matig) | 0mm (Goed) | Matig | dry but cold - still just "fair" |
+| 28°C (Slecht) | 0mm (Goed) | Slecht | heat is the bigger driver |
+| 20°C (Goed) | 20mm (Zeer slecht) | Zeer slecht | heavy rain is the bigger driver |
+| -2°C (Slecht) | 20mm (Zeer slecht) | Zeer slecht | both inputs bad, worse of the two wins |
+
+See `scripts/test_forecast_quality_scenarios.py` for these and more as
+executable, deterministic assertions (every tier, both boundary edges
+exactly, the two inputs disagreeing in opposite directions, and
+`weather_quality.toml`'s fail-soft fallback) - live weather won't
+reliably hit an exact boundary value or a rare combination (a heatwave
+day that's also drenched) on any given test run.
 
 ## Via the web UI (`web_app.py`, always-on)
 

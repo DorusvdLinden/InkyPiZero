@@ -67,7 +67,11 @@ class Palette:
         self.chart_cool = c["blue"]
         self.chart_zero_line = c["black"]
 
-        # forecast cards (widgets/forecast.py)
+        # forecast cards (widgets/forecast.py) - plain black border.
+        # weather_data.py's weather-quality classification pipeline
+        # (weather_quality.toml, _quality_tier_and_color,
+        # DayForecast.quality_border_color) is deliberately kept and still
+        # computed every render, just not consumed here for now.
         self.card_border = c["black"]
 
         # header (canvas.py) - was a soft dark gray (51,51,51) for visual

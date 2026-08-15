@@ -73,6 +73,12 @@ def _fit_stacked_lines(assets, top_text: str, bottom_text: str, max_size: int, m
 
 def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
     draw = ImageDraw.Draw(image)
+    # Plain black border - the weather-quality classification pipeline
+    # (weather_data.py: weather_quality.toml, _load_weather_quality_config,
+    # _band_tier, _quality_tier_and_color, DayForecast.quality_border_color)
+    # is deliberately kept and still computed every render; this card just
+    # doesn't consume the resolved color for its border, at the user's
+    # request, for a different use later.
     draw.rounded_rectangle(
         [region.x, region.y, region.right - 1, region.bottom - 1],
         radius=8, outline=PALETTE.card_border, width=2,

@@ -958,10 +958,14 @@ fresh-context review caught before merge (a font-overflow edge case at
 high `forecast_days`, and a truncation bug misclassifying some sub-zero
 fractional temperatures). **Reverted back to a plain black border at the
 user's request** after seeing both live on the real Pi - the colored
-version is fully preserved, un-merged, on
-`feature/forecast-quality-border-color` for later, including all of the
-above; nothing about the rain-mm half needed to change to revert it, they
-shared data but not rendering code.
+version was preserved, un-merged, on `feature/forecast-quality-border-color`
+for later; nothing about the rain-mm half needed to change to revert it,
+they shared data but not rendering code. That branch's own history
+continued separately (entries 39-41): the classification later moved to
+an editable `weather_quality.toml`, then was itself merged into `main`
+with the border still reverted to black - the classification pipeline is
+live in `main` (computed every render) but, same as here, not currently
+drawn anywhere.
 
 **A real layout bug caught by rendering, not reasoning about it** (this
 part stayed relevant after the revert, since the mm text is still
@@ -1246,6 +1250,186 @@ interaction beyond the pre-existing, already-logged moon-row overlap
 (`TODO.md`); full `scripts/test_forecast_rain_scenarios.py` and
 `scripts/test_locations.py` (14 locations, 3 modes) regressions passed
 after every revision.
+
+### 39. Forecast cards: rain amount + weather-quality border color (original build)
+Branch `feature/forecast-rain-quality-cards`
+
+Two additions to the multi-day forecast row, requested together since
+both need the same new daily-precipitation data: (1) the expected rain
+amount ("3mm", "0.6mm") drawn next to each day's icon, only when rain is
+actually expected; (2) each card's border colored by how pleasant that
+day's weather is overall (temperature + precipitation combined), using
+the same worst-of-both-wins `max()` idiom entry 32's "Kwaliteit & Pollen"
+gauge already established.
+
+`OPEN_METEO_FORECAST_URL`'s `daily=` list gained `precipitation_sum` -
+Open-Meteo's own rain+showers+snowfall water-equivalent sum, already in
+mm since `precipitation_unit=mm` was already fixed for the whole request.
+`DayForecast` gained `precip_mm`/`rain_expected`/`quality_tier_index`,
+all computed once in `_parse_forecast()` per this codebase's established
+separation (classification lives in `weather_data.py`; widgets only draw
+what they're handed). A fresh small `FORECAST_QUALITY_TIERS` scale
+(`["Goed", "Matig", "Slecht", "Zeer slecht"]`) - deliberately not
+`COMBINED_TIERS`, which is entry 32's own 5-tier AQI/pollen scale, a
+different concern.
+
+**Changed mid-build from a filled card background to a colored border**
+(confirmed with the user) - simpler, and it sidesteps two questions a
+filled background would have raised: text/icon contrast against a
+saturated fill, and a hardcoded-white "cloud interior" icon element
+(`widgets/palette.py`'s `cloud_interior`, baked into the icon PNGs at
+generation time) no longer reading as "paper showing through" against a
+non-white card. With the border-only approach neither applies - the card
+interior stays exactly as it always was.
+
+**A real layout bug caught by rendering, not reasoning about it**: at a
+higher `forecast_days` setting, cards are narrower but the icon stays the
+same height-bound size, so a longer rain amount like "0.6mm" at a fixed
+font size overflowed past the card's border - visible once actually
+rendered at `forecast_days=10`, not obvious from the numbers alone. Fixed
+by giving `widgets/forecast.py` its own `_fit_font` shrink-to-fit helper,
+mirroring `WeatherCanvas._fit_font` (`canvas.py`, entry 22) - can't reuse
+that one directly (widgets never import from `canvas.py` - the dependency
+runs the other way), so this is a small intentional duplication of the
+same two-line pattern rather than a cross-module refactor for it.
+
+**A fresh-context review (per this repo's Mode 2 rule) caught two more
+gaps before merge, both fixed**: (1) the first `_fit_font` fix still had
+an artificial 10px floor on the available width, so it silently
+reintroduced the same overflow at a high enough `forecast_days` (verified
+at 12, where only 6px is genuinely available) - removed the floor and
+instead skip the mm text entirely when even the smallest font still
+doesn't fit, same as a dry day, rather than ever drawing something that
+overflows; (2) `_temp_quality_tier` was fed the already-int-truncated
+`high` used for display, and `int()` truncates toward zero, so a real
+high of e.g. -0.3°C became `0` and landed a tier too nice ("Matig"
+instead of "Slecht") - fixed by classifying off the raw float before
+truncation, leaving the display value untouched.
+
+**Outdated - superseded by entry 41** (reverted to a plain black border,
+the classification pipeline preserved but unused). Verified at the time:
+`scripts/test_forecast_quality_scenarios.py` (new, 12 scenarios - every
+tier, both boundary edges exactly at 0.2mm/26°C, the two inputs
+disagreeing in opposite directions, the mm-text on/off gate); a full
+14-location `scripts/test_locations.py` regression (no crashes, run
+twice - before and after the review fixes); direct visual checks of a
+real live render (a 36°C day correctly red, rainy days correctly
+yellow/orange with sensible mm amounts next to real rain-cloud icons),
+the `forecast_days=10` + `show_moon_phase=True` tight-layout case that
+caught the first overflow bug, and `forecast_days=12` (the review's own
+flagged case) confirming the text now omits cleanly instead of
+overflowing; and the exact boundary values (-0.3°C, -5.7°C) the review
+traced through `_temp_quality_tier` by hand to confirm the truncation fix.
+
+### 40. Forecast-card quality tiers move to an editable weather_quality.toml
+Branch `feature/forecast-quality-border-color`
+
+Entry 39's temperature/precipitation ranges and colors were hardcoded
+Python (`_temp_quality_tier`/`_precip_quality_tier`/
+`FORECAST_QUALITY_TIERS`). The user wants to edit the scheme themselves
+without touching code - confirmed keeping today's exact values for now
+("keep the existing color system, I will edit later"), so this is purely
+a mechanism change, not a redesign. New `weather_quality.toml` (repo
+root) holds an ordered `[tiers]` table (name -> color, declaration order
+*is* severity order) plus two ordered `{max, tier}` band lists for
+temperature and precipitation - an exact re-encoding of the previous
+hardcoded bands. TOML over YAML/JSON: Python's stdlib `tomllib` (shipped
+since 3.11, confirmed available - the deployed Pi runs 3.13.5) needs no
+new dependency, and unlike JSON it supports comments, which matters since
+the file's whole purpose is being hand-edited later without reading
+`weather_data.py` to understand it.
+
+`weather_data._load_weather_quality_config()` re-reads the file fresh on
+every render tick (no caching - `main.py` is already a one-shot process
+per tick, matching `config.py`/`settings_store.py`'s own re-read-every-run
+pattern) - an edit takes effect on the very next scheduled render, no
+restart needed. **Fails soft** on any problem (missing file, unparseable
+TOML, a tier/color reference that doesn't resolve) by falling back to a
+hardcoded copy of the shipped defaults, logging a warning rather than
+crashing the render - the same leniency `settings_store.load_config()`
+already applies to a corrupted `settings.json`, needed here for exactly
+the same reason: a hand-edited file is exactly what typos happen to.
+
+`DayForecast.quality_tier_index` (an int into `FORECAST_QUALITY_TIERS`)
+became `quality_border_color` (the resolved RGB tuple) -
+`weather_data._quality_tier_and_color()` now does the full temperature/
+precipitation-tier lookup *and* the tier-name-to-color resolution in one
+place, so `widgets/forecast.py` just uses the value directly as the
+border's `outline=` color with no lookup of its own. This also let
+`widgets/palette.py`'s `forecast_border_good/fair/poor/bad` fields and
+the `PALETTE` import in `widgets/forecast.py` go away entirely -
+`native_colors()` (already used for exactly this name-to-RGB resolution
+elsewhere) is now called from `weather_data.py` directly instead of
+being wrapped in dedicated `Palette` fields, and nothing else needed
+them. `rain_expected` now derives from the same config's precipitation
+table instead of a separate `FORECAST_DRY_MM_THRESHOLD` constant, so the
+border color and the mm-text gate can't drift out of sync from two
+separately-hand-edited numbers.
+
+**A fresh-context review (per this repo's Mode 2 rule) caught four real
+gaps before merge, all fixed**: (1) the border color was resolved via the
+shared `PALETTE.saturation`, but `fetch_snapshot()` (which computes it)
+always runs *before* `WeatherCanvas.__init__` ever calls
+`PALETTE.set_saturation(config.inky_saturation)` for that render - so
+anyone with a non-default `inky_saturation` got the 0.0 module-load
+default's colors instead, a reintroduction of the exact bug class entry
+26 already fixed once. Fixed by threading `config.inky_saturation`
+through `_parse_forecast`/`_quality_tier_and_color` explicitly instead of
+reading the timing-dependent singleton - confirmed the same bug still
+exists, unfixed, for `get_uv_color()` (pre-existing, unrelated to this
+branch), logged to `TODO.md` rather than fixed here. (2)
+`_validate_weather_quality_config` didn't require the last
+temperature/precipitation band to be a catch-all (no `max`) - a config
+missing one would silently score an out-of-range extreme value (e.g. a
+45°C day) as the *best* tier instead of the worst, via `_band_tier`'s
+defensive fallback. (3) it also didn't check that a band's `max` was
+actually numeric - a quoted value (`max = "cold"`) passed validation and
+then crashed `_band_tier`'s `<` comparison, contradicting the whole
+fail-soft premise. (4) `_load_weather_quality_config`'s exception handler
+didn't catch `UnicodeDecodeError`, so a non-UTF-8 hand-edit (a realistic
+mishap for a file explicitly meant to be edited by hand) crashed the
+render instead of falling back.
+
+**Active** - current design. Verified: zero behavior change confirmed by
+diffing a live render taken immediately before and after switching to
+the file-driven path (identical colors, same location/day); an
+edit-takes-effect check (changed `Matig`'s color to blue in the TOML
+file, re-rendered with no code change, confirmed blue appeared, then
+reverted); `scripts/test_forecast_quality_scenarios.py` (rewritten to
+assert resolved RGB colors instead of tier indices, plus 6 fail-soft
+scenarios - missing file, invalid color, unparseable TOML, non-UTF-8
+bytes, a missing catch-all band, and a non-numeric `max` - and a
+dedicated saturation-threading scenario reproducing finding (1) against
+a non-default `inky_saturation`); and a full 14-location
+`scripts/test_locations.py` regression, run both before and after the
+review fixes.
+
+### 41. Forecast cards: revert to a plain black border, keep the weather-quality pipeline
+Branch `feature/forecast-quality-border-color`
+
+Entries 33-34's colored border (temperature+precipitation tier ->
+resolved color, drawn as the card's `outline=`) is reverted back to a
+plain black border (`PALETTE.card_border`) - at the user's explicit
+request, so they can reuse the classification for a different visual
+treatment later ("I will use them later") rather than losing the work.
+Only `widgets/forecast.py`'s `draw_forecast_card` changed (one line:
+`outline=day.quality_border_color` -> `outline=PALETTE.card_border`,
+`width=3` -> `2` to match this repo's other black-border precedent) -
+`weather_data.py`'s entire weather-quality pipeline (`weather_quality.toml`,
+`_load_weather_quality_config`, `_validate_weather_quality_config`,
+`_band_tier`, `_quality_tier_and_color`, `DayForecast.quality_border_color`)
+is untouched and still computed every render, just not consumed for the
+border anymore. `widgets/palette.py`'s `card_border` field (already
+present, previously unused by forecast cards specifically) is back in
+active use; its comment updated to say so instead of claiming no one
+reads it.
+
+**Active** - current design. Verified: `scripts/test_forecast_quality_scenarios.py`
+still passes unchanged (asserts `DayForecast.quality_border_color`
+directly - a data-level check, unaffected by what the widget draws with
+it); visually confirmed a scenario expected to resolve red (heavy rain,
+mild temp) now renders with a plain black border instead; full
+`scripts/test_locations.py` (14 locations, 3 modes) regression passed.
 
 ---
 

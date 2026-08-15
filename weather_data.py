@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import time
+import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone, date
 
@@ -418,6 +419,10 @@ class DayForecast:
     moon_icon_key: str
     precip_mm: float
     rain_expected: bool
+    # Computed every render but not currently drawn anywhere - see
+    # widgets/forecast.py's draw_forecast_card and docs/settings.md's
+    # "Forecast cards" section. Kept for a different visual use later.
+    quality_border_color: tuple[int, int, int]
 
 
 @dataclass
@@ -655,16 +660,144 @@ def _lki_tier_index(lki: int) -> int:
 
 
 # Forecast card mm-rain text: below this daily precipitation_sum (mm), a
-# day counts as dry and no amount is shown next to its icon.
+# day counts as dry and no amount is shown next to its icon. Deliberately
+# independent of weather_quality.toml's own precipitation table below -
+# that one drives the (currently unused) quality classification, this one
+# drives the actually-visible mm-text gate; they happen to agree today
+# (both 0.2mm) but aren't meant to be the same knob.
 FORECAST_DRY_MM_THRESHOLD = 0.2
 
+WEATHER_QUALITY_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weather_quality.toml")
 
-def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
+# Multi-day forecast-card weather-quality classification: a "how nice is
+# this day" score combining temperature and precipitation, worst-of-both-
+# wins via max() (same combining idiom as _combine_aqi_pollen_tier).
+# Computed every render (DayForecast.quality_border_color) but not
+# currently drawn anywhere - kept for a different visual use later, see
+# docs/settings.md's "Forecast cards" section. The actual ranges and
+# colors are user-editable in weather_quality.toml rather than hardcoded
+# here - this dict is only the fallback used when that file is
+# missing/unreadable/invalid, kept in exact sync with the file's own
+# shipped defaults.
+_DEFAULT_WEATHER_QUALITY_CONFIG = {
+    "tiers": {"Goed": "green", "Matig": "yellow", "Slecht": "orange", "Zeer slecht": "red"},
+    "temperature": [
+        {"max": -5, "tier": "Zeer slecht"},
+        {"max": 0, "tier": "Slecht"},
+        {"max": 15, "tier": "Matig"},
+        {"max": 26, "tier": "Goed"},
+        {"max": 32, "tier": "Slecht"},
+        {"tier": "Zeer slecht"},
+    ],
+    "precipitation": [
+        {"max": 0.2, "tier": "Goed"},
+        {"max": 5, "tier": "Matig"},
+        {"max": 15, "tier": "Slecht"},
+        {"tier": "Zeer slecht"},
+    ],
+}
+
+
+def _validate_weather_quality_config(config: dict) -> bool:
+    """True if config has the shape _band_tier/_quality_tier_and_color
+    expect - every tier maps to one of the panel's 7 ink names; every
+    temperature/precipitation band references a defined tier and has a
+    numeric "max" whenever "max" is present (a quoted/non-numeric "max"
+    would otherwise pass this check and then crash _band_tier's `<`
+    comparison); and both band lists end with a catch-all (last entry has
+    no "max") - without one, a value beyond the last threshold would
+    silently fall through to _band_tier's default_tier (the best/mildest
+    tier) instead of the worst one, e.g. a 45C day reading as "Goed".
+
+    Catches AttributeError too, not just KeyError/TypeError: a plausible
+    hand-edit mistake is doubling `[tiers]`'s brackets to `[[tiers]]`
+    (copying the `[[temperature]]`/`[[precipitation]]` array-of-tables
+    style right next to it) - tomllib then parses "tiers" as a list of
+    dicts, and `tiers.values()` below raises AttributeError rather than
+    the TypeError a wrong-but-still-dict-like value would."""
+    try:
+        tiers = config["tiers"]
+        valid_colors = set(native_colors(0.0).keys())
+        if not tiers or any(color not in valid_colors for color in tiers.values()):
+            return False
+        for key in ("temperature", "precipitation"):
+            bands = config[key]
+            if not bands or "max" in bands[-1]:
+                return False
+            for band in bands:
+                if band["tier"] not in tiers:
+                    return False
+                if "max" in band and (isinstance(band["max"], bool) or not isinstance(band["max"], (int, float))):
+                    return False
+        return True
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
+def _load_weather_quality_config() -> dict:
+    """Reads weather_quality.toml fresh on every call - no caching,
+    main.py is already a one-shot process per render tick, so a hand
+    edit takes effect on the very next scheduled render. Falls back to
+    _DEFAULT_WEATHER_QUALITY_CONFIG (logging a warning) on any problem -
+    missing file, unreadable encoding, unparseable TOML, or an invalid
+    tier/color/max reference - same leniency philosophy as
+    settings_store.load_config(): a typo in a hand-edited file must never
+    take the render pipeline down with it."""
+    try:
+        with open(WEATHER_QUALITY_CONFIG_PATH, "rb") as f:
+            config = tomllib.load(f)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        logger.warning("Could not read %s, using defaults: %s", WEATHER_QUALITY_CONFIG_PATH, e)
+        return _DEFAULT_WEATHER_QUALITY_CONFIG
+    if not _validate_weather_quality_config(config):
+        logger.warning("%s has an invalid tier/color/max reference, using defaults", WEATHER_QUALITY_CONFIG_PATH)
+        return _DEFAULT_WEATHER_QUALITY_CONFIG
+    return config
+
+
+def _band_tier(value: float, bands: list[dict], default_tier: str) -> str:
+    """Walks bands in file order, returning the first whose "max" the
+    value is under - the last band (no "max" key) catches everything
+    above the previous one. default_tier is a defensive-only fallback
+    (unreachable as long as the config's last band omits "max", true of
+    both the shipped file and _DEFAULT_WEATHER_QUALITY_CONFIG)."""
+    for band in bands:
+        if "max" not in band or value < band["max"]:
+            return band["tier"]
+    return default_tier
+
+
+def _quality_tier_and_color(high_c: float, precip_mm: float, quality_config: dict, saturation: float) -> tuple[str, tuple[int, int, int], bool]:
+    """Returns (worst_tier_name, resolved_border_color, rain_expected).
+    rain_expected is True whenever precip_mm's own tier isn't the best
+    (first-declared) tier - deriving it from the same config as the
+    border color means editing weather_quality.toml's dry/wet boundary
+    updates both consistently, instead of two thresholds that could
+    silently drift apart.
+
+    Takes saturation explicitly (config.inky_saturation) rather than
+    reading the shared PALETTE.saturation - fetch_snapshot() (and thus
+    this) always runs before WeatherCanvas.__init__ ever calls
+    PALETTE.set_saturation() for this render, so PALETTE.saturation would
+    still be whichever value it was last synced to (the 0.0 module-load
+    default on every one-shot main.py run), not this render's configured
+    saturation - the exact bug class entry 26/
+    docs/plans/palette-saturation-sync-fix.md already fixed elsewhere."""
+    tier_order = list(quality_config["tiers"].keys())
+    temp_tier = _band_tier(high_c, quality_config["temperature"], tier_order[0])
+    precip_tier = _band_tier(precip_mm, quality_config["precipitation"], tier_order[0])
+    worst_tier = max(temp_tier, precip_tier, key=tier_order.index)
+    color = native_colors(saturation)[quality_config["tiers"][worst_tier]]
+    return worst_tier, color, precip_tier != tier_order[0]
+
+
+def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
     temp_max = daily_data.get("temperature_2m_max", [])
     temp_min = daily_data.get("temperature_2m_min", [])
     precip_sums = daily_data.get("precipitation_sum", [])
+    quality_config = _load_weather_quality_config()
 
     forecast = []
     for i in range(len(times)):
@@ -692,6 +825,15 @@ def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
         moon_icon_key = get_moon_phase_icon_key(phase_name, lat)
 
         precip_mm = float(precip_sums[i]) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
+        # Tier from the raw (un-truncated) high, not the display-rounded
+        # int below - int() truncates toward zero, so e.g. -0.3 -> 0 would
+        # otherwise land a real "-5 to 0 C" day one tier too nice. The
+        # rain_expected this also returns is intentionally discarded (`_`)
+        # in favor of FORECAST_DRY_MM_THRESHOLD below - see that
+        # constant's comment for why they're kept as two separate knobs
+        # rather than one.
+        high_raw = float(temp_max[i]) if i < len(temp_max) else 0.0
+        _, quality_border_color, _ = _quality_tier_and_color(high_raw, precip_mm, quality_config, saturation)
 
         forecast.append(DayForecast(
             day_label=format_day_abbr_nl(dt),
@@ -702,6 +844,7 @@ def _parse_forecast(daily_data, tz, lat) -> list[DayForecast]:
             moon_icon_key=moon_icon_key,
             precip_mm=precip_mm,
             rain_expected=precip_mm >= FORECAST_DRY_MM_THRESHOLD,
+            quality_border_color=quality_border_color,
         ))
     return forecast
 
@@ -968,7 +1111,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     is_day = current.get("is_day", 1)
     current_icon_key = map_weather_code_to_icon(weather_code, is_day)
 
-    daily_forecast = _parse_forecast(daily, tz, config.latitude)
+    daily_forecast = _parse_forecast(daily, tz, config.latitude, config.inky_saturation)
     data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation)
     hourly, sun_events, precip_label = _parse_hourly(
         weather_data.get("hourly", {}), tz, config.time_format,

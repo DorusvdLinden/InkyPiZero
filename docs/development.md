@@ -61,6 +61,15 @@ python main.py --mock-output output.png
   since live weather can't reliably guarantee an exact boundary value
   (precipitation_sum landing on exactly the 0.2mm dry/wet cutoff) on any
   given run.
+- `python scripts/test_forecast_quality_scenarios.py` - covers the
+  multi-day forecast cards' weather-quality classification (computed
+  every render but not currently drawn - a plain black border, see
+  [settings.md](./settings.md)'s "Forecast cards" section) via crafted
+  daily high-temp/precipitation fixtures, since live weather can't
+  reliably guarantee an exact tier boundary or two inputs disagreeing in
+  opposite directions on any given run; also covers `weather_quality.toml`'s
+  fail-soft fallback (missing/invalid file) since that's exactly the kind
+  of thing a hand-edited file can break in ways live testing won't catch.
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
   skip/force decision (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.
