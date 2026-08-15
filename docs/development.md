@@ -56,8 +56,10 @@ python main.py --mock-output output.png
   value, since live weather can't reliably guarantee season/hemisphere
   coverage or a specific LKI+pollen combination on any given run.
 - `python scripts/test_forecast_quality_scenarios.py` - covers the
-  multi-day forecast cards' weather-quality border color and rain-mm text
-  (see [settings.md](./settings.md)'s "Forecast cards" section) via
+  multi-day forecast cards' weather-quality classification (computed but
+  not currently drawn - a plain black border again, see
+  [settings.md](./settings.md)'s "Forecast cards" section) and rain-mm
+  text via
   crafted daily high-temp/precipitation fixtures, since live weather can't
   reliably guarantee an exact tier boundary or two inputs disagreeing in
   opposite directions on any given run; also covers `weather_quality.toml`'s

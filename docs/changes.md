@@ -1028,6 +1028,33 @@ a non-default `inky_saturation`); and a full 14-location
 `scripts/test_locations.py` regression, run both before and after the
 review fixes.
 
+### 35. Forecast cards: revert to a plain black border, keep the weather-quality pipeline
+Branch `feature/forecast-quality-border-color`
+
+Entries 33-34's colored border (temperature+precipitation tier ->
+resolved color, drawn as the card's `outline=`) is reverted back to a
+plain black border (`PALETTE.card_border`) - at the user's explicit
+request, so they can reuse the classification for a different visual
+treatment later ("I will use them later") rather than losing the work.
+Only `widgets/forecast.py`'s `draw_forecast_card` changed (one line:
+`outline=day.quality_border_color` -> `outline=PALETTE.card_border`,
+`width=3` -> `2` to match this repo's other black-border precedent) -
+`weather_data.py`'s entire weather-quality pipeline (`weather_quality.toml`,
+`_load_weather_quality_config`, `_validate_weather_quality_config`,
+`_band_tier`, `_quality_tier_and_color`, `DayForecast.quality_border_color`)
+is untouched and still computed every render, just not consumed for the
+border anymore. `widgets/palette.py`'s `card_border` field (already
+present, previously unused by forecast cards specifically) is back in
+active use; its comment updated to say so instead of claiming no one
+reads it.
+
+**Active** - current design. Verified: `scripts/test_forecast_quality_scenarios.py`
+still passes unchanged (asserts `DayForecast.quality_border_color`
+directly - a data-level check, unaffected by what the widget draws with
+it); visually confirmed a scenario expected to resolve red (heavy rain,
+mild temp) now renders with a plain black border instead; full
+`scripts/test_locations.py` (14 locations, 3 modes) regression passed.
+
 ---
 
 ## Pruned branches

@@ -1,6 +1,7 @@
 from PIL import ImageDraw
 
 from widgets.icons import thicken_icon
+from widgets.palette import PALETTE
 
 
 def _fit_font(assets, text: str, max_size: int, max_width: float, min_size: int = 8):
@@ -19,12 +20,16 @@ def _fit_font(assets, text: str, max_size: int, max_width: float, min_size: int 
 
 def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
     draw = ImageDraw.Draw(image)
-    # day.quality_border_color is already a resolved RGB tuple (see
-    # weather_data._quality_tier_and_color) - user-editable via
-    # weather_quality.toml, nothing left to look up here.
+    # Plain black border again (2026-08-15) - the weather-quality
+    # classification pipeline (weather_data.py: weather_quality.toml,
+    # _load_weather_quality_config, _band_tier, _quality_tier_and_color,
+    # DayForecast.quality_border_color) is deliberately left in place and
+    # still computed every render; this card just doesn't consume the
+    # resolved color for its border anymore, at the user's request, for a
+    # different use later.
     draw.rounded_rectangle(
         [region.x, region.y, region.right - 1, region.bottom - 1],
-        radius=8, outline=day.quality_border_color, width=3,
+        radius=8, outline=PALETTE.card_border, width=2,
     )
 
     icon_size = int(min(region.w * 0.85, region.h * 0.45))

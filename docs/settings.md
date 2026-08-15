@@ -378,16 +378,22 @@ weeds not modeled here, e.g. nettle/sorrel/plantain) under a broader
 Netherlands-focused service reports even when both are working correctly -
 a real, permanent data-source gap (see `TODO.md`), not a bug.
 
-### Forecast cards: rain amount + weather-quality border
+### Forecast cards: rain amount (+ weather-quality classification, computed but not shown)
 
-Each card in the multi-day forecast row (`widgets/forecast.py`) shows two
-things beyond the icon and high/low temperature, added 2026-08-14:
+Each card in the multi-day forecast row (`widgets/forecast.py`) shows the
+expected **rain amount** ("3mm", "0.6mm", etc.) next to the icon, added
+2026-08-14, only on days where rain is actually expected. The border
+itself is plain black (`PALETTE.card_border`).
 
-- **Rain amount** ("3mm", "0.6mm", etc.) drawn next to the icon, only on
-  days where rain is actually expected.
-- **A colored border** coding how pleasant that day's weather is overall -
-  temperature and precipitation combined, worst-of-both-wins, the same
-  `max()` combining idiom the "Kwaliteit & Pollen" gauge above uses.
+A separate weather-quality classification - how pleasant a day's weather
+is overall, temperature and precipitation combined, worst-of-both-wins,
+the same `max()` combining idiom the "Kwaliteit & Pollen" gauge above
+uses - is fully implemented and still computed every render
+(`weather_data._quality_tier_and_color`, exposed on
+`DayForecast.quality_border_color`), but the card doesn't currently draw
+it anywhere. Kept in place deliberately (confirmed with the user
+2026-08-15) rather than removed, for a different visual treatment later
+than the colored-border version this was originally built as.
 
 #### Editable in `weather_quality.toml`, not hardcoded
 
@@ -397,7 +403,9 @@ to change the scheme (confirmed with the user 2026-08-15, keeping the
 values below as the shipped defaults for now). It's re-read fresh on
 every render tick (`main.py` is already a one-shot process per tick, same
 as `config.py`), so an edit takes effect on the very next scheduled
-render - no restart needed.
+render - no restart needed. The resolved tier/color aren't drawn
+anywhere yet (see above), but every edit here is still live in
+`DayForecast.quality_border_color` for whenever that changes.
 
 Schema: an ordered `[tiers]` table (name -> color, **declaration order is
 the severity order**, best first) plus two ordered band lists, each entry
@@ -438,17 +446,19 @@ render as a flat color. The shipped defaults:
 
 The precipitation table's first band's `max` doubles as the "is rain
 expected" gate for the mm text (`DayForecast.rain_expected`) - editing it
-updates both the border color and the mm-text gate together, one number
-instead of two that could drift apart.
+updates both `quality_border_color`'s classification and the mm-text gate
+together, one number instead of two that could drift apart.
 
 **Combining**: `weather_data._quality_tier_and_color` takes the worse of
 the day's temperature and precipitation tiers (by the `[tiers]` table's
 declaration order) - same worst-of-both-wins `max()` idiom the "Kwaliteit
 & Pollen" gauge above uses, on a scale deliberately separate from
 `COMBINED_TIERS` (that one's AQI/pollen's own, a different concern). The
-result renders as the card's outline color - a colored **border**, not a
-filled background, so the card interior stays white and nothing about
-existing icon/text rendering had to change.
+resolved `(tier, color)` is stored on `DayForecast.quality_border_color`
+but not currently drawn - originally rendered as the card's outline color
+(a colored **border**, not a filled background, so the card interior
+stayed white), reverted to a plain black border 2026-08-15 while keeping
+the classification itself intact for a future use.
 
 **Fails soft**: a missing file, unparseable TOML, or a tier/color
 reference that doesn't resolve (e.g. a typo'd color name) falls back to
