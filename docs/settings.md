@@ -381,22 +381,32 @@ a real, permanent data-source gap, not a bug.
 ### Forecast cards: rain amount
 
 Each card in the multi-day forecast row (`widgets/forecast.py`) shows the
-expected rain amount ("3mm", "0.6mm", etc.) next to its icon, added
-2026-08-14, drawn only on days where rain is actually expected -
-`DayForecast.rain_expected` is `True` when Open-Meteo's daily
-`precipitation_sum` (mm, rain+showers+snowfall water-equivalent - added to
-`OPEN_METEO_FORECAST_URL`'s `daily=` list specifically for this feature)
-is at least `weather_data.FORECAST_DRY_MM_THRESHOLD` (0.2mm). Amounts
-under 1mm keep a decimal ("0.6mm") rather than rounding to a
-contradictory "0mm" next to an icon that's flagging rain.
+expected rain amount next to its icon, added 2026-08-14, drawn only on
+days where rain is actually expected - `DayForecast.rain_expected` is
+`True` when Open-Meteo's daily `precipitation_sum` (mm, rain+showers+
+snowfall water-equivalent - added to `OPEN_METEO_FORECAST_URL`'s `daily=`
+list specifically for this feature) is at least
+`weather_data.FORECAST_DRY_MM_THRESHOLD` (0.2mm). Amounts under 1mm keep a
+decimal ("0.6") rather than rounding to a contradictory "0" next to an
+icon that's flagging rain. The number and its "mm" unit are drawn as two
+stacked lines (number on top, "mm" below - changed 2026-08-15, was a
+single inline "0.6mm" string originally) so the number reads first at a
+glance.
 
-The mm text's font shrinks to fit the remaining card width if needed
-(`widgets/forecast.py::_fit_font`, same shrink-to-fit approach
-`WeatherCanvas._fit_font` in `canvas.py` already uses for compact-mode
-data-point labels) - narrower cards at a higher `forecast_days` setting
-would otherwise let a longer amount like "0.6mm" overflow the card's
-border. If even the smallest font genuinely doesn't fit, the text is
-omitted entirely (same as a dry day) rather than ever drawn overflowing.
+The number/unit font shrinks to fit if needed
+(`widgets/forecast.py::_fit_stacked_lines`, same shrink-to-fit approach
+`WeatherCanvas._fit_font` in `canvas.py` uses for compact-mode data-point
+labels) - narrower cards at a higher `forecast_days` setting would
+otherwise let a longer amount like "0.6" or "mm" overflow the card's
+border, and the stacked two-line layout needs roughly twice the vertical
+room the old single-line text did, which could otherwise collide with the
+day-label row below the icon. Width (whichever of the two lines is wider,
+since they're stacked rather than concatenated) and height are checked
+*jointly* per candidate font size, not width-then-height sequentially - a
+smaller size that satisfies both must not be skipped just because a
+larger size already happened to satisfy width alone. If no size in range
+satisfies both, the text is omitted entirely (same as a dry day) rather
+than ever drawn overflowing or colliding.
 
 See `scripts/test_forecast_rain_scenarios.py` for this as executable,
 deterministic assertions (dry, both sides of the 0.2mm boundary exactly,

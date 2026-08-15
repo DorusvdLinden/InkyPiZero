@@ -1081,6 +1081,54 @@ improved over the pre-fix thin/pale version, not silhouette-matched to its
 siblings; full `scripts/test_locations.py` (14 locations, 3 modes)
 regression passed.
 
+### 37. Forecast cards: mm unit moved below the rain number
+Branch `feature/forecast-mm-unit-below-number`
+
+The rain-mm text next to each forecast card's icon was a single inline
+string ("0.6mm", "20mm"). Split into two stacked lines - the number on
+top, "mm" below it - so the number reads first at a glance. No
+`weather_data.py`/`DayForecast` change - `precip_mm`/`rain_expected` were
+already separate fields, this only changed how `widgets/forecast.py`
+draws them.
+
+A first pass added a *separate* vertical-fit check alongside the existing
+horizontal one (two stacked lines need roughly twice the vertical room the
+old single line did) - a numeric sweep across `forecast_days` 8-30 showed
+the horizontal check already happens to gate this in practice (the same
+shrinking `icon_size` that tightens vertical headroom also tightens
+horizontal room), but checking it sequentially rather than jointly meant a
+smaller font size that could satisfy *both* constraints would never be
+tried once a larger size already passed the width-only check, per a
+fresh-context review. Replaced `_fit_font` with `_fit_stacked_lines`
+(`widgets/forecast.py`): one shrink-to-fit loop that checks width and
+height together per candidate size and returns the draw position
+directly, rather than two sequential checks with the position math
+duplicated between the fit check and the actual draw call. `_fit_font`
+itself was then dead code (no other caller in this file) and removed. A
+second review pass caught one more small duplication - `_fit_stacked_lines`
+now returns the already-measured block width alongside the font/position
+tuple, instead of the caller re-measuring both strings a second time.
+
+Also found, logged to `TODO.md`, and deliberately **not** fixed here
+(pre-existing, unrelated): with `show_moon_phase=True` and a wide rain
+amount, the moon-phase percentage row can visually overlap the day-name/
+temps text above it - reproduced against the pre-this-change code too
+(`git stash`), so out of scope for this change's diff.
+
+**Active** - current design. Verified: `scripts/test_forecast_rain_scenarios.py`
+(unaffected - it asserts `DayForecast` fields, not pixel layout); visually
+inspected every scenario's rendered card (sub-1mm decimal, 2-digit whole-mm,
+dry) after each revision of the fit logic; confirmed via a data-level check
+(not just the render) that a synthetic 12-card/2-digit-mm scenario has
+`rain_expected=True` on every card yet correctly omits the text
+(tightest-width case, matching how the original mm-text overflow bug -
+entry 34 - was found); a 30-card extreme case (`forecast_days=30`,
+unbounded by `settings_store` validation) confirmed no text is drawn there
+either, with no vertical collision; confirmed no collision with the
+moon-phase row in the normal (non-overlapping-bug) case
+(`show_moon_phase=True`); full `scripts/test_locations.py` (14 locations,
+3 modes) regression passed after every revision.
+
 ---
 
 ## Pruned branches
