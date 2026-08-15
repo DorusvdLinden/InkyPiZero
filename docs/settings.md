@@ -381,22 +381,42 @@ a real, permanent data-source gap, not a bug.
 ### Forecast cards: rain amount
 
 Each card in the multi-day forecast row (`widgets/forecast.py`) shows the
-expected rain amount ("3mm", "0.6mm", etc.) next to its icon, added
-2026-08-14, drawn only on days where rain is actually expected -
-`DayForecast.rain_expected` is `True` when Open-Meteo's daily
-`precipitation_sum` (mm, rain+showers+snowfall water-equivalent - added to
-`OPEN_METEO_FORECAST_URL`'s `daily=` list specifically for this feature)
-is at least `weather_data.FORECAST_DRY_MM_THRESHOLD` (0.2mm). Amounts
-under 1mm keep a decimal ("0.6mm") rather than rounding to a
-contradictory "0mm" next to an icon that's flagging rain.
+expected rain amount next to its icon, added 2026-08-14, drawn only on
+days where rain is actually expected - `DayForecast.rain_expected` is
+`True` when Open-Meteo's daily `precipitation_sum` (mm, rain+showers+
+snowfall water-equivalent - added to `OPEN_METEO_FORECAST_URL`'s `daily=`
+list specifically for this feature) is at least
+`weather_data.FORECAST_DRY_MM_THRESHOLD` (0.2mm). Amounts under 1mm keep a
+decimal ("0.6") rather than rounding to a contradictory "0" next to an
+icon that's flagging rain. The number and its "mm" unit are drawn as two
+stacked lines (number on top, "mm" below - changed 2026-08-15, was a
+single inline "0.6mm" string originally) so the number reads first at a
+glance, in the same bold size as the day-label/high-low-temp text below
+the icon (changed 2026-08-15 - was a smaller `normal`-weight size before,
+capped at 12px regardless of card width).
 
-The mm text's font shrinks to fit the remaining card width if needed
-(`widgets/forecast.py::_fit_font`, same shrink-to-fit approach
-`WeatherCanvas._fit_font` in `canvas.py` already uses for compact-mode
-data-point labels) - narrower cards at a higher `forecast_days` setting
-would otherwise let a longer amount like "0.6mm" overflow the card's
-border. If even the smallest font genuinely doesn't fit, the text is
-omitted entirely (same as a dry day) rather than ever drawn overflowing.
+The number/unit font shares its *ideal* size with the day-label/temps
+text (`bold_size = max(10, int(region.w * 0.15))`, one shared local
+instead of two separately-computed copies of the same formula) but
+shrinks below it if the card doesn't have room
+(`widgets/forecast.py::_fit_stacked_lines`, 1px-step shrink-to-fit, checking
+width and height together per candidate size rather than sequentially - a
+smaller size that satisfies both must not be skipped just because a
+larger size already happened to satisfy width alone, and the block must
+land with at least a 1px gap above the day-label row, not literally
+touching it). If no size satisfies both width and height, the text is
+omitted entirely (same as a dry day) rather than ever drawn overflowing
+or colliding. The day-name/code itself (e.g. "zo") has always shared the
+same bold size/weight as the temps text below it - the mm-rain text now
+matches all three **at `forecast_days` 5 through 10** (the default, 7,
+falls in the middle of that band). Below 5 (wider cards), `icon_size`
+caps out independently of card width while `bold_size` keeps growing, so
+the mm-text's fixed vertical budget stops growing with it and it shrinks
+well below `bold_size`; above 10 (narrower cards), `available_width`
+alone becomes the binding constraint and the text shrinks or, eventually,
+omits itself entirely, same as before this change. Not an unconditional
+match at every setting - a known gap outside that band, not silently
+pretending otherwise (see `TODO.md`).
 
 See `scripts/test_forecast_rain_scenarios.py` for this as executable,
 deterministic assertions (dry, both sides of the 0.2mm boundary exactly,

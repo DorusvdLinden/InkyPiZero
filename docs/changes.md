@@ -1081,6 +1081,172 @@ improved over the pre-fix thin/pale version, not silhouette-matched to its
 siblings; full `scripts/test_locations.py` (14 locations, 3 modes)
 regression passed.
 
+### 37. Forecast cards: mm unit moved below the rain number
+Branch `feature/forecast-mm-unit-below-number`
+
+The rain-mm text next to each forecast card's icon was a single inline
+string ("0.6mm", "20mm"). Split into two stacked lines - the number on
+top, "mm" below it - so the number reads first at a glance. No
+`weather_data.py`/`DayForecast` change - `precip_mm`/`rain_expected` were
+already separate fields, this only changed how `widgets/forecast.py`
+draws them.
+
+A first pass added a *separate* vertical-fit check alongside the existing
+horizontal one (two stacked lines need roughly twice the vertical room the
+old single line did) - a numeric sweep across `forecast_days` 8-30 showed
+the horizontal check already happens to gate this in practice (the same
+shrinking `icon_size` that tightens vertical headroom also tightens
+horizontal room), but checking it sequentially rather than jointly meant a
+smaller font size that could satisfy *both* constraints would never be
+tried once a larger size already passed the width-only check, per a
+fresh-context review. Replaced `_fit_font` with `_fit_stacked_lines`
+(`widgets/forecast.py`): one shrink-to-fit loop that checks width and
+height together per candidate size and returns the draw position
+directly, rather than two sequential checks with the position math
+duplicated between the fit check and the actual draw call. `_fit_font`
+itself was then dead code (no other caller in this file) and removed. A
+second review pass caught one more small duplication - `_fit_stacked_lines`
+now returns the already-measured block width alongside the font/position
+tuple, instead of the caller re-measuring both strings a second time.
+
+Also found, logged to `TODO.md`, and deliberately **not** fixed here
+(pre-existing, unrelated): with `show_moon_phase=True` and a wide rain
+amount, the moon-phase percentage row can visually overlap the day-name/
+temps text above it - reproduced against the pre-this-change code too
+(`git stash`), so out of scope for this change's diff.
+
+**Active** - current design. Verified: `scripts/test_forecast_rain_scenarios.py`
+(unaffected - it asserts `DayForecast` fields, not pixel layout); visually
+inspected every scenario's rendered card (sub-1mm decimal, 2-digit whole-mm,
+dry) after each revision of the fit logic; confirmed via a data-level check
+(not just the render) that a synthetic 12-card/2-digit-mm scenario has
+`rain_expected=True` on every card yet correctly omits the text
+(tightest-width case, matching how the original mm-text overflow bug -
+entry 34 - was found); a 30-card extreme case (`forecast_days=30`,
+unbounded by `settings_store` validation) confirmed no text is drawn there
+either, with no vertical collision; confirmed no collision with the
+moon-phase row in the normal (non-overlapping-bug) case
+(`show_moon_phase=True`); full `scripts/test_locations.py` (14 locations,
+3 modes) regression passed after every revision.
+
+### 38. Forecast cards: mm-rain text matches the day-code/temps size and weight
+Branch `feature/forecast-mm-unit-below-number`
+
+The rain-mm number/unit (entry 37) was drawn `normal`-weight, capped at
+12px regardless of card width - noticeably smaller and lighter than the
+bold day-name/high-low-temp text right below it in the same card, at the
+user's request to match. `draw_forecast_card` (`widgets/forecast.py`) now
+computes `bold_size = max(10, int(region.w * 0.15))` once and passes it
+as both the mm-text's ideal max size and the day-label/temps font's size,
+so the two can't drift apart by editing one and not the other; the
+day-name/code itself (`day.day_label`) already shared the bold size/weight
+with the temps text before this change - only the mm-rain text's style
+changed. `_fit_stacked_lines` always draws bold now (its one caller's only
+use).
+
+**A multi-agent fresh-context review (7 parallel finder passes) caught two
+real bugs in the first version of this change**, both independently
+confirmed by more than one agent and reproduced directly:
+
+1. **Parity bug silently dropping valid text.** The shrink loop stepped
+   by 2px (`range(max_size, min_size - 1, -2)`), which only ever reaches
+   `min_size` (8) when `max_size` shares its parity. The old code always
+   passed a fixed even `max_size=12`, so this never mattered; `bold_size`
+   varies continuously with card width and lands on odd values roughly
+   half the time. Reproduced concretely: `forecast_days=11`, a day
+   forecasting 20mm - size 8 genuinely satisfies both width and height,
+   but the old loop (starting from odd `bold_size=10`... `9` in some
+   width buckets) never tried it, so the text silently vanished (icon
+   just re-centered as if dry) even though a valid rendering existed.
+   Fixed by stepping 1px at a time instead of 2px - `min_size` is now
+   always reached.
+2. **"Can't drift apart" was an overclaim.** `bold_size` is sized off the
+   full card width, but the mm-text only has `region.w` minus the icon
+   and gaps to work with, and its vertical budget is pinned to
+   `icon_size` (capped independently of card width once cards get wide
+   enough) rather than to `bold_size` itself - so at `forecast_days`
+   below the default (7), the mm-text provably shrinks below `bold_size`
+   even though plenty of horizontal room exists. Not fixed (would mean
+   reworking the card's vertical budget - out of scope for a font-size
+   match); logged the gap plus a related, pre-existing, unrelated bug
+   found along the way (`font_bold` itself has no shrink-to-fit and
+   overflows badly at very low `forecast_days`) to `TODO.md`.
+
+A third, lower-severity finding from the same pass (the block's height
+check allowed it to land literally flush against the day-label row, no
+clearance) is also fixed - `_fit_stacked_lines` gained a `margin`
+parameter (default `1`px, deliberately small: the natural gap at the
+default `forecast_days=7` is itself only ~1px, so a bigger default margin
+would shrink the mm-text below the day-label/temps size at the *default*
+setting, undermining the whole point of sharing that size).
+
+**A follow-up review pass caught two more issues in that fix**, one a
+second overclaim, one an efficiency regression:
+
+3. **The "matches at forecast_days=7 and higher" correction (above) was
+   itself still wrong.** A full sweep (`forecast_days` 1-17) showed the
+   match band is actually 7 *through 10*, not open-ended upward - above
+   10, `available_width` becomes the binding constraint (same as before
+   this change existed) and the text shrinks or omits itself the same way
+   it always has. Corrected `docs/settings.md` to state the real,
+   verified band instead of guessing past what was actually measured.
+4. **Unbounded loop start caused wasted work at low `forecast_days`.**
+   The shrink loop started at `bold_size` directly, and `bold_size` has
+   no upper bound (`settings_store` only validates `forecast_days > 0`,
+   so `forecast_days=1` yields `bold_size≈120`) - but the height
+   constraint can never actually pass above a modest ceiling regardless
+   (derived from `icon_size`'s own fixed cap). Every rainy card at a low
+   `forecast_days` was iterating and font-shaping (`getlength()`, not
+   cached, unlike the font object itself) dozens of pointless sizes on
+   every render - a real Pi Zero W cost. Capped the loop's start (`32`,
+   with real headroom above the observed ceiling - see point 5) and
+   reordered the checks so the cheap, text-independent height check runs
+   *before* the two `getlength()` shaping calls, skipping them entirely
+   for a size the height check would reject anyway - verified zero
+   change in the actual chosen font size across the full `forecast_days`
+   1-17 sweep, a pure efficiency fix.
+
+**A second follow-up pass (8 parallel finders) caught one more real bug -
+the height check's own formula didn't match what actually gets
+rendered:**
+
+5. **Height check was off by half a line-height, needlessly shrinking
+   text.** Both lines are drawn with `anchor="lm"` (each line's y is its
+   own vertical *center*), so the block's true bottom edge is
+   `top_line_y + 1.5 * line_h` - but the check computed
+   `top_line_y + 2 * line_h`, a full half-line more conservative than
+   the real geometry. Confirmed both algebraically and empirically
+   (`forecast_days=6`: old formula capped at font size 15, a
+   geometrically-correct formula reaches 18 - `bold_size` exactly).
+   Fixed the formula to match the actual rendered bottom edge, which
+   widened the real exact-match band from `forecast_days` 7-10 to
+   **5-10** - not a new feature, a correctness fix that happened to
+   recover headroom the layout already had. This also raised the
+   observed height ceiling from ~15px to ~23px, which is why point 4's
+   loop-start cap moved from `24` to `32` (barely any headroom would
+   have been left otherwise).
+
+**Active** - current design. Verified: visually inspected every rain
+scenario (sub-1mm decimal, 2-digit whole-mm) at the default width and at
+`forecast_days=6` specifically (the band-widening fix's clearest case -
+"0.6"/"mm" visibly larger, matching the day-label size); directly
+reproduced the parity bug's exact failure scenario (`forecast_days=11`,
+20mm) against the pre-fix code and confirmed the post-fix code renders
+"20"/"mm" instead of nothing; measured the actual pixel gap between the
+mm-block and the day-label row at the default `forecast_days=7` (1px
+before the margin fix) to size the `margin` parameter correctly rather
+than guessing; a full `forecast_days` 1-17 sweep (both a decimal and a
+2-digit amount) confirmed the exact-match band, first found to be 7-10,
+is really 5-10 after the height-formula fix, and that graceful
+shrink/omission above and below that band still works the same as before
+this change; confirmed the loop-start cap and check-reordering produce
+byte-identical chosen font sizes across that entire sweep - efficiency-only,
+no behavior change; confirmed `show_moon_phase=True` shows no *new*
+interaction beyond the pre-existing, already-logged moon-row overlap
+(`TODO.md`); full `scripts/test_forecast_rain_scenarios.py` and
+`scripts/test_locations.py` (14 locations, 3 modes) regressions passed
+after every revision.
+
 ---
 
 ## Pruned branches
