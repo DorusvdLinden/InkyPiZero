@@ -50,6 +50,28 @@ COMPOSITE_ICONS = {
 # once the panel-matching work above made every *other* icon color exact.
 HUMIDITY_DROP_FILES = ["humidity_drop_filled", "humidity_drop_empty"]
 
+# Icons needing extra baked-in stroke boldness beyond the runtime-applied
+# default (chart.py/forecast.py's thicken_icon(..., strength=0.5) call) -
+# same technique the 022d/022n composite's back layer already uses
+# (thicken_icon(..., strength=1.0), see _composite_icon above) to fight the
+# same underlying problem: a hollow ring's antialiased edge dithering into
+# speckle. 01n (wi-night-clear) specifically reads noticeably thinner than
+# the wi-moon-* phase icons it sits next to at the same render size, despite
+# sharing PALETTE.moon - a source-SVG stroke-weight mismatch, not a color
+# one (Icon-Plan.md item 5).
+#
+# Full strength (1.0), matching the composite, not a partial blend - a
+# pixel-level check (Icon-Plan.md item 5's verification) measured the
+# fraction of semi-transparent "ambiguous" edge pixels (the ones dithering
+# actually struggles with) at each candidate strength on 01n specifically:
+# 0.0 -> 0.117, 0.25 -> 0.228, 0.5 -> 0.232, 0.75 -> 0.229, 1.0 -> 0.101.
+# Every partial strength roughly *doubles* the ambiguous-edge fraction
+# relative to either endpoint - thicken_icon's MaxFilter blend interpolation
+# bakes in its own soft edge on top of the original antialiasing. Only the
+# full 1px dilation (1.0) is both bolder AND cleaner, which is exactly why
+# the composite already uses 1.0 rather than a partial value.
+EXTRA_THICKEN = {"01n": 1.0}
+
 
 def _recolor_humidity_drops(out_dir: str):
     color = PALETTE.humidity_drop
@@ -203,14 +225,19 @@ def regenerate(out_dir: str = OUT_DIR):
 
     all_icons = _icon_map()
     for key, (svg_name, color) in all_icons.items():
-        svg_path = os.path.join(SVG_DIR, f"{svg_name}.svg")
-        png_bytes = resvg_py.svg_to_bytes(
-            svg_path=svg_path, width=256, height=256,
-            style_sheet=f"path {{ fill: {color}; }}",
-        )
         out_path = os.path.join(out_dir, f"{key}.png")
-        with open(out_path, "wb") as f:
-            f.write(bytes(png_bytes))
+        if key in EXTRA_THICKEN:
+            icon = _render_svg(svg_name, color, size=256)
+            icon = thicken_icon(icon, strength=EXTRA_THICKEN[key])
+            icon.save(out_path)
+        else:
+            svg_path = os.path.join(SVG_DIR, f"{svg_name}.svg")
+            png_bytes = resvg_py.svg_to_bytes(
+                svg_path=svg_path, width=256, height=256,
+                style_sheet=f"path {{ fill: {color}; }}",
+            )
+            with open(out_path, "wb") as f:
+                f.write(bytes(png_bytes))
         print(f"{key:8s} <- {svg_name:30s} {color}")
 
     for key, spec in COMPOSITE_ICONS.items():
