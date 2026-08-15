@@ -376,7 +376,7 @@ services like pollennieuws.nl group mugwort+ragweed (and sometimes other
 weeds not modeled here, e.g. nettle/sorrel/plantain) under a broader
 "Kruiden" category, so this app's pollen contribution can understate what a
 Netherlands-focused service reports even when both are working correctly -
-a real, permanent data-source gap (see `TODO.md`), not a bug.
+a real, permanent data-source gap, not a bug.
 
 ## Via the web UI (`web_app.py`, always-on)
 
