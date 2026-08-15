@@ -876,6 +876,64 @@ along the way, see `RIVM_MAX_STATION_DISTANCE_KM` above); and all 5 gauge
 states rendered directly to confirm the new black "Zeer slecht" band and
 its needle stay visually distinct.
 
+### 33. Fix UV icon color ignoring the configured saturation
+Branch `fix/uv-color-saturation-timing`
+
+`get_uv_color()` read `PALETTE.uv_low/moderate/high/very_high/extreme`,
+which are only refreshed by `WeatherCanvas.__init__`'s
+`PALETTE.set_saturation(config.inky_saturation)` call - but
+`fetch_snapshot()` (which calls `get_uv_color()` via `_parse_data_points`)
+always runs *before* `WeatherCanvas` is constructed (`main.py`: fetch at
+line 52/67, canvas construction afterward at line 53/73). So the UV icon
+was always colored at whatever saturation `PALETTE` last happened to be
+synced to - the 0.0 module-load default on every one-shot `main.py` run -
+never the render's actually configured `inky_saturation`, for anyone
+who's changed that setting from the default. A reintroduction of the
+exact bug class entry 26/`docs/plans/palette-saturation-sync-fix.md`
+already fixed once, in a different code path.
+
+Found 2026-08-14 while building the (separate, still-unmerged)
+forecast-card weather-quality border color feature, which had the
+identical pattern - fixed there by threading `config.inky_saturation`
+through explicitly instead of reading the timing-dependent `PALETTE`
+singleton. Logged to `TODO.md` at the time rather than fixed immediately
+(unrelated feature, kept that branch's scope narrow); fixed here as its
+own standalone change once asked for.
+
+Same fix applied: `get_uv_color(uv_index, saturation)` and
+`_parse_data_points(..., saturation)` now take saturation as an explicit
+argument, resolving colors via `native_colors(saturation)` directly
+instead of the `PALETTE` singleton's instance attributes -
+`fetch_snapshot()` passes `config.inky_saturation` through.
+
+`scripts/test_palette_sync.py` (the file specifically meant to cover
+this exact class of bug) gained a new regression test,
+`test_get_uv_color_uses_the_saturation_it_is_given` - its three existing
+tests only ever checked `PALETTE.saturation` *after* a
+`WeatherCanvas`/`render_setup_screen` call, so none of them could have
+caught a bug in code (`get_uv_color`, via `fetch_snapshot`) that runs
+*before* that sync happens. Worth remembering next time this bug class
+shows up somewhere else: check what runs before the palette sync, not
+just whether the sync itself works.
+
+**Active** - current design. Verified: `get_uv_color(7, 0.0)` vs.
+`get_uv_color(7, 0.7)` now produce different, correctly-computed colors
+(previously identical regardless of the second argument); a full
+`fetch_snapshot()` → render pass at `inky_saturation=0.7` confirmed the
+UV data point's resolved color matches `native_colors(0.7)` exactly; the
+full `scripts/test_locations.py` (14 locations), `test_pollen_scenarios.py`,
+`test_precip_scenarios.py`, `test_display_freshness.py`, and
+`test_palette_sync.py` (including the new test) all pass; and a default
+saturation (0.0, unaffected by this fix) live render confirmed
+zero visual change for the current production configuration.
+
+A fresh-context review (per this repo's Mode 2 rule) caught two cleanup
+gaps the fix itself left behind: `Palette.uv_low/moderate/high/
+very_high/extreme` were now dead attributes (nothing reads them since
+`get_uv_color` stopped sourcing from the singleton) still sitting under a
+comment that claimed otherwise, and `weather_data.py`'s `PALETTE` import
+was now unused. Both removed.
+
 ---
 
 ## Pruned branches

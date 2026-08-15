@@ -17,8 +17,9 @@ os.chdir(REPO_DIR)
 from config import DisplayConfig
 from canvas import WeatherCanvas
 from setup_screen import render_setup_screen
+from weather_data import get_uv_color
 from widgets.icons import AssetStore
-from widgets.palette import PALETTE
+from widgets.palette import PALETTE, native_colors
 
 ICON_DIR = os.path.join(REPO_DIR, "assets", "icons")
 FONT_DIR = os.path.join(REPO_DIR, "assets", "fonts")
@@ -51,10 +52,30 @@ def test_render_setup_screen_syncs_palette():
     return PALETTE.saturation == 0.3
 
 
+def test_get_uv_color_uses_the_saturation_it_is_given():
+    """weather_data.get_uv_color() takes saturation as an explicit
+    argument rather than reading the shared PALETTE.saturation - unlike
+    the tests above, fetch_snapshot() (which calls this) always runs
+    *before* WeatherCanvas.__init__ syncs PALETTE for that render, so
+    reading the singleton here would silently use whatever saturation it
+    was last synced to instead of this render's actual configured value.
+    Found 2026-08-15 while fixing the identical bug pattern for the
+    forecast-card weather-quality border color - this test exists because
+    the other three tests in this file, which only check PALETTE.saturation
+    after a WeatherCanvas/render_setup_screen call, would never have caught
+    it (get_uv_color runs earlier, in fetch_snapshot)."""
+    color_a = get_uv_color(7, 0.0)
+    color_b = get_uv_color(7, 0.7)
+    expected_a = "#{:02x}{:02x}{:02x}".format(*native_colors(0.0)["orange"])
+    expected_b = "#{:02x}{:02x}{:02x}".format(*native_colors(0.7)["orange"])
+    return color_a == expected_a and color_b == expected_b and color_a != color_b
+
+
 TESTS = [
     test_weather_canvas_syncs_palette,
     test_weather_canvas_resyncs_on_later_construction,
     test_render_setup_screen_syncs_palette,
+    test_get_uv_color_uses_the_saturation_it_is_given,
 ]
 
 

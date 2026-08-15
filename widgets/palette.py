@@ -104,15 +104,13 @@ class Palette:
         # pressure_needle/pressure_needle_outline already use.
         self.aqi_needle_outline = c["white"]
 
-        # UV icon (weather_data.get_uv_color / widgets/gauge.render_uv_icon) -
-        # discrete per the same tiers get_uv_rating_nl already shows as text
-        # (Laag/Matig/Hoog/Zeer hoog/Extreem), rather than a continuous
-        # gradient that would dither between them.
-        self.uv_low = c["green"]
-        self.uv_moderate = c["yellow"]
-        self.uv_high = c["orange"]
-        self.uv_very_high = c["red"]
-        self.uv_extreme = c["black"]
+        # No uv_* fields here - the UV icon's color is computed by
+        # weather_data.get_uv_color() directly via native_colors(), not
+        # through this singleton (see docs/settings.md's "Color palette"
+        # section for why: get_uv_color runs inside fetch_snapshot(),
+        # always before this class's set_saturation() gets called for the
+        # render, so reading instance attributes here would use a stale
+        # saturation - fixed 2026-08-15, docs/changes.md entry 33).
 
     def set_saturation(self, saturation: float):
         """Mutates this instance in place so the shared `PALETTE` singleton

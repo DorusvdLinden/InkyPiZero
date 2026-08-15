@@ -15,7 +15,7 @@ import requests
 from astral import moon
 
 from config import DisplayConfig
-from widgets.palette import PALETTE
+from widgets.palette import native_colors
 
 logger = logging.getLogger(__name__)
 
@@ -259,25 +259,39 @@ def get_uv_rating_nl(uv_index) -> str:
     return "Extreem"
 
 
-def get_uv_color(uv_index) -> str:
+def get_uv_color(uv_index, saturation: float) -> str:
     """Discrete per the same tiers get_uv_rating_nl shows as text - a
     continuous gradient would dither into speckle on the panel's fixed
     7-colour palette instead of rendering as a flat native color (see
-    widgets/palette.py)."""
+    widgets/palette.py).
+
+    Takes saturation explicitly (config.inky_saturation) rather than
+    reading PALETTE.uv_low/moderate/high/very_high/extreme - this is
+    called from fetch_snapshot(), which always runs before
+    WeatherCanvas.__init__ ever calls PALETTE.set_saturation() for that
+    render, so those attributes would still reflect whichever saturation
+    the shared PALETTE singleton was last synced to (the 0.0 module-load
+    default on every one-shot main.py run), not this render's actually
+    configured saturation - the same bug class entry 26/
+    docs/plans/palette-saturation-sync-fix.md already fixed once, found
+    recurring here 2026-08-15 (see TODO.md) while fixing it for the
+    forecast-card weather-quality border color, which had the identical
+    pattern."""
     try:
         uv_index = float(uv_index)
     except (TypeError, ValueError):
         uv_index = 0
+    c = native_colors(saturation)
     if uv_index < 3:
-        color = PALETTE.uv_low
+        color = c["green"]
     elif uv_index < 6:
-        color = PALETTE.uv_moderate
+        color = c["yellow"]
     elif uv_index < 8:
-        color = PALETTE.uv_high
+        color = c["orange"]
     elif uv_index < 11:
-        color = PALETTE.uv_very_high
+        color = c["red"]
     else:
-        color = PALETTE.uv_extreme
+        color = c["black"]
     return "#{:02x}{:02x}{:02x}".format(*color)
 
 
@@ -836,7 +850,7 @@ def _value_max_today(times, values, tz, current_date):
     return best
 
 
-def _parse_data_points(weather_data, aqi_data, current_lki, tz) -> list[dict]:
+def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: float) -> list[dict]:
     data_points = []
     current_data = weather_data.get("current", {})
     hourly_data = weather_data.get("hourly", {})
@@ -870,7 +884,7 @@ def _parse_data_points(weather_data, aqi_data, current_lki, tz) -> list[dict]:
     uv_values = aqi_data.get("hourly", {}).get("uv_index", [])
     uv_index_raw = _value_at_current_hour(uv_times, uv_values, tz, current_time)
     uv_rating = get_uv_rating_nl(uv_index_raw)
-    uv_color = get_uv_color(uv_index_raw)
+    uv_color = get_uv_color(uv_index_raw, saturation)
     uv_beams = get_uv_beam_points(uv_index_raw)
     uv_index = round(uv_index_raw) if uv_index_raw is not None else "N/A"
     data_points.append({
@@ -935,7 +949,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     current_icon_key = map_weather_code_to_icon(weather_code, is_day)
 
     daily_forecast = _parse_forecast(daily, tz, config.latitude)
-    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz)
+    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation)
     hourly, sun_events, precip_label = _parse_hourly(
         weather_data.get("hourly", {}), tz, config.time_format,
         daily.get("sunrise", []), daily.get("sunset", []),
