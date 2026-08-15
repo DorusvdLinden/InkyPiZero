@@ -466,17 +466,31 @@ configured:
 ## Color palette (`widgets/palette.py`)
 
 Not a "setting" in the adjustable-knob sense, but a would-be sharp edge
-that's now handled automatically: every widget color comes from the
-shared `widgets.palette.PALETTE` singleton (`PALETTE.uv_low`,
-`PALETTE.aqi_band_high`, wind compass colors, etc.), computed at a given
-`saturation`. `PALETTE.set_saturation(config.inky_saturation)` is called
-at the top of both of the app's actual rendering entry points
-(`canvas.py`'s `WeatherCanvas.__init__`, `setup_screen.py`'s
-`render_setup_screen`), so every render keeps `PALETTE` in sync with
-whatever `inky_saturation` that particular `DisplayConfig` specifies -
-authored colors always stay exact panel-palette matches, never silently
-drifting into dithered speckle even if `inky_saturation` is changed via
-the web UI. See `scripts/test_palette_sync.py` for deterministic
-coverage, `scripts/panel_sim.py` (preview at the actual driven
-saturation), and `scripts/color_options.py` (side-by-side comparison at
-other saturations).
+that's now handled automatically: most widget colors come from the
+shared `widgets.palette.PALETTE` singleton (`PALETTE.aqi_band_high`, wind
+compass colors, etc.), computed at a given `saturation`.
+`PALETTE.set_saturation(config.inky_saturation)` is called at the top of
+both of the app's actual rendering entry points (`canvas.py`'s
+`WeatherCanvas.__init__`, `setup_screen.py`'s `render_setup_screen`), so
+every render keeps `PALETTE` in sync with whatever `inky_saturation` that
+particular `DisplayConfig` specifies - authored colors always stay exact
+panel-palette matches, never silently drifting into dithered speckle
+even if `inky_saturation` is changed via the web UI.
+
+**Exception**: anything colored inside `weather_data.py` itself
+(currently just the UV icon, `get_uv_color`) can't rely on the `PALETTE`
+singleton for this - `fetch_snapshot()` always runs *before*
+`WeatherCanvas`/`render_setup_screen` ever call `set_saturation()` for
+that render, so `PALETTE`'s attributes would still reflect whichever
+saturation it was last synced to, not this render's. `get_uv_color` takes
+`saturation` as an explicit argument instead (`config.inky_saturation`,
+threaded through `fetch_snapshot` -> `_parse_data_points`), resolving
+colors via `widgets.palette.native_colors(saturation)` directly - a real
+bug until 2026-08-15 (see `docs/changes.md` entry 33), and the pattern to
+follow for any future color computed inside `weather_data.py` rather than
+inside a widget.
+
+See `scripts/test_palette_sync.py` for deterministic coverage of both the
+`PALETTE`-sync path and this exception, `scripts/panel_sim.py` (preview
+at the actual driven saturation), and `scripts/color_options.py`
+(side-by-side comparison at other saturations).
