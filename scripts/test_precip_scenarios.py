@@ -1,11 +1,13 @@
 """Deterministic coverage for the chart's precipitation axis label
-(weather_data._classify_precip / WeatherSnapshot.precip_label) - not part of
-the app. test_locations.py exercises real live weather, but live data can't
-reliably guarantee all four label branches on any given test run (a hailstorm
-in particular). This script fakes only the Open-Meteo *forecast* fetch with
-crafted weather-code/precipitation/snowfall data for each branch, then runs
-the real fetch_snapshot -> classify -> render pipeline unmodified on top of
-it (air quality and location-name lookups still hit the real network).
+(weather_data._classify_precip / WeatherSnapshot.precip_label), plus the
+hourly hail icon key (map_weather_code_to_icon's WMO 96/99 -> "96d" branch,
+Icon-Plan.md item 2) - not part of the app. test_locations.py exercises real
+live weather, but live data can't reliably guarantee all four label branches
+or a hail hour on any given test run. This script fakes only the Open-Meteo
+*forecast* fetch with crafted weather-code/precipitation/snowfall data for
+each branch, then runs the real fetch_snapshot -> classify -> render
+pipeline unmodified on top of it (air quality and location-name lookups
+still hit the real network).
 
 Renders each scenario in all three screen modes and saves to
 mock_display_output/precip_scenario_test/. Run alongside test_locations.py
@@ -116,6 +118,16 @@ def main():
 
         ok = data.precip_label.startswith(EXPECTED_LABEL_PREFIX[name])
         status = "OK" if ok else f"FAIL: expected {EXPECTED_LABEL_PREFIX[name]!r}, got {data.precip_label!r}"
+
+        if name == "hail":
+            # Fixture's hour index 2 is the WMO-96 hour (see SCENARIOS above) -
+            # confirm the hourly icon strip actually shows the dedicated hail
+            # icon there, not the plain-thunderstorm icon (Icon-Plan.md item 2).
+            hail_icon = data.hourly[2].icon_key
+            icon_ok = hail_icon == "96d"
+            ok = ok and icon_ok
+            status = status if icon_ok else f"FAIL: expected hourly[2].icon_key='96d', got {hail_icon!r}"
+
         results.append((name, status))
         print(f"{'OK' if ok else 'FAIL':6s}{name:6s} precip_label={data.precip_label!r}")
 

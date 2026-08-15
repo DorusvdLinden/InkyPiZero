@@ -35,8 +35,8 @@ PADDING = 12
 # order scripts/generate_icons.py defines them, then any other icon assets
 # (humidity drops, visibility) that aren't part of that generated set.
 PREFERRED_ORDER = [
-    "01d", "01n", "022d", "022n", "02d", "02n", "04d", "50d", "48d",
-    "51d", "53d", "09d", "56d", "57d", "71d", "73d", "13d", "77d", "11d",
+    "01d", "01n", "022d", "022n", "04d", "50d", "48d",
+    "51d", "53d", "09d", "56d", "57d", "71d", "73d", "13d", "77d", "11d", "96d",
     "newmoon", "waxingcrescent", "firstquarter", "waxinggibbous", "fullmoon",
     "waninggibbous", "lastquarter", "waningcrescent",
     "sunrise", "sunset",

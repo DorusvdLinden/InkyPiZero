@@ -160,8 +160,6 @@ def _icon_map():
         "01d": ("wi-day-sunny", orange),
         "01n": ("wi-night-clear", moon_yellow),
         # 022d/022n are composited separately - see COMPOSITE_ICONS
-        "02d": ("wi-day-cloudy", cloud_blue),
-        "02n": ("wi-night-alt-cloudy", cloud_blue),
         "04d": ("wi-cloudy", cloud_blue),
         "50d": ("wi-day-fog", fog),
         "48d": ("wi-day-fog", fog),
@@ -175,6 +173,7 @@ def _icon_map():
         "13d": ("wi-day-snow-wind", cloud_blue),
         "77d": ("wi-day-snow", cloud_blue),
         "11d": ("wi-day-thunderstorm", storm),
+        "96d": ("wi-day-hail", storm),
     }
     moon_phases = {
         "newmoon": ("wi-moon-new", moon_yellow),

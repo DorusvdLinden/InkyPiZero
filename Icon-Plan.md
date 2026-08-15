@@ -1,10 +1,11 @@
 # Plan: Icon fixes
 
-Status: **proposed, not implemented**. Covers every open item in
-`TODO.md`'s "Icons" section (all six were found while writing
-`docs/icons.md`, none have been worked yet). See `docs/icons.md` for the
-current icon system this plan builds on, and `scripts/generate_icons.py`
-for the actual generation pipeline referenced throughout.
+Status: **items 1-3 implemented** (`feature/icon-plan-cleanup`, see
+`docs/changes.md` entry 35). **Item 4 accepted as-is, closed, no code
+change.** **Item 5 still pending.** Covers every item found while writing
+`docs/icons.md`. See `docs/icons.md` for the current icon system this plan
+builds on, and `scripts/generate_icons.py` for the actual generation
+pipeline referenced throughout.
 
 ## Context
 
@@ -25,7 +26,7 @@ no code change guaranteed, items 4-5 are cosmetic/lower priority.
 
 ---
 
-## Item 1: `02d`/`02n` are dead icon keys
+## Item 1: `02d`/`02n` are dead icon keys - DONE (option A, as recommended)
 
 **Problem**: `scripts/generate_icons.py`'s `_icon_map()` still generates
 `02d.png`/`02n.png` (`wi-day-cloudy`/`wi-night-alt-cloudy`), and
@@ -67,7 +68,7 @@ empty afterward except the icon-key literal itself being gone entirely.
 
 ---
 
-## Item 2: No hail-specific icon
+## Item 2: No hail-specific icon - DONE
 
 **Problem**: WMO thunderstorm-with-hail codes (96, 99) share the plain
 `11d` icon with ordinary thunderstorm (95) - `map_weather_code_to_icon`
@@ -141,7 +142,7 @@ the standard no-regressions pass.
 
 ---
 
-## Item 3: Verify forecast-card moon phase isn't off by one day
+## Item 3: Verify forecast-card moon phase isn't off by one day - DONE (offset confirmed correct)
 
 **Problem**: `weather_data.py`'s `_parse_forecast()` computes each
 forecast card's moon phase for `target_date = dt.date() +
@@ -185,7 +186,7 @@ just a `TODO.md` checkbox + comment update, no functional change.
 
 ---
 
-## Item 4: Low icon differentiation (71d/73d/77d, 51d/53d/09d)
+## Item 4: Low icon differentiation (71d/73d/77d, 51d/53d/09d) - SKIPPED, accepted as-is
 
 **Problem**: `71d`/`73d`/`77d` (light snow / moderate snow / snow
 grains) all render as the identical `wi-day-snow` icon -

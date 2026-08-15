@@ -58,7 +58,7 @@ def thicken_icon(icon: Image.Image, amount: int = ICON_THICKEN_PX,
 # the cached base image (after crop, before any resize) makes them render
 # smaller everywhere they're used, without a per-call-site hack. Doesn't
 # include "022n" - that's a moon+cloud composite (see generate_icons.py),
-# already cloud-icon-proportioned like "02n", not tightly-cropped like a bare
+# already cloud-icon-proportioned like "04d", not tightly-cropped like a bare
 # moon.
 MOON_ICON_KEYS = {
     "01n", "newmoon", "waxingcrescent", "firstquarter", "waxinggibbous",

@@ -38,9 +38,10 @@ automatically, without being asked each time.
   covers the chart's precipitation axis label (rain/hail/snow/dry) via crafted
   Open-Meteo fixtures rather than live weather, since live data can't reliably
   guarantee all four on any given run (a hailstorm especially). Saves to
-  `mock_display_output/precip_scenario_test/`. Run this after any change to
-  `weather_data.py`'s precipitation classification or `widgets/chart.py`'s axis-label
-  rendering, alongside the 14-location test above.
+  `mock_display_output/precip_scenario_test/`. Also asserts the hourly hail
+  icon key (WMO 96/99 -> `96d`). Run this after any change to
+  `weather_data.py`'s precipitation/icon classification or `widgets/chart.py`'s
+  axis-label rendering, alongside the 14-location test above.
 - **Always test the pollen scenarios**: `python scripts/test_pollen_scenarios.py`
   covers the combined "Kwaliteit & Pollen" data point (worst of European AQI and
   pollen, on the combined Goed/Matig/Slecht/Zeer slecht scale - see `docs/settings.md`)

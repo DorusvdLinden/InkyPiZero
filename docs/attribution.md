@@ -12,10 +12,11 @@ This project uses various fonts and icons, each with specific licensing terms. B
 
 Weather condition icons, moon phases, and sunrise/sunset icons are recolored PNGs
 rendered from [erikflowers/weather-icons](https://github.com/erikflowers/weather-icons)
-SVG source (`svg/wi-*.svg`), converted at build time - see `TODO.md` for how to
-regenerate them. Icons: [SIL OFL 1.1](https://github.com/erikflowers/weather-icons/blob/master/SIL%20OFL.txt).
-Covers: `01d`, `01n`, `022d`, `022n`, `02d`, `02n`, `04d`, `50d`, `48d`, `51d`,
-`53d`, `09d`, `56d`, `57d`, `71d`, `73d`, `13d`, `77d`, `11d`, `newmoon`,
+SVG source (`svg/wi-*.svg`), converted at build time - see `docs/icons.md`'s
+"Regenerating icons" section for how to regenerate them. Icons:
+[SIL OFL 1.1](https://github.com/erikflowers/weather-icons/blob/master/SIL%20OFL.txt).
+Covers: `01d`, `01n`, `022d`, `022n`, `04d`, `50d`, `48d`, `51d`,
+`53d`, `09d`, `56d`, `57d`, `71d`, `73d`, `13d`, `77d`, `11d`, `96d`, `newmoon`,
 `waxingcrescent`, `firstquarter`, `waxinggibbous`, `fullmoon`, `waninggibbous`,
 `lastquarter`, `waningcrescent`, `sunrise`, `sunset`.
 
