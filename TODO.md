@@ -6,6 +6,20 @@ them) once fixed. Grouped by area, open items first in each group. See also
 `docs/settings.md`, `docs/icons.md`, and `docs/changes.md` for the broader
 reference docs this list feeds into.
 
+## Icons
+
+- [ ] Decide whether `022d-new.png`/`022n-new.png` (committed 2026-08-15,
+  `c385e7b`) should replace the current `022d`/`022n` "half cloudy"
+  composite. Compared both pairs at actual runtime sizes (102px
+  current-conditions, 42px forecast card, 30px hourly strip) - see
+  `mock_display_output/icon_compare_022_sizes.png` and
+  `icon_compare_022_old_vs_new.png`. The `-new` versions scale the cloud
+  up and overlap roughly half the sun/moon (vs. just clipping the corner
+  in the current version), reading as a more cohesive "cloud in front of
+  sun" glyph at small sizes, at the cost of less sun/moon visibility.
+  Leaning toward swapping in `-new`, but left as a judgment call pending
+  user sign-off rather than done unilaterally.
+
 ## Forecast cards
 
 - [ ] With `show_moon_phase=True` and a wide rain amount (e.g. a 2-digit
