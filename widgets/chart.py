@@ -9,23 +9,11 @@ from PIL import Image, ImageDraw
 from widgets.icons import thicken_icon
 from widgets.palette import PALETTE
 
-LEFT_MARGIN = 46  # fits a wide axis label with its unit suffix ("-36°C")
+LEFT_MARGIN = 58  # fits the larger axis-number font's widest label ("-36°C")
 RIGHT_MARGIN = 42
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
 ICON_SIZE = 30
-
-
-def _decimal_point_center_x(label: str, font) -> float | None:
-    """x-offset (from the label's own left edge) to the horizontal center
-    of its "." character, or None if the label has no decimal point (e.g.
-    a whole-number rain value like "1 mm")."""
-    dot_idx = label.find(".")
-    if dot_idx == -1:
-        return None
-    before = font.getbbox(label[:dot_idx])[2] if dot_idx > 0 else 0
-    upto = font.getbbox(label[:dot_idx + 1])[2]
-    return (before + upto) / 2
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -49,7 +37,7 @@ def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
 
 
 def render_chart(image: Image.Image, region, hourly, sun_events, text_color, icon_lookup,
-                  graph_icon_step, font_small, font_bold, unit_label_temp, precip_label,
+                  graph_icon_step, font_small, font_bold, font_axis, unit_label_temp, precip_label,
                   show_temp_gridlines: bool = False):
     draw = ImageDraw.Draw(image)
     n = len(hourly)
@@ -68,7 +56,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     actual_min, actual_max = min(temps), max(temps)
     min_temp, max_temp = min(actual_min, 0), max(actual_max, 0)
     temp_span = (max_temp - min_temp) or 1
-    rain_axis_max = max(1, math.ceil(max(rains, default=0) * 10) / 10)
+    rain_axis_max = max(1, math.ceil(max(rains, default=0)))
 
     band = plot_w / n
     xs = [plot_x0 + band * (i + 0.5) for i in range(n)]
@@ -108,7 +96,10 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         # axis-extreme label already drawn there (below) - not just an
         # *exact* coincidence, a near-miss (e.g. max_temp=21, a v=20 tick)
         # still overlaps into illegible garbled text at this font size.
-        label_bbox = font_bold.getbbox("0123456789°C-")
+        # Sized off font_axis (not font_bold, which the gridline label
+        # itself uses) since that's the taller of the two fonts drawn at
+        # this position - the axis-extreme label this gap must clear.
+        label_bbox = font_axis.getbbox("0123456789°C-")
         min_label_gap = (label_bbox[3] - label_bbox[1]) * 1.2
         max_temp_y, min_temp_y = y_temp(max_temp), y_temp(min_temp)
         grid_start = math.ceil(min_temp / 10) * 10
@@ -180,25 +171,18 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # column (see LEFT_MARGIN).
     temp_unit_suffix = f"°{unit_label_temp}"
     rain_max_label = f"{rain_axis_max:g}"
-    draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_bold, fill=text_color, anchor="rm")
-    draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_bold, fill=text_color, anchor="rm")
-    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_bold, fill=text_color, anchor="lm")
-    draw.text((plot_x1 + 6, y_rain(0)), "0", font=font_bold, fill=text_color, anchor="lm")
+    draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
+    draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
+    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_axis, fill=text_color, anchor="lm")
+    draw.text((plot_x1 + 6, y_rain(0)), "0", font=font_axis, fill=text_color, anchor="lm")
 
     # The precipitation label ("Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" /
     # "Droog" - picked in weather_data.py based on the hourly window's actual
-    # weather codes) is centered on the decimal point of the rain-axis-max
-    # number (e.g. the "." in "4.5") when it has one, so the two read as
-    # visually aligned rather than the label just trailing off to the
-    # right of it. Whole numbers ("1"/"0") have no "." to align to, so
-    # fall back to a flat 2mm (~10px) gap off the axis line.
-    regen_bbox = font_bold.getbbox(precip_label)
-    regen_rotated_w = (regen_bbox[3] - regen_bbox[1]) + 2
-    dot_offset = _decimal_point_center_x(rain_max_label, font_bold)
-    if dot_offset is not None:
-        regen_x = plot_x1 + 6 + dot_offset - regen_rotated_w / 2
-    else:
-        regen_x = plot_x1 + 10
+    # weather codes) sits a flat 2mm (~10px) gap off the axis line. The
+    # rain-axis-max number above it is always a whole number (rain_axis_max
+    # rounds up to the nearest integer), so there's no decimal point to
+    # align the label to.
+    regen_x = plot_x1 + 10
     _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), precip_label, font_bold, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip

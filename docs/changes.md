@@ -1431,6 +1431,46 @@ it); visually confirmed a scenario expected to resolve red (heavy rain,
 mild temp) now renders with a plain black border instead; full
 `scripts/test_locations.py` (14 locations, 3 modes) regression passed.
 
+### 42. Chart: whole-number rain axis, bigger axis-number font
+Branch `feature/chart-axis-polish`
+
+`widgets/chart.py`'s rain-axis max (`rain_axis_max`) rounded up to the
+nearest tenth, so its top label could show a decimal (e.g. "4.5"); now
+rounds up to the nearest whole number instead, so the label is always an
+integer. This made `_decimal_point_center_x()` and its decimal-alignment
+branch for the rotated precip label (`"Regen [mm]"` etc.) permanently
+dead code - removed, the precip label now always uses its flat 10px gap
+off the axis line.
+
+Separately, the left (temperature) and right (rain) axis-extreme number
+labels (`max_temp`/`min_temp`/`rain_axis_max`/`0`) now draw in a new,
+larger `font_axis` param (18px bold, up from the shared 14px `font_bold`)
+passed into `render_chart()` from `canvas.py`. Every other bold-font
+element on the chart (gridline tick labels, dashed actual min/max lines,
+the precip label itself) stays on the original 14px `font_bold`, since
+only the axis-extreme numbers were asked for and changing the others
+risks the existing label-collision math around them (entry 11's rain-axis
+clipping bug). `LEFT_MARGIN` widened 46px -> 58px to fit the larger
+temperature labels (measured worst case `"-36°C"` at 18px = 48px +6px
+gap); `RIGHT_MARGIN` (42px) needed no change - worst-case 3-digit rain
+label at 18px (32px +6px gap) still fits under it.
+
+One collision-avoidance spot did need re-tuning for the new font size: in
+`show_temp_gridlines` mode, the gap that suppresses a gridline's own tick
+label when it's too close to the axis-extreme label (`min_label_gap`) was
+still measured off `font_bold`'s (14px) height even though it now has to
+clear the taller `font_axis` (18px) label - a subagent review (see Mode 2's
+diff-review step) caught this before it shipped. Fixed by measuring
+`min_label_gap` off `font_axis` instead.
+
+**Active** - current design. Verified: `scripts/test_locations.py` (14
+locations, 3 modes) and `scripts/test_precip_scenarios.py` (rain/hail/
+snow/dry) both pass; visually confirmed no decimal point on the rain
+axis, visibly larger axis numbers, no clipping at either margin, and (in
+gridlines mode) a genuine near-miss case - Dubai's max_temp=43 vs. a
+would-be "40°" gridline tick, only 3° apart - correctly suppresses the
+tick label instead of overlapping it.
+
 ---
 
 ## Pruned branches
