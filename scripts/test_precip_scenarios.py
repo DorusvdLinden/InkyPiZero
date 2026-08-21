@@ -13,6 +13,14 @@ Renders each scenario in all three screen modes and saves to
 mock_display_output/precip_scenario_test/. Run alongside test_locations.py
 after any change to weather_data.py's precipitation classification or to
 widgets/chart.py's axis-label rendering - see CLAUDE.md.
+
+The "rain"/"hail" scenarios (the only ones rain_axis_format="category"
+affects) also render once more under that setting, in every screen mode
+- covers the "gridlines"/"compact" + category combination specifically,
+since that's an ordinary, independently-selectable user configuration
+(screen mode and rain_axis_format are unrelated settings), not an edge
+case, and the shared-gridline rain-value labels only actually exercise
+in that combination.
 """
 
 import os
@@ -105,6 +113,7 @@ EXPECTED_LABEL_PREFIX = {"rain": "Regen", "hail": "Hagel", "snow": "Sneeuw", "dr
 def main():
     assets = AssetStore(ICON_DIR, FONT_DIR)
     config = DisplayConfig()
+    category_config = DisplayConfig(rain_axis_format="category")
     results = []
 
     for name, make_payload in SCENARIOS.items():
@@ -135,6 +144,12 @@ def main():
             image = WeatherCanvas(assets, config, mode).render(data)
             out_path = os.path.join(OUT_DIR, f"{name}_{mode}.png")
             MockDriver(out_path).show(image)
+
+        if name in ("rain", "hail"):
+            for mode in SCREEN_MODES:
+                image = WeatherCanvas(assets, category_config, mode).render(data)
+                out_path = os.path.join(OUT_DIR, f"{name}_{mode}_category.png")
+                MockDriver(out_path).show(image)
 
     print("\n--- Summary ---")
     for name, status in results:

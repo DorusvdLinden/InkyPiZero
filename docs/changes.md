@@ -1560,6 +1560,62 @@ drop applies only there; manually exercised `web_app.py`'s `/settings`
 page locally (`curl` POST round-trip) to confirm the new dropdown saves
 and persists. Fresh-context subagent review found no issues.
 
+### 45. Shared temp/rain gridlines in "gridlines"/"compact" mode
+Branch `feature/shared-temp-rain-gridlines`
+
+`show_temp_gridlines` mode's every-10° reference lines now also label
+the rain value at that same height, for rain/hail windows only
+(`show_rain_gridline_labels`) - `y_temp()` and `y_rain()` already map
+their two different scales onto the exact identical `plot_y0..plot_y1`
+pixel range (`y_temp(max_temp)`/`y_rain(rain_axis_max)` both exactly
+`plot_y0`, `y_temp(min_temp)`/`y_rain(0)` both exactly `plot_y1`), so
+every gridline's height already corresponds to a specific rain value -
+this labels it instead of drawing a second independent rain grid, per
+the user's explicit ask ("can we have shared lines so for instance 10
+degrees is same line as moderate rain?"), addressing the plot's limited
+~104px height without doubling the line count. `_format_rain_number()`
+added to keep the gridline and axis-extreme numeric labels formatted
+consistently (one decimal, shared helper).
+
+Two real bugs surfaced only through rendering and review, not from the
+plan itself:
+- The rotated `"Regen [mm]"`/category-word side label occupies ~90px of
+  the ~104px plot height, centered - almost any gridline label landed
+  directly on it, confirmed illegible in rendered screenshots. Resolved
+  (user's choice, offered as one of three options) by dropping the side
+  label whenever a gridline label actually gets drawn
+  (`any_gridline_labeled`) - not unconditionally on `show_temp_gridlines`,
+  since a narrow-enough temp range can suppress every gridline via the
+  existing extreme-collision check, in which case the side label still
+  shows (nothing else identifies the axis as rain otherwise).
+- A subagent review then caught that snow/dry windows were also getting
+  bare, unit-less gridline numbers (e.g. "0.5" with no "cm"/"Droog"
+  context) once the side-label suppression applied broadly - scoped the
+  entire gridline-rain-label feature (drawing it and suppressing the side
+  label) to `show_rain_gridline_labels = precip_label in
+  INTENSITY_LABELED_PRECIP` (rain/hail only); snow/dry keep the chart's
+  original gridline-mode behavior untouched.
+- A second subagent-review round flagged inconsistent numeric rounding
+  between the new gridline labels and the existing axis-extreme label
+  (fixed via `_format_rain_number`), a redundant per-iteration
+  `getbbox()` call (hoisted above the loop), and duplicated comments
+  (trimmed).
+
+`scripts/test_precip_scenarios.py` extended to also render the "rain"/
+"hail" scenarios under `rain_axis_format="category"` in every screen
+mode (`*_category.png`) - closes a real coverage gap a subagent review
+found (gridlines/compact x category was previously untested).
+
+**Active** - current design. Verified: `scripts/test_locations.py` and
+the extended `scripts/test_precip_scenarios.py` pass; visually confirmed
+across live rain (Mumbai), dry (Dubai), and crafted rain/hail/snow/dry
+fixtures that gridline rain labels render without collision, snow/dry
+correctly keep their side label and skip bare numbers, and a scratch
+fixture with an artificially narrow temp range confirmed the side label
+correctly reappears when every gridline gets suppressed. Two rounds of
+fresh-context subagent review both surfaced real, fixed issues before
+this shipped.
+
 ---
 
 ## Pruned branches

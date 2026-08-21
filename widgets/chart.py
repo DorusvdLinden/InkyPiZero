@@ -36,6 +36,12 @@ def _rain_intensity_label(mm_per_hour: float) -> str:
     return "hevig"
 
 
+def _format_rain_number(v: float) -> str:
+    """One decimal, trailing zero dropped - shared by every plain-mm rain
+    label (axis extremes and gridline values) so they read consistently."""
+    return f"{round(v, 1):g}"
+
+
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
     """Pastes text rotated 90 degrees (bottom-to-top), left edge at `position`."""
     bbox = font.getbbox(text)
@@ -77,6 +83,20 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     min_temp, max_temp = min(actual_min, 0), max(actual_max, 0)
     temp_span = (max_temp - min_temp) or 1
     rain_axis_max = max(1, math.ceil(max(rains, default=0)))
+    # Rain/hail windows (mm/h), when rain_axis_format="category" (a
+    # DisplayConfig/web-UI setting - "mm" is the default), label the rain
+    # axis with intensity words instead of raw numbers. Snow (cm/h, a
+    # different unit) and dry windows always keep the plain numeric axis
+    # regardless of the setting.
+    show_intensity_labels = rain_axis_format == "category" and precip_label in INTENSITY_LABELED_PRECIP
+    # Whether show_temp_gridlines mode also labels each gridline with a
+    # rain value at that height (below) - scoped to rain/hail only (both
+    # "mm" and "category" format). Snow's cm values and dry's meaningless
+    # placeholder-vs-nothing numbers have no self-explanatory unit/word the
+    # way rain/hail's numbers or category words do, so those two keep the
+    # chart's original gridline-mode behavior (temp-only gridlines, side
+    # label always shown) rather than gaining unlabeled bare numbers.
+    show_rain_gridline_labels = precip_label in INTENSITY_LABELED_PRECIP
 
     band = plot_w / n
     xs = [plot_x0 + band * (i + 0.5) for i in range(n)]
@@ -106,6 +126,11 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         color = PALETTE.chart_warm if (t1 + t2) >= 0 else PALETTE.chart_cool
         draw.line([(x1, y1), (x2, y2)], fill=color, width=5, joint="curve")
 
+    # Set True below only when show_temp_gridlines mode actually draws at
+    # least one gridline label - read further down to decide whether the
+    # vertical precip side-label should stand in for it.
+    any_gridline_labeled = False
+
     if show_temp_gridlines:
         # "Screen B" alternate: a uniform reference grid every 10deg across
         # the whole visible range, instead of calling out the day's actual
@@ -121,6 +146,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         label_bbox = font_axis.getbbox("0123456789°C-")
         min_label_gap = (label_bbox[3] - label_bbox[1]) * 1.2
         max_temp_y, min_temp_y = y_temp(max_temp), y_temp(min_temp)
+        # loop-invariant - unit_label_temp never changes per iteration
+        unit_w = font_axis.getbbox(unit_label_temp)[2]
         grid_start = math.ceil(min_temp / 10) * 10
         grid_end = math.floor(max_temp / 10) * 10
         v = grid_start
@@ -135,8 +162,25 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
                 # the same width as the letter it's standing in for, so
                 # padding with literal spaces would leave them misaligned.
                 label = f"{v}°"
-                unit_w = font_axis.getbbox(unit_label_temp)[2]
                 draw.text((plot_x0 - 6 - unit_w, y), label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="rm")
+
+                if show_rain_gridline_labels:
+                    any_gridline_labeled = True
+                    # Shared axis: temp and rain map onto the exact same
+                    # plot_y0..plot_y1 pixel range (two scales, one set of
+                    # lines - y_temp(max_temp)/y_rain(rain_axis_max) are both
+                    # exactly plot_y0, y_temp(min_temp)/y_rain(0) both exactly
+                    # plot_y1) - label the rain value at this same height
+                    # instead of drawing a second independent rain grid. This
+                    # is a geometric scale marker like the temp side, not a
+                    # per-hour reading - in category mode it can occasionally
+                    # read one band "worse" than the nearby actual-peak axis
+                    # label if rain_axis_max's ceil-rounding leaves enough
+                    # slack for an interior gridline to cross a band boundary
+                    # the real data never reached.
+                    rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
+                    rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number(rain_at_y)
+                    draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
             v += 10
     else:
         # dashed actual min/max lines - skip whichever one exactly coincides
@@ -192,19 +236,14 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
     draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
 
-    # Rain/hail windows (mm/h), when rain_axis_format="category" (a
-    # DisplayConfig/web-UI setting - "mm" is the default), label the axis
-    # with which intensity band today's actual peak/trough falls into,
-    # rather than a raw number - derived from the real data (not the
-    # rounded-up rain_axis_max ceiling) so the word matches what actually
-    # happened. Snow (cm/h, a different unit) and dry windows always keep
-    # the plain numeric axis regardless of the setting.
-    show_intensity_labels = rain_axis_format == "category" and precip_label in INTENSITY_LABELED_PRECIP
+    # show_intensity_labels (computed above) - the actual peak/trough
+    # value, not the rounded-up rain_axis_max ceiling, so the word matches
+    # what really happened.
     if show_intensity_labels:
         top_label = _rain_intensity_label(max(rains))
         bottom_label = _rain_intensity_label(min(rains))
     else:
-        top_label = f"{rain_axis_max:g}"
+        top_label = _format_rain_number(rain_axis_max)
         bottom_label = "0"
     draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
     draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")
@@ -216,10 +255,20 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # (rain_axis_max, always a whole number) and the intensity-band words
     # both have no decimal point to align to. In intensity-label mode the
     # "[mm]" unit suffix is dropped - it's no longer accurate once the axis
-    # isn't showing millimeters.
-    side_label = precip_label.removesuffix(" [mm]") if show_intensity_labels else precip_label
-    regen_x = plot_x1 + 10
-    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, font_bold, text_color)
+    # isn't showing millimeters. Dropped whenever a rain/hail gridline
+    # label was actually drawn (any_gridline_labeled, only ever set True
+    # when show_rain_gridline_labels - see above) - its rotated span
+    # (~90px of a ~104px-tall plot, vertically centered) collided with the
+    # shared gridlines' rain-value labels, which communicate the rain
+    # scale without it. Snow/dry never set any_gridline_labeled (their
+    # gridline numbers have no self-explanatory unit/word the way rain's
+    # do), so their side label always shows, same as before this feature -
+    # as does rain/hail's on the rare day narrow enough that every
+    # gridline collides with the axis extremes and none get drawn.
+    if not (show_temp_gridlines and any_gridline_labeled):
+        side_label = precip_label.removesuffix(" [mm]") if show_intensity_labels else precip_label
+        regen_x = plot_x1 + 10
+        _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, font_bold, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip
     # below, so each icon sits directly under its hour's label instead of
