@@ -1445,31 +1445,39 @@ off the axis line.
 Separately, the left (temperature) and right (rain) axis-extreme number
 labels (`max_temp`/`min_temp`/`rain_axis_max`/`0`) now draw in a new,
 larger `font_axis` param (18px bold, up from the shared 14px `font_bold`)
-passed into `render_chart()` from `canvas.py`. Every other bold-font
-element on the chart (gridline tick labels, dashed actual min/max lines,
-the precip label itself) stays on the original 14px `font_bold`, since
-only the axis-extreme numbers were asked for and changing the others
-risks the existing label-collision math around them (entry 11's rain-axis
-clipping bug). `LEFT_MARGIN` widened 46px -> 58px to fit the larger
-temperature labels (measured worst case `"-36°C"` at 18px = 48px +6px
-gap); `RIGHT_MARGIN` (42px) needed no change - worst-case 3-digit rain
-label at 18px (32px +6px gap) still fits under it.
+passed into `render_chart()` from `canvas.py`. `LEFT_MARGIN` widened
+46px -> 58px to fit the larger temperature labels (measured worst case
+`"-36°C"` at 18px = 48px +6px gap); `RIGHT_MARGIN` (42px) needed no
+change - worst-case 3-digit rain label at 18px (32px +6px gap) still
+fits under it.
 
-One collision-avoidance spot did need re-tuning for the new font size: in
+Initially only the axis-extreme labels moved to `font_axis`, leaving the
+chart's other horizontal-line temperature labels (the `show_temp_gridlines`
+mode's "10°"/"20°"/etc. gridline tick labels, the non-gridlines mode's
+dashed actual-min/max labels, and its dashed 0° reference-line label) on
+the smaller `font_bold` - but the user pointed out the gridline tick
+labels still read small next to the now-bigger axis numbers, so all three
+moved to `font_axis` too for a consistent size across every temperature
+label on the chart. Only the rotated precip label (`"Regen [mm]"` etc.)
+and the x-axis hour labels stayed on their original fonts.
+
+Two collision-avoidance spots needed re-tuning for the new font size: in
 `show_temp_gridlines` mode, the gap that suppresses a gridline's own tick
-label when it's too close to the axis-extreme label (`min_label_gap`) was
-still measured off `font_bold`'s (14px) height even though it now has to
-clear the taller `font_axis` (18px) label - a subagent review (see Mode 2's
-diff-review step) caught this before it shipped. Fixed by measuring
-`min_label_gap` off `font_axis` instead.
+label when it's too close to the axis-extreme label (`min_label_gap`, and
+the unit-suffix-width shift that keeps the gridline labels' numbers
+column-aligned with the axis-extreme labels) was still measured off
+`font_bold` - a subagent review (see Mode 2's diff-review step) caught the
+`min_label_gap` half before it shipped; both now measure off `font_axis`,
+matching the font the labels actually draw in.
 
 **Active** - current design. Verified: `scripts/test_locations.py` (14
 locations, 3 modes) and `scripts/test_precip_scenarios.py` (rain/hail/
 snow/dry) both pass; visually confirmed no decimal point on the rain
-axis, visibly larger axis numbers, no clipping at either margin, and (in
-gridlines mode) a genuine near-miss case - Dubai's max_temp=43 vs. a
-would-be "40°" gridline tick, only 3° apart - correctly suppresses the
-tick label instead of overlapping it.
+axis, every temperature label on the chart (axis extremes, gridline
+ticks, dashed min/max, zero-line) at the same larger size, no clipping at
+either margin, and (in gridlines mode) a genuine near-miss case - Dubai's
+max_temp=43 vs. a would-be "40°" gridline tick, only 3° apart - still
+correctly suppresses the tick label instead of overlapping it.
 
 ---
 

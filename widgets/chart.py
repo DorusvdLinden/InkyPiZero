@@ -96,9 +96,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         # axis-extreme label already drawn there (below) - not just an
         # *exact* coincidence, a near-miss (e.g. max_temp=21, a v=20 tick)
         # still overlaps into illegible garbled text at this font size.
-        # Sized off font_axis (not font_bold, which the gridline label
-        # itself uses) since that's the taller of the two fonts drawn at
-        # this position - the axis-extreme label this gap must clear.
+        # Sized off font_axis, since both this gridline label and the
+        # axis-extreme label it must avoid draw in that font.
         label_bbox = font_axis.getbbox("0123456789°C-")
         min_label_gap = (label_bbox[3] - label_bbox[1]) * 1.2
         max_temp_y, min_temp_y = y_temp(max_temp), y_temp(min_temp)
@@ -116,8 +115,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
                 # the same width as the letter it's standing in for, so
                 # padding with literal spaces would leave them misaligned.
                 label = f"{v}°"
-                unit_w = font_bold.getbbox(unit_label_temp)[2]
-                draw.text((plot_x0 - 6 - unit_w, y), label, font=font_bold, fill=PALETTE.chart_zero_line, anchor="rm")
+                unit_w = font_axis.getbbox(unit_label_temp)[2]
+                draw.text((plot_x0 - 6 - unit_w, y), label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="rm")
             v += 10
     else:
         # dashed actual min/max lines - skip whichever one exactly coincides
@@ -135,7 +134,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
             _dotted_horizontal(draw, y, plot_x0, plot_x1, color)
             label_dy = 14 if (plot_y1 - y) > 20 else -14
             label = f"{value}°"
-            draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_bold, fill=color, anchor="mm")
+            draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_axis, fill=color, anchor="mm")
 
         # black dashed 0deg reference line, only shown when the day actually
         # dips below freezing (min_temp < 0 means actual_min < 0 too, since
@@ -145,7 +144,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         if min_temp < 0:
             _dotted_horizontal(draw, y_zero, plot_x0, plot_x1, PALETTE.chart_zero_line)
             label_dy = 14 if (plot_y1 - y_zero) > 20 else -14
-            draw.text((plot_x0 + plot_w / 2, y_zero + label_dy), "0°", font=font_bold, fill=PALETTE.chart_zero_line, anchor="mm")
+            draw.text((plot_x0 + plot_w / 2, y_zero + label_dy), "0°", font=font_axis, fill=PALETTE.chart_zero_line, anchor="mm")
 
     # axes
     draw.line([(plot_x0, plot_y0), (plot_x0, plot_y1)], fill=text_color, width=2)
