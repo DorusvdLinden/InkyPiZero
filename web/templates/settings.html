@@ -32,6 +32,13 @@
           {% endfor %}
         </select>
       </label>
+      <label>Regen-as weergave
+        <select name="rain_axis_format">
+          {% for value, label in [("mm", "Millimeters"), ("category", "Categorieën (licht/matig/zwaar)")] %}
+            <option value="{{ value }}" {{ "selected" if config.rain_axis_format == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Aantal dagen vooruit (forecast_days)
         <input type="number" min="1" step="1" name="forecast_days" value="{{ config.forecast_days }}" required>
       </label>

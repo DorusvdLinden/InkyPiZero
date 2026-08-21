@@ -191,6 +191,7 @@ class WeatherCanvas:
             # "compact" gets the gridlines chart style too - only "original"
             # keeps the actual-day min/max dashed lines.
             show_temp_gridlines=(self.screen_mode in ("gridlines", "compact")),
+            rain_axis_format=self.config.rain_axis_format,
         )
 
     def _draw_forecast_row(self, image, data: WeatherSnapshot):
