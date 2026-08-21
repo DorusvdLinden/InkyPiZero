@@ -10,10 +10,30 @@ from widgets.icons import thicken_icon
 from widgets.palette import PALETTE
 
 LEFT_MARGIN = 58  # fits the larger axis-number font's widest label ("-36°C")
-RIGHT_MARGIN = 42
+RIGHT_MARGIN = 82  # fits the widest rain-intensity label ("motrgn") at font_axis, worst case across both font families
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 44
 ICON_SIZE = 30
+
+# precip_label values (weather_data._classify_precip) whose series is in mm/h -
+# eligible for intensity-word axis labels instead of a raw number.
+INTENSITY_LABELED_PRECIP = ("Regen [mm]", "Hagel [mm]")
+
+# Rain-intensity bands (mm/h) -> Dutch label; upper bound exclusive, 50+ is "hevig".
+RAIN_INTENSITY_BANDS = [
+    (0.01, "droog"),
+    (1.0, "motrgn"),
+    (2.5, "licht"),
+    (10.0, "matig"),
+    (50.0, "zwaar"),
+]
+
+
+def _rain_intensity_label(mm_per_hour: float) -> str:
+    for upper, label in RAIN_INTENSITY_BANDS:
+        if mm_per_hour < upper:
+            return label
+    return "hevig"
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -169,18 +189,29 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # less element competing for space, and the chart reclaims that whole
     # column (see LEFT_MARGIN).
     temp_unit_suffix = f"°{unit_label_temp}"
-    rain_max_label = f"{rain_axis_max:g}"
     draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
     draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
-    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), rain_max_label, font=font_axis, fill=text_color, anchor="lm")
-    draw.text((plot_x1 + 6, y_rain(0)), "0", font=font_axis, fill=text_color, anchor="lm")
+
+    # Rain/hail windows (mm/h) label the axis with which intensity band
+    # today's actual peak/trough falls into, rather than a raw number -
+    # derived from the real data (not the rounded-up rain_axis_max ceiling)
+    # so the word matches what actually happened. Snow (cm/h, a different
+    # unit) and dry windows keep the plain numeric axis.
+    if precip_label in INTENSITY_LABELED_PRECIP:
+        top_label = _rain_intensity_label(max(rains))
+        bottom_label = _rain_intensity_label(min(rains))
+    else:
+        top_label = f"{rain_axis_max:g}"
+        bottom_label = "0"
+    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
+    draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")
 
     # The precipitation label ("Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" /
     # "Droog" - picked in weather_data.py based on the hourly window's actual
-    # weather codes) sits a flat 2mm (~10px) gap off the axis line. The
-    # rain-axis-max number above it is always a whole number (rain_axis_max
-    # rounds up to the nearest integer), so there's no decimal point to
-    # align the label to.
+    # weather codes) sits a flat 2mm (~10px) gap off the axis line - no
+    # decimal-point alignment to worry about, since the numbers above it
+    # (rain_axis_max, always a whole number) and the intensity-band words
+    # both have no decimal point to align to.
     regen_x = plot_x1 + 10
     _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), precip_label, font_bold, text_color)
 

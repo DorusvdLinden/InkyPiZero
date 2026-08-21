@@ -1479,6 +1479,53 @@ either margin, and (in gridlines mode) a genuine near-miss case - Dubai's
 max_temp=43 vs. a would-be "40°" gridline tick, only 3° apart - still
 correctly suppresses the tick label instead of overlapping it.
 
+### 43. Rain axis: intensity-category labels instead of mm numbers
+Branch `feature/rain-axis-intensity-labels`
+
+The right (rain) axis's two numbers (a rounded-up mm ceiling at top, "0"
+at bottom) are replaced with Dutch rain-intensity category words for
+rain/hail windows (`"Regen [mm]"`/`"Hagel [mm]"` - both plot the same
+mm/h `precipitation` series): `droog` (<0.01mm/h), `motrgn` (0.01-1.0),
+`licht` (1.0-2.5), `matig` (2.5-10), `zwaar` (10-50), `hevig` (50+) -
+`widgets/chart.py`'s new `RAIN_INTENSITY_BANDS`/`_rain_intensity_label()`.
+Snow (`"Sneeuw [cm]"`, a different unit) and dry (`"Droog"`) windows keep
+the old plain numeric axis unchanged.
+
+Showing all 6 bands as an always-on ladder was ruled out up front -
+measured word widths ("Moderate", before shortening to Dutch) exceeded
+the entire ~42px right margin on their own, and the ~104px-tall plot area
+has no room for 6 stacked rows at any legible size. Settled on the same
+idiom the temp axis already uses for its actual min/max (entry 15): only
+label *today's actual range* - the axis's existing top/bottom positions
+now show whichever band the window's real max/min hourly value falls
+into (not the rounded-up `rain_axis_max` ceiling used for the bars'
+unchanged linear scale), so a day that's mostly dry with a few rainy
+hours shows e.g. "licht" at top and "droog" at bottom. `RIGHT_MARGIN`
+widened 42px -> 82px to fit the longest label ("motrgn") - a subagent
+review caught that the first pass (70px) was sized only against the
+`jost` font, measuring 60px there, but `config.py`'s actual default
+`font_family` is `bitter` (`"jost"` is the non-default alternative), where
+the same word measures 71px - would have clipped off the 800px canvas
+edge under the app's own default settings. Re-measured against both
+font families and re-verified with a scratch fixture rendered under the
+default `bitter` config before shipping.
+
+Two rounds of clarifying questions (AskUserQuestion) shaped this before
+implementation: layout approach (today's-range-only vs. all 6 abbreviated
+vs. growing the chart taller), precip-type scope (rain-only vs. rain+hail
+- hail was included, snow/dry excluded), and label language (initially
+given in English, moved to Dutch to match every other chart/screen label
+- with two more user-requested tweaks: `geen`->`droog`, `motregen`->
+`motrgn` for width).
+
+**Active** - current design. Verified: `scripts/test_locations.py` and
+`scripts/test_precip_scenarios.py` both pass unchanged - the existing
+"rain" fixture (constant 2.4mm/h) incidentally covers the same-band
+top/bottom case ("licht"/"licht"), "hail" (1.0-3.5mm/h) covers two
+different bands ("matig"/"licht"), "snow"/"dry" confirm those stay
+numeric; a one-off scratch fixture (60mm/h peak, ~0mm/h trough) confirmed
+the "hevig"/"droog" extremes also render without clipping.
+
 ---
 
 ## Pruned branches
