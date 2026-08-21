@@ -67,6 +67,10 @@ def _valid_font_family(v):
     return v in FONT_FAMILIES
 
 
+def _valid_rain_axis_format(v):
+    return v in ("mm", "category")
+
+
 # One validator per DisplayConfig field - keep in sync with config.py.
 FIELD_VALIDATORS = {
     "latitude": _valid_latitude,
@@ -80,6 +84,7 @@ FIELD_VALIDATORS = {
     "text_color": _valid_hex_color,
     "inky_saturation": _valid_saturation,
     "font_family": _valid_font_family,
+    "rain_axis_format": _valid_rain_axis_format,
     "min_update_interval_minutes": _valid_nonnegative_int,
     "force_refresh_max_stale_minutes": _valid_positive_int,
 }

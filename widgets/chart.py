@@ -58,7 +58,7 @@ def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
 
 def render_chart(image: Image.Image, region, hourly, sun_events, text_color, icon_lookup,
                   graph_icon_step, font_small, font_bold, font_axis, unit_label_temp, precip_label,
-                  show_temp_gridlines: bool = False):
+                  show_temp_gridlines: bool = False, rain_axis_format: str = "mm"):
     draw = ImageDraw.Draw(image)
     n = len(hourly)
     if n == 0:
@@ -192,12 +192,15 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
     draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
 
-    # Rain/hail windows (mm/h) label the axis with which intensity band
-    # today's actual peak/trough falls into, rather than a raw number -
-    # derived from the real data (not the rounded-up rain_axis_max ceiling)
-    # so the word matches what actually happened. Snow (cm/h, a different
-    # unit) and dry windows keep the plain numeric axis.
-    if precip_label in INTENSITY_LABELED_PRECIP:
+    # Rain/hail windows (mm/h), when rain_axis_format="category" (a
+    # DisplayConfig/web-UI setting - "mm" is the default), label the axis
+    # with which intensity band today's actual peak/trough falls into,
+    # rather than a raw number - derived from the real data (not the
+    # rounded-up rain_axis_max ceiling) so the word matches what actually
+    # happened. Snow (cm/h, a different unit) and dry windows always keep
+    # the plain numeric axis regardless of the setting.
+    show_intensity_labels = rain_axis_format == "category" and precip_label in INTENSITY_LABELED_PRECIP
+    if show_intensity_labels:
         top_label = _rain_intensity_label(max(rains))
         bottom_label = _rain_intensity_label(min(rains))
     else:
@@ -211,9 +214,12 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # weather codes) sits a flat 2mm (~10px) gap off the axis line - no
     # decimal-point alignment to worry about, since the numbers above it
     # (rain_axis_max, always a whole number) and the intensity-band words
-    # both have no decimal point to align to.
+    # both have no decimal point to align to. In intensity-label mode the
+    # "[mm]" unit suffix is dropped - it's no longer accurate once the axis
+    # isn't showing millimeters.
+    side_label = precip_label.removesuffix(" [mm]") if show_intensity_labels else precip_label
     regen_x = plot_x1 + 10
-    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), precip_label, font_bold, text_color)
+    _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, font_bold, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip
     # below, so each icon sits directly under its hour's label instead of

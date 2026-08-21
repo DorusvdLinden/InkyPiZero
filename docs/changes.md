@@ -1518,13 +1518,47 @@ given in English, moved to Dutch to match every other chart/screen label
 - with two more user-requested tweaks: `geen`->`droog`, `motregen`->
 `motrgn` for width).
 
+**Active**, except that this behavior was unconditional (always-on for
+rain/hail) at the time it was written - **entry 44** makes it an opt-in
+`rain_axis_format="category"` setting, defaulting to the original plain-
+mm axis. The bands/labels/logic described here are otherwise unchanged.
+Verified: `scripts/test_locations.py` and `scripts/test_precip_scenarios.py`
+both pass unchanged - the existing "rain" fixture (constant 2.4mm/h)
+incidentally covers the same-band top/bottom case ("licht"/"licht"),
+"hail" (1.0-3.5mm/h) covers two different bands ("matig"/"licht"),
+"snow"/"dry" confirm those stay numeric; a one-off scratch fixture
+(60mm/h peak, ~0mm/h trough) confirmed the "hevig"/"droog" extremes also
+render without clipping.
+
+### 44. Rain axis format as a setting: mm vs category labels
+Branch `feature/rain-axis-intensity-labels`
+
+Entry 43's intensity-word rain axis was shipped unconditional; this adds
+a `DisplayConfig.rain_axis_format` setting (`"mm"` \| `"category"`,
+default `"mm"` - preserves the original plain-numeric axis for anyone not
+opting in) following the exact generic pattern every other 2-choice
+string setting already uses (`font_family`/`time_format`): one validator
+in `settings_store.py`'s `FIELD_VALIDATORS`, one `_set(...)` line in
+`web/routes.py`'s form parser, one `<select>` in `settings.html`'s
+"Weergave" fieldset - no new mechanism needed anywhere. `render_chart()`
+gains a `rain_axis_format` parameter threaded from `canvas.py`, and its
+existing `if precip_label in INTENSITY_LABELED_PRECIP:` check
+(unconditional in entry 43) gains a `rain_axis_format == "category"`
+guard.
+
+Also addressed: in category mode, the rotated side label drops its now-
+inaccurate `"[mm]"` unit suffix (`"Regen [mm]"` -> `"Regen"`,
+`"Hagel [mm]"` -> `"Hagel"`, via `str.removesuffix`) - snow/dry labels
+are untouched either way, since they're never in intensity-label mode.
+
 **Active** - current design. Verified: `scripts/test_locations.py` and
-`scripts/test_precip_scenarios.py` both pass unchanged - the existing
-"rain" fixture (constant 2.4mm/h) incidentally covers the same-band
-top/bottom case ("licht"/"licht"), "hail" (1.0-3.5mm/h) covers two
-different bands ("matig"/"licht"), "snow"/"dry" confirm those stay
-numeric; a one-off scratch fixture (60mm/h peak, ~0mm/h trough) confirmed
-the "hevig"/"droog" extremes also render without clipping.
+`scripts/test_precip_scenarios.py` pass with the new `"mm"` default,
+confirming it reproduces the pre-entry-43 plain-numeric axis; a scratch
+fixture rendered both `rain_axis_format` values side by side, confirming
+`"category"` still works correctly as an opt-in and the `"[mm]"` suffix
+drop applies only there; manually exercised `web_app.py`'s `/settings`
+page locally (`curl` POST round-trip) to confirm the new dropdown saves
+and persists. Fresh-context subagent review found no issues.
 
 ---
 

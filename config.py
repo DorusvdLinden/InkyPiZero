@@ -22,6 +22,11 @@ class DisplayConfig:
     # default (2026-08-11) - chosen over Jost after a real-hardware
     # comparison, see docs/changes.md. Also a web UI setting.
     font_family: str = "bitter"
+    # "mm" | "category" - chart's rain axis: a plain mm number vs Dutch
+    # intensity words (droog/motrgn/licht/matig/zwaar/hevig,
+    # widgets/chart.py). "category" only applies to rain/hail windows -
+    # snow/dry always show a plain number regardless.
+    rain_axis_format: str = "mm"
     # 0 = no extra throttling beyond the fixed 10-minute systemd timer tick
     # (install/pi-weather-display.timer) - raising this skips a check
     # entirely (before even fetching weather data) until this many minutes
