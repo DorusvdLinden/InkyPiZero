@@ -1819,7 +1819,36 @@ seam with nothing on the other end yet.
 pass with zero diffs (station is inert by default,
 `station_enabled=False`). Web UI round-trip verified end-to-end against a
 local `web_app.py` instance (save -> persisted to `settings.json` -> reload
-reflects it, then reset to defaults). Not yet deployed to the Pi.
+reflects it, then reset to defaults). Merged to `main` and deployed:
+`pi-weather-web.service` restarted (this entry touches `web/routes.py`,
+a persistent process - a plain `git pull` alone wouldn't have picked it
+up), then a forced-refresh tick confirmed a real end-to-end
+fetch -> render -> display cycle on the physical panel.
+
+---
+
+### 49. Drop the decimal on the shared gridlines' rain value
+Branch `fix/gridline-rain-no-decimal`
+
+Per explicit user ask: the rain value shown at the shared temp/rain
+gridlines (`"gridlines"`/`"compact"` screen mode, `rain_axis_format="mm"`)
+used to share `_format_rain_number` (one decimal, trailing zero dropped)
+with the rain axis's own top-extreme label. New `_format_rain_number_int`
+(rounds to a whole number, no decimal) is used for the gridline value only
+- it's a geometric scale marker derived from the axis's pixel position, not
+a real per-hour reading, so a decimal wasn't adding meaningful precision
+there. The axis top-extreme label (`_format_rain_number`, a real data
+point) is untouched.
+
+**Active** - current design. Verified: `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes) all pass; visually confirmed via
+`mock_display_output/precip_scenario_test/rain_gridlines.png` and
+`hail_gridlines.png` that gridline rain values now render as plain
+integers (e.g. `"3"`, `"2"`, `"4"`) with no decimal point.
 
 ---
 
