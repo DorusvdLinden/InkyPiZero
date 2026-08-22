@@ -269,7 +269,12 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     else:
         top_label = _format_rain_number(rain_axis_max)
         bottom_label = "0"
-    if not suppress_max_rain_label:
+    # On dry windows, rain_axis_max is always the max(1, ...) placeholder
+    # floor (there's no real rain to size the axis off) - showing "1" up top
+    # implies a rain reading that never happened, so it's dropped entirely
+    # rather than suppressed only on gridline-collision grounds like the
+    # other axis-extreme labels above.
+    if not suppress_max_rain_label and precip_label != "Droog":
         draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
     if not suppress_min_rain_label:
         draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")

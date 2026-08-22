@@ -1657,6 +1657,14 @@ Two small polish fixes:
   the chart itself doesn't shift. Verified no overflow/overlap via both
   real renders and direct `textbbox` measurements against the widest
   realistic case (double-digit negative temps, both font families).
+- On dry ("Droog") windows, the rain axis's top extreme label used to
+  always show `rain_axis_max` - but that value is always the
+  `max(1, ...)` placeholder floor on a dry day (there's no real rain to
+  size the axis off), so the "1" it showed implied a reading that never
+  happened. Dropped for `precip_label == "Droog"` specifically, per
+  explicit user ask - the bottom "0" and the "Droog" side label are
+  unaffected, and rain/hail/snow windows are untouched (their top label
+  reflects real data).
 
 **Active** - current design. Verified: `scripts/test_locations.py`,
 `scripts/test_precip_scenarios.py`, `scripts/test_pollen_scenarios.py`,
