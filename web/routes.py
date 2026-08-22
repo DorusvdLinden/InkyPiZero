@@ -12,6 +12,7 @@ import display_freshness
 import settings_store
 import wifi_manager
 from config import DisplayConfig
+from weather_data import STATION_ADAPTERS
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,10 @@ def _config_from_form(form) -> tuple[DisplayConfig, list[str]]:
     _set("rain_axis_format", str)
     _set("min_update_interval_minutes", int)
     _set("force_refresh_max_stale_minutes", int)
+    values["station_enabled"] = form.get("station_enabled") == "on"
+    _set("station_type", str)
+    _set("station_base_url", str)
+    _set("station_api_key", str)
 
     return DisplayConfig(**values), errors
 
@@ -87,14 +92,14 @@ def settings():
         if errors:
             for error in errors:
                 flash(error, "error")
-            return render_template("settings.html", config=config), 400
+            return render_template("settings.html", config=config, station_adapter_keys=STATION_ADAPTERS.keys()), 400
         settings_store.save_config(config)
         _trigger_rerender()
         flash("Instellingen opgeslagen.", "success")
         return redirect(url_for("web.settings"))
 
     config = settings_store.load_config()
-    return render_template("settings.html", config=config)
+    return render_template("settings.html", config=config, station_adapter_keys=STATION_ADAPTERS.keys())
 
 
 @bp.route("/wifi")

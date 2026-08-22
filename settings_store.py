@@ -18,6 +18,7 @@ import os
 import re
 
 from config import DisplayConfig
+from weather_data import STATION_ADAPTERS
 from widgets.icons import FONT_FAMILIES
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,14 @@ def _valid_rain_axis_format(v):
     return v in ("mm", "category")
 
 
+def _valid_station_type(v):
+    return v == "" or v in STATION_ADAPTERS
+
+
+def _valid_optional_str(v):
+    return isinstance(v, str)
+
+
 # One validator per DisplayConfig field - keep in sync with config.py.
 FIELD_VALIDATORS = {
     "latitude": _valid_latitude,
@@ -87,6 +96,10 @@ FIELD_VALIDATORS = {
     "rain_axis_format": _valid_rain_axis_format,
     "min_update_interval_minutes": _valid_nonnegative_int,
     "force_refresh_max_stale_minutes": _valid_positive_int,
+    "station_enabled": _valid_bool,
+    "station_type": _valid_station_type,
+    "station_base_url": _valid_optional_str,
+    "station_api_key": _valid_optional_str,
 }
 
 

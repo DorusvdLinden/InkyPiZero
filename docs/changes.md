@@ -1731,7 +1731,95 @@ modes - live network, real regression check), `scripts/test_precip_scenarios.py`
 `scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
 `scripts/test_palette_sync.py` all pass with zero diffs (these monkeypatch
 the fetch layer wholesale, unaffected by the merge either way). Fresh-context
-subagent review found no correctness bugs. Not yet deployed to the Pi.
+subagent review found no correctness bugs. Merged to `main` and deployed:
+pulled on the real Pi, forced a real timer tick
+(`pi-weather-display.service`, exit 0), confirmed a real end-to-end
+fetch -> render -> display cycle on the physical panel.
+
+---
+
+### 48. Pluggable local weather-station seam
+Branch `local-station-seam`
+
+`IDEAS.md` had long noted wanting "actual" (not modeled) current
+temperature/rain from a local weather station. No station is owned/chosen
+yet, so this builds the generic seam (config + fetch/merge contract) rather
+than a specific vendor integration, so a real one can be wired in later
+without restructuring - same spirit as entry 47's model blend, but for a
+seam with nothing on the other end yet.
+
+- New `weather_data.StationConditions` dataclass (`temperature_c`,
+  `rain_mm` - the latter a **rate**, mm/h, by documented convention, not an
+  accumulation) + `STATION_ADAPTERS` registry (one placeholder entry,
+  `"generic_http"` - reads flat JSON from a configured URL, optionally
+  bearer-authed) + `_get_station_conditions`, following the exact fail-soft
+  pattern already established for the RIVM/luchtmeetnet.nl integration
+  (`_get_rivm_current_lki`): every adapter is a one-arg callable that never
+  raises, `None`-able per field on partial sensor failure.
+- 4 new `DisplayConfig` fields (`station_enabled`, `station_type`,
+  `station_base_url`, `station_api_key`), with `settings_store.py`
+  validators and web UI form controls (a new "Lokaal weerstation" fieldset
+  in `settings.html`) - matches this project's existing invariant that
+  every `DisplayConfig` field has a form control.
+- `fetch_snapshot` now sources `current_temp` from the station when present
+  (else the existing Open-Meteo `current.temperature` fallback);
+  `feels_like` stays Open-Meteo-only always (no generic station API
+  reliably publishes a computed apparent-temperature figure) - a known,
+  documented limitation, not silently glossed over.
+- **Current rain has no existing display slot** - the current-conditions
+  panel has ~22px of vertical slack left (recently reclaimed by entry 46's
+  font bump) and the data-point grid is a fixed 2x3 with no spare cell
+  (deliberately fixed at a constant count, per `docs/settings.md`). Per
+  explicit user direction, rain is instead reflected by **swapping the main
+  weather icon**: new `_apply_station_rain_override` swaps the current icon
+  to a rain icon (`"51d"`/`"53d"`/`"09d"` by intensity threshold) only when
+  the model's own icon doesn't already depict precipitation
+  (`DRY_ICON_KEYS`) - a model that already shows rain/snow/thunderstorm/hail
+  is left untouched. Confirmed rain icons have no night variant in this
+  codebase's asset set (`docs/icons.md`), so this never produces a
+  non-existent `"51n"`/`"53n"`/`"09n"` key.
+- New `WeatherSnapshot.current_rain_mm` field (the raw station reading, or
+  `None`) - kept even though nothing renders it as text, for the
+  icon-override logic and any future display use.
+- A fresh-context subagent review caught a real bug in
+  `_fetch_station_generic_http`: it only validated the HTTP transport
+  (network errors, non-2xx status, unparseable JSON), not the payload's
+  shape - a non-dict JSON body raised an uncaught `AttributeError` on
+  `payload.get(...)`, and a dict with a wrong-typed field (e.g.
+  `{"temperature": "warm"}`) passed the adapter silently but then crashed
+  `fetch_snapshot` at `round(station_temp)` with a `TypeError` - both
+  reproduced end-to-end, both worse than "station unreachable" since a
+  misconfigured/buggy endpoint (not just a down one) would break every
+  scheduled render until fixed, contradicting the adapter's own
+  must-never-abort contract. Fixed with a new `_coerce_optional_number`
+  helper (rejects non-numeric values and `bool`, which is a Python `int`
+  subclass and would otherwise silently become `1.0`/`0.0`) plus an
+  explicit `isinstance(payload, dict)` check before any `.get()` call.
+- New `scripts/test_station_scenarios.py`: 13 deterministic tests against
+  crafted fixtures for *both* the Open-Meteo forecast and the station
+  adapter (so the model's dry/wet state is controlled, not dependent on
+  live weather) - covers the disabled-by-default no-op path, a full
+  reading overriding temp+icon, the "already wet, don't override" case, a
+  `None`-returning adapter failing soft, partial readings (temp-only,
+  rain-only), the exact intensity thresholds, and (added after the review
+  above, faking `requests.get` directly to reach `_fetch_station_generic_http`'s
+  real parsing path) the non-dict-payload and wrong-typed-field crash
+  scenarios. Also renders 3 scenarios (disabled, light rain, heavy rain +
+  negative temp) across all 3 screen modes as a visual clipping check - no
+  overflow/collision found.
+- `IDEAS.md`'s local-station line reworded (not deleted) - the seam exists,
+  but no real vendor is chosen yet.
+
+**Active** - current design. Verified: new `scripts/test_station_scenarios.py`
+(13/13), full existing suite (`scripts/test_model_blend.py`,
+`scripts/test_precip_scenarios.py`, `scripts/test_forecast_rain_scenarios.py`,
+`scripts/test_forecast_quality_scenarios.py`, `scripts/test_pollen_scenarios.py`,
+`scripts/test_display_freshness.py`, `scripts/test_palette_sync.py`,
+`scripts/test_locations.py` - all 14 locations, all 3 screen modes) all
+pass with zero diffs (station is inert by default,
+`station_enabled=False`). Web UI round-trip verified end-to-end against a
+local `web_app.py` instance (save -> persisted to `settings.json` -> reload
+reflects it, then reset to defaults). Not yet deployed to the Pi.
 
 ---
 
