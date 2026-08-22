@@ -190,7 +190,7 @@ class WeatherCanvas:
         chart_widget.render_chart(
             image, layout.CHART_AREA, data.hourly, data.sun_events, self.text_color,
             lambda key, size: self.assets.icon(key, size), self.config.graph_icon_step,
-            self.assets.font("normal", 13), self.assets.font("bold", 14), self.assets.font("bold", 18),
+            self.assets.font("normal", 13), self.assets.font("bold", 18),
             temp_unit_label, data.precip_label,
             # "compact" gets the gridlines chart style too - only "original"
             # keeps the actual-day min/max dashed lines.
