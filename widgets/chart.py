@@ -65,6 +65,18 @@ def _vertical_text(draw_target: Image.Image, position, text, font, color):
     draw_target.paste(rotated, (int(x), int(y - rotated.height // 2)), rotated)
 
 
+def _pick_side_label_font(text, font_axis, font_fallback, max_height):
+    """The rotated side label's height (post-rotation) is the text's own
+    *width* pre-rotation - font_axis (matching the gridline/axis numbers'
+    size+weight, per explicit user ask) fits every real precip_label except
+    "Sneeuw [cm]", the longest one, which overflows a ~104px-tall plot by a
+    few px at that size. Falls back to font_fallback (the original,
+    smaller size) only for whichever label actually needs it, rather than
+    shrinking every label to accommodate the one long outlier."""
+    w = font_axis.getbbox(text)[2]
+    return font_axis if (w + 2) <= max_height else font_fallback
+
+
 def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
     x = plot_x0
     while x < plot_x1:
@@ -330,7 +342,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         # label (which spans the plot's full height) doesn't land on top
         # of a number instead of beside it.
         regen_x = plot_x1 + 6 + max_rain_number_w + 6 if max_rain_number_w else plot_x1 + 10
-        _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, font_bold, text_color)
+        side_label_font = _pick_side_label_font(side_label, font_axis, font_bold, plot_h)
+        _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, side_label_font, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip
     # below, so each icon sits directly under its hour's label instead of
