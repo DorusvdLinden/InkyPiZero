@@ -112,7 +112,10 @@ See [development.md](./docs/development.md) for local (no-hardware) testing.
 
 - `weather_data.py` - fetches and parses Open-Meteo data (current, hourly,
   daily forecast, UV, pollen) plus RIVM/luchtmeetnet.nl air quality (LKI)
-  into typed dataclasses
+  into typed dataclasses. Forecast requests blend three Open-Meteo models
+  (`dwd_icon_d2`/`dwd_icon_eu`/`best_match`, in that priority order) rather
+  than a single model - see `docs/settings.md`'s "Forecast model blend"
+  section
 - `weather_quality.toml` - user-editable ranges/colors for a forecast-card
   weather-quality classification (temperature/precipitation -> tier ->
   color) - re-read fresh every render, no restart needed to take effect;

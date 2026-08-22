@@ -586,6 +586,47 @@ specific to those unit systems (`TODO.md`), rather than being fixed.
 | `min_update_interval_minutes` | `0` | Minimum minutes between checks, on top of the fixed 10-minute systemd timer cadence - `0` means no extra throttling. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 | `force_refresh_max_stale_minutes` | `60` | How long the physical display can go unrefreshed while the main icon/temperature are unchanged before a refresh is forced anyway. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 
+## Forecast model blend (`weather_data.py`)
+
+Not a `DisplayConfig` field - `MODEL_PRIORITY = ["dwd_icon_d2", "dwd_icon_eu", "best_match"]`
+is a hardcoded constant, since it's a location-specific research finding
+(only valid because Sittard sits inside DWD's ICON coverage), not a general
+user preference. A sibling research project (Weather-Reader) ran a real,
+backfilled-data comparison of forecast accuracy against Sittard ground truth
+and found DWD's ICON-D2/ICON-EU clearly beat KNMI's own model (what
+`best_match` resolves to for this location) on nearly every variable
+(`MODELING_PLANS.md` Plan 4) - see `docs/changes.md` entry 47.
+
+- `OPEN_METEO_FORECAST_URL`'s `models=` param requests all three in one
+  call: `dwd_icon_d2,dwd_icon_eu,best_match`.
+- Open-Meteo does not merge a multi-model request - each hourly/daily
+  variable comes back suffixed per model (e.g. `temperature_2m_dwd_icon_d2`),
+  but only when 2+ of the requested models are actually valid for the
+  location; an out-of-domain model is dropped from the response entirely
+  (key absent), and once only one model remains valid there (any
+  non-European location), Open-Meteo drops suffixing altogether and
+  returns the plain unsuffixed key instead - confirmed live for Reykjavik
+  (partial: `dwd_icon_d2` absent, `dwd_icon_eu`/`best_match` still
+  suffixed) and Phoenix (single: fully unsuffixed).
+- `_merge_model_series`/`_merge_model_blend` walk `MODEL_PRIORITY` per
+  (variable, hour/day index), taking the first model's non-null value and
+  falling back to the plain key, reproducing the same unsuffixed shape a
+  single-model response always had - no other function in `weather_data.py`
+  needed to change.
+- DWD's ICON-D2/ICON-EU have much shorter real forecast horizons than this
+  project's `forecast_days=7` default (~54h / ~123h respectively) -
+  `best_match` is the full-horizon backstop for the tail, and (via the same
+  fallback mechanism) for any location entirely outside DWD's coverage.
+  `scripts/test_locations.py`'s 13 non-Sittard locations confirm this is
+  self-correcting: they render identically to the pre-blend behavior.
+- The `current` block is never suffixed regardless of model count -
+  Open-Meteo sources it from whichever model is listed *first* in
+  `models=` (confirmed by swapping order across live calls), so current
+  conditions come from `dwd_icon_d2` with no extra request or merge code.
+- Covered by `scripts/test_model_blend.py` (crafted fixtures, no network) -
+  run after any change to `MODEL_PRIORITY`, `_merge_model_series`, or
+  `_merge_model_blend`.
+
 ## Via CLI flags (`main.py`, local/dev use only)
 
 Not available on the deployed Pi (the systemd service invokes `main.py` with
