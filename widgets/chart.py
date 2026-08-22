@@ -140,6 +140,12 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # least one gridline label - read further down to decide whether the
     # vertical precip side-label should stand in for it.
     any_gridline_labeled = False
+    # Widest gridline rain NUMBER actually drawn (mm format only - category
+    # words are measured separately and always suppress the side label, see
+    # below) - the side label's x position is pushed past this so the two
+    # don't occupy the same horizontal band, since the vertical label spans
+    # the plot's full height and a gridline number can land anywhere in it.
+    max_rain_number_w = 0
 
     # Set True below whenever a gridline sits close enough to the top/bottom
     # axis extreme that its label would otherwise collide with that
@@ -211,6 +217,9 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
                 rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
                 rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number_int(rain_at_y)
                 draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
+                if not show_intensity_labels:
+                    label_w = font_axis.getbbox(rain_label)[2]
+                    max_rain_number_w = max(max_rain_number_w, label_w)
                 suppress_max_rain_label = suppress_max_rain_label or near_max_rain
                 suppress_min_rain_label = suppress_min_rain_label or near_min_rain
             v += 10
@@ -296,21 +305,31 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # (rain_axis_max, always a whole number) and the intensity-band words
     # both have no decimal point to align to. In intensity-label mode the
     # "[mm]" unit suffix is dropped - it's no longer accurate once the axis
-    # isn't showing millimeters. Dropped whenever a rain/hail gridline
+    # isn't showing millimeters. Dropped only when BOTH a rain/hail gridline
     # label was actually drawn (any_gridline_labeled, only ever set True
-    # when show_rain_gridline_labels - see above) - its rotated span
-    # (~90px of a ~104px-tall plot, vertically centered) collided with the
-    # shared gridlines' rain-value labels, which communicate the rain
-    # scale without it. Snow/dry never set any_gridline_labeled (their
-    # gridline numbers have no self-explanatory unit/word the way rain's
-    # do), so their side label always shows, same as before this feature.
-    # (Every gridline label now always draws regardless of proximity to the
-    # axis extremes, and v=0 - hence at least one gridline - is always in
-    # range since min_temp <= 0 <= max_temp, so any_gridline_labeled is
-    # unconditionally True whenever show_rain_gridline_labels is True.)
-    if not (show_temp_gridlines and any_gridline_labeled):
+    # when show_rain_gridline_labels - see above) AND those are the wide
+    # intensity words (show_intensity_labels/"category" format) - "motrgn"
+    # etc. is wide enough at font_axis to genuinely collide with the
+    # rotated side label's own span. In plain "mm" format the gridline
+    # value is just a short number (_format_rain_number_int, no decimal) -
+    # RIGHT_MARGIN was sized for the widest intensity word, so a bare
+    # number leaves real unused width there and the side label still fits
+    # alongside it, per explicit user ask. Snow/dry never set
+    # any_gridline_labeled (their gridline numbers have no self-explanatory
+    # unit/word the way rain's do), so their side label always shows,
+    # same as before this feature. (Every gridline label now always draws
+    # regardless of proximity to the axis extremes, and v=0 - hence at
+    # least one gridline - is always in range since min_temp <= 0 <=
+    # max_temp, so any_gridline_labeled is unconditionally True whenever
+    # show_rain_gridline_labels is True.)
+    if not (show_temp_gridlines and any_gridline_labeled and show_intensity_labels):
         side_label = precip_label.removesuffix(" [mm]") if show_intensity_labels else precip_label
-        regen_x = plot_x1 + 10
+        # Default gap off the axis line (10) unless mm-format gridline
+        # numbers were drawn in this same column (max_rain_number_w > 0) -
+        # then push past the widest one actually drawn, so the rotated
+        # label (which spans the plot's full height) doesn't land on top
+        # of a number instead of beside it.
+        regen_x = plot_x1 + 6 + max_rain_number_w + 6 if max_rain_number_w else plot_x1 + 10
         _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, font_bold, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip

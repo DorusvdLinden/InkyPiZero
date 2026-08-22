@@ -1852,6 +1852,46 @@ integers (e.g. `"3"`, `"2"`, `"4"`) with no decimal point.
 
 ---
 
+### 50. Keep the rotated "Regen [mm]" side label in plain mm gridline mode
+Branch `feature/mm-mode-keep-rain-side-label`
+
+Entry 45 dropped the rotated precipitation side label entirely whenever a
+rain/hail gridline label was drawn (`any_gridline_labeled`), regardless of
+`rain_axis_format` - reasonable when the gridline label could be a wide
+intensity word ("motrgn"), but entry 49's decimal-drop made the plain
+`"mm"`-mode gridline number short enough that real unused width was left in
+`RIGHT_MARGIN`. Per explicit user ask, the side label is now kept in `"mm"`
+mode (only still dropped in `"category"` mode, where the wide words
+genuinely collide with it).
+
+A first pass just flipped the suppression condition and re-showed the label
+at its old fixed x offset - visual testing immediately caught a real
+overlap: the rotated label spans the plot's **full height**, so any
+gridline number landing near the vertical center (e.g. this render's
+interior "2" gridline) sat directly underneath the label's text instead of
+beside it (see the before/after crop in
+`mock_display_output/precip_scenario_test/_debug_crop_rightlabel.png` -
+kept as the working record of the bug, not deleted once fixed). Fixed by
+measuring the actual rendered width of the widest gridline number drawn in
+this render (`max_rain_number_w`, tracked during the existing gridline
+loop) and positioning the side label past it (`plot_x1 + 6 + max_rain_number_w + 6`)
+instead of a fixed offset - the two columns now sit side by side at every
+gridline position, not just by luck of where a given day's numbers happen
+to land.
+
+**Active** - current design. Verified: `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes) all pass. Visually confirmed via crafted
+rain/hail gridline renders (single- and double-digit gridline numbers) and
+a real live rainy location (Mumbai, `location_consistency_test/mumbai_india_gridlines.png`)
+that the number and side label no longer overlap at any gridline position,
+and that `"category"` mode's existing suppression is unchanged.
+
+---
+
 ## Pruned branches
 
 - `real-icons` (was local-only) - fully merged (entry 2) via PR #1, zero
