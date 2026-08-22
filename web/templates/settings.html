@@ -80,6 +80,32 @@
         grafiek, "Laatste update") niet oneindig verouderen.</p>
     </fieldset>
 
+    <fieldset>
+      <legend>Lokaal weerstation</legend>
+      <label class="checkbox">
+        <input type="checkbox" name="station_enabled" {{ "checked" if config.station_enabled }}>
+        Actuele temperatuur/regen van een lokaal weerstation gebruiken
+      </label>
+      <label>Type
+        <select name="station_type">
+          <option value="" {{ "selected" if config.station_type == "" }}>(geen)</option>
+          {% for value in station_adapter_keys %}
+            <option value="{{ value }}" {{ "selected" if config.station_type == value }}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>URL
+        <input type="text" name="station_base_url" value="{{ config.station_base_url }}">
+      </label>
+      <label>API-sleutel (optioneel)
+        <input type="password" name="station_api_key" value="{{ config.station_api_key }}">
+      </label>
+      <p class="hint">Er is nog geen echt weerstation aangesloten - alleen een generieke
+        "generic_http"-adapter die platte JSON ({"temperature": ..., "rain_mm": ...}) van de
+        opgegeven URL leest. Als het station onbereikbaar is of geen geldige waarde teruggeeft,
+        valt de weergave automatisch terug op het model (Open-Meteo). Zie docs/settings.md.</p>
+    </fieldset>
+
     <button type="submit">Opslaan</button>
   </form>
 {% endblock %}

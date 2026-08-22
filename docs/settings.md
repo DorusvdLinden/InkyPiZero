@@ -585,6 +585,53 @@ specific to those unit systems (`TODO.md`), rather than being fixed.
 | `rain_axis_format` | `"mm"` | `"mm"` \| `"category"` - chart's rain axis for rain/hail windows: a plain mm number vs Dutch intensity words (droog/motrgn/licht/matig/zwaar/hevig). Snow/dry windows always show a plain number regardless. In `"category"` mode the rotated side label also drops its `"[mm]"` unit suffix (`"Regen [mm]"` -> `"Regen"`). In "gridlines"/"compact" screen mode, every 10° reference line on a rain/hail window also shows the rain value/word at that same height (temp and rain share one pixel-height axis) - once any of those show, the rotated side label is dropped (it collided with them); it still shows on a rare narrow-temp-range day where no gridline ends up labeled, and always on snow/dry windows (their gridline numbers have no self-explanatory unit/word, so those two keep the side label and skip the extra gridline values entirely). |
 | `min_update_interval_minutes` | `0` | Minimum minutes between checks, on top of the fixed 10-minute systemd timer cadence - `0` means no extra throttling. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 | `force_refresh_max_stale_minutes` | `60` | How long the physical display can go unrefreshed while the main icon/temperature are unchanged before a refresh is forced anyway. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
+| `station_enabled` | `False` | Whether current temperature/rain are sourced from a local weather station instead of Open-Meteo's `current` block. See [Local weather station](#local-weather-station-weather_datapy) below |
+| `station_type` | `""` | `""` (disabled) or a key in `weather_data.STATION_ADAPTERS` - only `"generic_http"` (a placeholder, no real vendor wired up) exists today |
+| `station_base_url` | `""` | URL the `"generic_http"` adapter reads flat JSON from |
+| `station_api_key` | `""` | Optional bearer token sent to `station_base_url` |
+
+## Local weather station (`weather_data.py`)
+
+No real station vendor is wired up yet (`IDEAS.md`) - only a placeholder
+`"generic_http"` adapter exists, reading flat JSON
+(`{"temperature": ..., "rain_mm": ...}`) from a user-configured URL. The
+seam (`StationConditions`, `STATION_ADAPTERS`, `_get_station_conditions`)
+exists so a real vendor (Netatmo, Ecowitt, etc.) can be added later purely
+inside `weather_data.py` - add a new `STATION_ADAPTERS` entry and a matching
+`station_type` value, following the same fail-soft pattern as the RIVM/
+luchtmeetnet.nl integration (`_get_rivm_current_lki`): every adapter is a
+one-arg (`config`) callable that never raises, returning
+`StationConditions | None` with each field (`temperature_c`, `rain_mm`)
+independently `None`-able on partial sensor failure - or on a malformed/
+wrong-typed field, not just a transport failure (`_coerce_optional_number`;
+a real bug caught by review, see `docs/changes.md` entry 48).
+
+- **Current temperature**: the station's reading when present, else
+  Open-Meteo's `current.temperature` (unchanged fallback). `feels_like`
+  always comes from Open-Meteo's `apparent_temperature` - no generic
+  station API reliably publishes a computed apparent-temperature figure
+  (needs wind+humidity) - a known limitation to revisit once a real vendor
+  is picked.
+- **Current rain**: displayed by swapping the main current-conditions icon,
+  not a new text line or grid cell (the panel has no vertical slack left
+  and the data-point grid is a fixed 2x3 - see `docs/changes.md` entry 48).
+  If the model's own current icon doesn't already depict precipitation
+  (`weather_data.DRY_ICON_KEYS` - clear/cloudy/fog), but the station
+  reports live rain, `_apply_station_rain_override` swaps it to a rain icon
+  by intensity: `<=0.5` -> `"51d"` (light/drizzle), `<=4.0` -> `"53d"`
+  (moderate), above -> `"09d"` (heavy/showers). If the model already shows
+  rain/snow/drizzle/thunderstorm/hail, the station reading never overrides
+  it. `rain_mm` is a **rate** (mm/h) by convention, not an accumulation -
+  needed for these thresholds; this hasn't been validated against a real
+  vendor's actual field semantics yet, so the thresholds themselves are a
+  provisional placeholder.
+- **`WeatherSnapshot.current_rain_mm`**: the raw station reading (or
+  `None`), kept on the snapshot even though nothing renders it as text -
+  useful for the icon-override logic and any future display.
+- Covered by `scripts/test_station_scenarios.py` (crafted fixtures for both
+  the forecast model and the station adapter - no network needed) - run
+  after any change to this seam, `canvas.py`'s current-conditions icon
+  selection, or the `station_*` config fields.
 
 ## Forecast model blend (`weather_data.py`)
 

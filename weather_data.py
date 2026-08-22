@@ -458,6 +458,7 @@ class WeatherSnapshot:
     daily: list = field(default_factory=list)           # list[DayForecast]
     last_refresh_time: str = ""
     precip_label: str = "Droog"  # chart's rotated axis label - "Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" / "Droog"
+    current_rain_mm: float | None = None  # from a local station, if configured - see STATION_ADAPTERS
 
 
 def _reverse_geocode(lat: float, long: float, lang: str) -> dict:
@@ -1172,6 +1173,100 @@ def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: floa
     return data_points
 
 
+@dataclass
+class StationConditions:
+    temperature_c: float | None
+    rain_mm: float | None   # convention: most recent rain RATE (mm/h), not
+                             # an accumulation - needed for the icon-intensity
+                             # override below (_apply_station_rain_override).
+                             # Not yet validated against a real vendor's
+                             # actual field semantics - see docs/settings.md.
+
+
+def _coerce_optional_number(value) -> float | None:
+    """A field that's missing, non-numeric, or the wrong JSON type (a
+    string, a list, a bool) is "no reading" rather than a crash - fail-soft
+    extends to the payload's shape, not just its transport (a misconfigured
+    or buggy station endpoint must degrade the same way an unreachable one
+    does, not break every scheduled render until fixed)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _fetch_station_generic_http(config: DisplayConfig) -> StationConditions | None:
+    """Placeholder adapter - no real station vendor is wired up yet (see
+    IDEAS.md). Reads flat JSON ({"temperature": ..., "rain_mm": ...}) from a
+    user-configured URL, optionally bearer-authed. Fails soft on any
+    network/parse/shape problem, same as _get_rivm_current_lki/
+    _resolve_rivm_station - the render must never abort just because the
+    station is unreachable, or returns a malformed/wrong-typed body."""
+    if not config.station_base_url:
+        return None
+    try:
+        headers = {"Authorization": f"Bearer {config.station_api_key}"} if config.station_api_key else {}
+        response = requests.get(config.station_base_url, headers=headers, timeout=10)
+        if not 200 <= response.status_code < 300:
+            logger.warning("Station request failed: %s", response.content)
+            return None
+        payload = response.json()
+        if not isinstance(payload, dict):
+            logger.warning("Station response was not a JSON object: %r", payload)
+            return None
+        return StationConditions(
+            temperature_c=_coerce_optional_number(payload.get("temperature")),
+            rain_mm=_coerce_optional_number(payload.get("rain_mm")),
+        )
+    except (requests.RequestException, ValueError, KeyError) as e:
+        logger.warning("Could not read local weather station: %s", e)
+        return None
+
+
+# Add a new entry (and a new DisplayConfig.station_type value settings_store
+# validates against) once a real station vendor is chosen. Every adapter
+# must satisfy the same contract: one-arg (config) callable, never raises,
+# returns StationConditions|None with each field independently None-able on
+# partial sensor failure.
+STATION_ADAPTERS: dict = {
+    "generic_http": _fetch_station_generic_http,
+}
+
+
+def _get_station_conditions(config: DisplayConfig) -> StationConditions | None:
+    if not config.station_enabled:
+        return None
+    adapter = STATION_ADAPTERS.get(config.station_type)
+    return adapter(config) if adapter else None
+
+
+# Icon keys map_weather_code_to_icon can produce that don't already depict
+# precipitation - only these are eligible for the station-rain override
+# below (if the model already shows rain/snow/drizzle/thunderstorm/hail, a
+# live station rain reading doesn't override it).
+DRY_ICON_KEYS = {"01d", "01n", "022d", "022n", "04d", "50d", "48d"}
+
+
+def _apply_station_rain_override(icon_key: str, rain_mm: float | None) -> str:
+    """If the model's current icon doesn't already depict precipitation but
+    the station is reporting live rain, swap to a rain icon reflecting
+    intensity. Thresholds are a documented placeholder pending a real
+    vendor's actual rate-field granularity - see docs/settings.md.
+
+    Rain icons have no night variant in this codebase's asset set (see
+    docs/icons.md - only 51d/53d/09d exist; map_weather_code_to_icon itself
+    never swaps them for is_day==0), so this never produces a non-existent
+    "51n"/"53n"/"09n" key - matches existing precedent."""
+    if rain_mm is None or rain_mm <= 0 or icon_key not in DRY_ICON_KEYS:
+        return icon_key
+    if rain_mm <= 0.5:
+        return "51d"   # light / drizzle
+    if rain_mm <= 4.0:
+        return "53d"   # moderate rain
+    return "09d"        # heavy / showers
+
+
 def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     """Fetches current Open-Meteo data and returns a fully-parsed WeatherSnapshot."""
     weather_data = _get_open_meteo_data(config.latitude, config.longitude, config.forecast_days + 1)
@@ -1187,6 +1282,11 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     weather_code = current.get("weather_code", 0)
     is_day = current.get("is_day", 1)
     current_icon_key = map_weather_code_to_icon(weather_code, is_day)
+
+    station = _get_station_conditions(config)
+    station_temp = station.temperature_c if station else None
+    station_rain = station.rain_mm if station else None
+    current_icon_key = _apply_station_rain_override(current_icon_key, station_rain)
 
     daily_forecast = _parse_forecast(daily, tz, config.latitude, config.inky_saturation)
     data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation)
@@ -1211,7 +1311,10 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         current_date=format_date_nl(dt),
         location=location,
         current_icon_key=current_icon_key,
-        current_temp=round(current.get("temperature", 0)),
+        current_temp=round(station_temp if station_temp is not None else current.get("temperature", 0)),
+        # Always from Open-Meteo, never the station - no generic station API
+        # reliably publishes a computed apparent-temperature figure (needs
+        # wind+humidity), a known limitation until a real vendor is picked.
         feels_like=round(current.get("apparent_temperature", current.get("temperature", 0))),
         temp_unit=TEMP_UNIT,
         last_night_low=last_night_low,
@@ -1223,4 +1326,5 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         daily=daily_forecast[1:config.forecast_days + 1],
         last_refresh_time=last_refresh_time,
         precip_label=precip_label,
+        current_rain_mm=station_rain,
     )

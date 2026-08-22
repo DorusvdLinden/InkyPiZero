@@ -37,3 +37,12 @@ class DisplayConfig:
     # cards, the hourly chart, "Laatste update") don't go stale forever.
     # See display_freshness.py.
     force_refresh_max_stale_minutes: int = 60
+    # Pluggable local weather-station source for "actual" (not modeled)
+    # current temperature/rain - see weather_data.STATION_ADAPTERS. No real
+    # station is wired up yet (only "generic_http", a placeholder) - these
+    # fields exist so a real integration (Netatmo, Ecowitt, etc.) can be
+    # added later purely inside weather_data.py. See docs/settings.md.
+    station_enabled: bool = False
+    station_type: str = ""       # "" (disabled) | a key in weather_data.STATION_ADAPTERS
+    station_base_url: str = ""
+    station_api_key: str = ""
