@@ -32,7 +32,23 @@ SPEED_UNIT = "m/s"
 DISTANCE_UNIT = "km"
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={long}&format=jsonv2&accept-language={lang}&zoom=14"
-OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models=best_match&forecast_days={forecast_days}"
+
+# Models tried in priority order, both for `current` (Open-Meteo returns one
+# unsuffixed `current` block sourced from whichever model is listed FIRST -
+# confirmed empirically, not documented) and for the hourly/daily merge in
+# _merge_model_blend below (first non-null value per model wins). DWD's
+# ICON-D2/ICON-EU beat KNMI's own model (best_match's pick for NL) on nearly
+# every variable for this project's Sittard location, per a real backfilled
+# comparison in the sibling Weather-Reader project (MODELING_PLANS.md Plan
+# 4) - not a general claim about DWD vs KNMI elsewhere. Their real horizons
+# are short (~54h / ~123h); best_match is the full-horizon backstop for the
+# tail, and for any location outside DWD's coverage (Open-Meteo drops an
+# out-of-domain model from the response entirely rather than null-filling
+# it - see _merge_model_series - so every hour falls through to best_match).
+MODEL_PRIORITY = ["dwd_icon_d2", "dwd_icon_eu", "best_match"]
+OPEN_METEO_MODELS_PARAM = ",".join(MODEL_PRIORITY)
+
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,relative_humidity_2m,surface_pressure,visibility,snowfall&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset&current=temperature,windspeed,winddirection,is_day,precipitation,weather_code,apparent_temperature&timezone=auto&models={models}&forecast_days={forecast_days}"
 OPEN_METEO_AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={long}&hourly=uv_index,uv_index_clear_sky,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto"
 OPEN_METEO_UNIT_PARAMS = "temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm"
 
@@ -493,12 +509,73 @@ def get_nearest_location_name(lat: float, long: float) -> str:
         return ""
 
 
+# Variables requested per array in OPEN_METEO_FORECAST_URL - kept in sync
+# with that template so _merge_model_blend knows which per-model-suffixed
+# keys to look for (e.g. "temperature_2m_dwd_icon_d2").
+_MERGED_HOURLY_VARS = [
+    "weather_code", "temperature_2m", "precipitation", "precipitation_probability",
+    "relative_humidity_2m", "surface_pressure", "visibility", "snowfall",
+]
+_MERGED_DAILY_VARS = [
+    "weathercode", "temperature_2m_max", "temperature_2m_min",
+    "precipitation_sum", "sunrise", "sunset",
+]
+
+
+def _merge_model_series(block: dict, variables: list[str]) -> dict:
+    """Requesting multiple `models=` does not merge them - Open-Meteo
+    returns each variable suffixed per model (e.g. "temperature_2m_dwd_icon_d2",
+    "..._dwd_icon_eu", "..._best_match"), confirmed empirically. This walks
+    MODEL_PRIORITY per (variable, hour/day index) and takes the first
+    model's non-null value, producing the same unsuffixed shape a
+    single-model response has so every existing parser in this file keeps
+    working unchanged.
+
+    Open-Meteo only suffixes a variable when 2+ of the requested models are
+    actually valid for that location - a model outside its own domain (e.g.
+    dwd_icon_d2 for anywhere far from Central Europe) is dropped from the
+    response entirely rather than suffixed-with-nulls, confirmed live for
+    Reykjavik (dwd_icon_d2 absent, dwd_icon_eu/best_match still suffixed).
+    Once only one model remains valid (any non-European location), Open-Meteo
+    drops suffixing altogether and returns the plain unsuffixed key,
+    confirmed live for Phoenix. Falling back to the plain key below handles
+    both cases with the same logic."""
+    times = block.get("time", [])
+    merged = {"time": times}
+    for var in variables:
+        series = []
+        plain = block.get(var)
+        for i in range(len(times)):
+            value = None
+            for model in MODEL_PRIORITY:
+                candidates = block.get(f"{var}_{model}")
+                if candidates and i < len(candidates) and candidates[i] is not None:
+                    value = candidates[i]
+                    break
+            if value is None and plain and i < len(plain):
+                value = plain[i]
+            series.append(value)
+        merged[var] = series
+    return merged
+
+
+def _merge_model_blend(raw: dict) -> dict:
+    return {
+        "timezone": raw.get("timezone"),
+        "current": raw.get("current", {}),  # already single-model - see MODEL_PRIORITY comment
+        "hourly": _merge_model_series(raw.get("hourly", {}), _MERGED_HOURLY_VARS),
+        "daily": _merge_model_series(raw.get("daily", {}), _MERGED_DAILY_VARS),
+    }
+
+
 def _get_open_meteo_data(lat, long, forecast_days):
-    url = OPEN_METEO_FORECAST_URL.format(lat=lat, long=long, forecast_days=forecast_days) + f"&{OPEN_METEO_UNIT_PARAMS}"
+    url = OPEN_METEO_FORECAST_URL.format(
+        lat=lat, long=long, forecast_days=forecast_days, models=OPEN_METEO_MODELS_PARAM
+    ) + f"&{OPEN_METEO_UNIT_PARAMS}"
     response = requests.get(url, timeout=30)
     if not 200 <= response.status_code < 300:
         raise RuntimeError(f"Failed to retrieve Open-Meteo weather data: {response.content}")
-    return response.json()
+    return _merge_model_blend(response.json())
 
 
 def _get_open_meteo_air_quality(lat, long):

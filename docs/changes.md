@@ -1676,6 +1676,65 @@ fixed the isothermal-rain-label bug before shipping.
 
 ---
 
+### 47. Switch forecast model from best_match to a DWD ICON blend
+Branch `forecast-model-blend`
+
+`weather_data.py`'s Open-Meteo forecast request used `models=best_match`,
+which resolves to KNMI's own HARMONIE-AROME-Netherlands model for this
+project's Sittard location. The sibling Weather-Reader research project ran
+a real, backfilled-data comparison of forecast accuracy against Sittard
+ground truth (KNMI actuals) and found KNMI's own model came in dead last of
+7 candidates - DWD's `dwd_icon_d2`/`dwd_icon_eu` clearly won on nearly every
+variable (`MODELING_PLANS.md` Plan 4), a "domain edge effect" from Sittard
+sitting near KNMI's Netherlands-grid boundary. That finding was deliberately
+left un-acted-on pending a real decision; this entry acts on it.
+
+- `OPEN_METEO_FORECAST_URL` now requests `models=dwd_icon_d2,dwd_icon_eu,best_match`
+  (`MODEL_PRIORITY`) in one combined call, instead of `best_match` alone.
+- Confirmed live against the real API (not assumed) before implementing:
+  DWD's ICON-D2/ICON-EU have much shorter real forecast horizons than this
+  project's `forecast_days=7` config (~54h / ~123h respectively) - `best_match`
+  stays in the request as the full-horizon backstop for the tail. Open-Meteo
+  does not auto-merge a multi-model request - each variable comes back
+  suffixed per model (e.g. `temperature_2m_dwd_icon_d2`), but *only* when
+  2+ of the requested models are actually valid for the location; a model
+  outside its own domain is dropped from the response entirely (key
+  absent), and once only one model remains valid there (confirmed for
+  Phoenix - any non-European location), Open-Meteo drops suffixing
+  altogether and returns the plain unsuffixed key instead. New
+  `_merge_model_series`/`_merge_model_blend` walk `MODEL_PRIORITY` per
+  (variable, index) and fall back to the plain key, reproducing the exact
+  same unsuffixed `{"timezone", "current", "hourly", "daily"}` shape a
+  single-model response always had - every existing parser in
+  `weather_data.py` needed zero changes.
+- The `current` block is never suffixed regardless of model count - Open-Meteo
+  sources it from whichever model is listed *first* in `models=` (confirmed
+  by swapping order across live calls), so `current` conditions come from
+  `dwd_icon_d2` with no extra request or merge code.
+- This also makes the fallback self-correcting for every non-Sittard
+  location `scripts/test_locations.py` covers: outside DWD's coverage, its
+  arrays are absent entirely, so every hour/day falls straight through to
+  `best_match` with no special-casing - confirmed all 14 locations render
+  identically to before except Sittard itself.
+- New `scripts/test_model_blend.py`: 13 deterministic unit tests against
+  crafted multi-model-suffixed fixtures, covering the horizon boundaries
+  (53/54h, 122/123h), the out-of-domain (all-null-equivalent) case, a
+  model's key entirely absent vs. null-filled, the single-valid-model
+  plain-key fallback, and `_merge_model_blend`'s `current` passthrough.
+- `IDEAS.md`'s "Use a different weather model for the best forecast" line
+  removed - built by this entry.
+
+**Active** - current design. Verified: new `scripts/test_model_blend.py`
+(13/13), `scripts/test_locations.py` (all 14 locations, all 3 screen
+modes - live network, real regression check), `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py` all pass with zero diffs (these monkeypatch
+the fetch layer wholesale, unaffected by the merge either way). Fresh-context
+subagent review found no correctness bugs. Not yet deployed to the Pi.
+
+---
+
 ## Pruned branches
 
 - `real-icons` (was local-only) - fully merged (entry 2) via PR #1, zero
