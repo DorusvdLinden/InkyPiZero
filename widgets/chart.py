@@ -37,9 +37,19 @@ def _rain_intensity_label(mm_per_hour: float) -> str:
 
 
 def _format_rain_number(v: float) -> str:
-    """One decimal, trailing zero dropped - shared by every plain-mm rain
-    label (axis extremes and gridline values) so they read consistently."""
+    """One decimal, trailing zero dropped - used for the rain axis's own
+    top-extreme label (a real data point). See _format_rain_number_int for
+    the shared temp/rain gridlines' rain value, which drops the decimal
+    entirely."""
     return f"{round(v, 1):g}"
+
+
+def _format_rain_number_int(v: float) -> str:
+    """Rounded to a whole number, no decimal - the shared temp/rain
+    gridlines' rain value (drawn at the dotted lines) is a geometric scale
+    marker, not a real reading, so a decimal there added precision the
+    label was never trying to convey. Per explicit user ask."""
+    return str(round(v))
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -199,7 +209,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
                 # slack for an interior gridline to cross a band boundary
                 # the real data never reached.
                 rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
-                rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number(rain_at_y)
+                rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number_int(rain_at_y)
                 draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
                 suppress_max_rain_label = suppress_max_rain_label or near_max_rain
                 suppress_min_rain_label = suppress_min_rain_label or near_min_rain
