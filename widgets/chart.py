@@ -131,18 +131,26 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # vertical precip side-label should stand in for it.
     any_gridline_labeled = False
 
+    # Set True below whenever a gridline sits close enough to the top/bottom
+    # axis extreme that its label would otherwise collide with that
+    # extreme's own axis-extreme label (below) - not just an *exact*
+    # coincidence, a near-miss (e.g. max_temp=21, a v=20 tick) still overlaps
+    # into illegible garbled text at this font size. In that case the
+    # gridline's label wins (it carries the shared temp+rain reading) and the
+    # corresponding axis-extreme label is skipped instead, rather than the
+    # other way around.
+    suppress_max_temp_label = False
+    suppress_min_temp_label = False
+    suppress_max_rain_label = False
+    suppress_min_rain_label = False
+
     if show_temp_gridlines:
         # "Screen B" alternate: a uniform reference grid every 10deg across
         # the whole visible range, instead of calling out the day's actual
-        # min/max. Each line gets its value labeled at the left axis
-        # (before the line, matching the axis-extreme labels' own
-        # position/style) - skipped when a line is close enough to
-        # min_temp/max_temp that its label would collide with the
-        # axis-extreme label already drawn there (below) - not just an
-        # *exact* coincidence, a near-miss (e.g. max_temp=21, a v=20 tick)
-        # still overlaps into illegible garbled text at this font size.
+        # min/max. Each line gets its value labeled at the left axis (before
+        # the line, matching the axis-extreme labels' own position/style).
         # Sized off font_axis, since both this gridline label and the
-        # axis-extreme label it must avoid draw in that font.
+        # axis-extreme label it might replace draw in that font.
         label_bbox = font_axis.getbbox("0123456789°C-")
         min_label_gap = (label_bbox[3] - label_bbox[1]) * 1.2
         max_temp_y, min_temp_y = y_temp(max_temp), y_temp(min_temp)
@@ -154,33 +162,47 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         while v <= grid_end:
             y = y_temp(v)
             _dotted_horizontal(draw, y, plot_x0, plot_x1, PALETTE.chart_zero_line)
-            too_close_to_extreme = abs(y - max_temp_y) < min_label_gap or abs(y - min_temp_y) < min_label_gap
-            if not too_close_to_extreme:
-                # shifted left by the pixel width of the axis-extreme labels'
-                # unit suffix ("C", not present here) so the numbers
-                # themselves line up in a column - a space character isn't
-                # the same width as the letter it's standing in for, so
-                # padding with literal spaces would leave them misaligned.
-                label = f"{v}°"
-                draw.text((plot_x0 - 6 - unit_w, y), label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="rm")
+            near_max = abs(y - max_temp_y) < min_label_gap
+            near_min = abs(y - min_temp_y) < min_label_gap
+            suppress_max_temp_label = suppress_max_temp_label or near_max
+            suppress_min_temp_label = suppress_min_temp_label or near_min
+            # Rain-side proximity is checked against plot_y0/plot_y1 directly
+            # (always the true rain-axis extremes by construction) rather
+            # than max_temp_y/min_temp_y - those normally coincide exactly
+            # with plot_y0/plot_y1 too, but temp_span's "or 1" fallback
+            # (above) can decouple them from plot_y0/plot_y1 on a degenerate
+            # all-temps-exactly-0 window, which would otherwise wrongly hide
+            # a rain-axis label that isn't actually colliding with anything.
+            near_max_rain = abs(y - plot_y0) < min_label_gap
+            near_min_rain = abs(y - plot_y1) < min_label_gap
 
-                if show_rain_gridline_labels:
-                    any_gridline_labeled = True
-                    # Shared axis: temp and rain map onto the exact same
-                    # plot_y0..plot_y1 pixel range (two scales, one set of
-                    # lines - y_temp(max_temp)/y_rain(rain_axis_max) are both
-                    # exactly plot_y0, y_temp(min_temp)/y_rain(0) both exactly
-                    # plot_y1) - label the rain value at this same height
-                    # instead of drawing a second independent rain grid. This
-                    # is a geometric scale marker like the temp side, not a
-                    # per-hour reading - in category mode it can occasionally
-                    # read one band "worse" than the nearby actual-peak axis
-                    # label if rain_axis_max's ceil-rounding leaves enough
-                    # slack for an interior gridline to cross a band boundary
-                    # the real data never reached.
-                    rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
-                    rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number(rain_at_y)
-                    draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
+            # shifted left by the pixel width of the axis-extreme labels'
+            # unit suffix ("C", not present here) so the numbers themselves
+            # line up in a column - a space character isn't the same width
+            # as the letter it's standing in for, so padding with literal
+            # spaces would leave them misaligned.
+            label = f"{v}°"
+            draw.text((plot_x0 - 6 - unit_w, y), label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="rm")
+
+            if show_rain_gridline_labels:
+                any_gridline_labeled = True
+                # Shared axis: temp and rain map onto the exact same
+                # plot_y0..plot_y1 pixel range (two scales, one set of
+                # lines - y_temp(max_temp)/y_rain(rain_axis_max) are both
+                # exactly plot_y0, y_temp(min_temp)/y_rain(0) both exactly
+                # plot_y1) - label the rain value at this same height
+                # instead of drawing a second independent rain grid. This
+                # is a geometric scale marker like the temp side, not a
+                # per-hour reading - in category mode it can occasionally
+                # read one band "worse" than the nearby actual-peak axis
+                # label if rain_axis_max's ceil-rounding leaves enough
+                # slack for an interior gridline to cross a band boundary
+                # the real data never reached.
+                rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
+                rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number(rain_at_y)
+                draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
+                suppress_max_rain_label = suppress_max_rain_label or near_max_rain
+                suppress_min_rain_label = suppress_min_rain_label or near_min_rain
             v += 10
     else:
         # dashed actual min/max lines - skip whichever one exactly coincides
@@ -233,8 +255,10 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # less element competing for space, and the chart reclaims that whole
     # column (see LEFT_MARGIN).
     temp_unit_suffix = f"°{unit_label_temp}"
-    draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
-    draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
+    if not suppress_max_temp_label:
+        draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
+    if not suppress_min_temp_label:
+        draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
 
     # show_intensity_labels (computed above) - the actual peak/trough
     # value, not the rounded-up rain_axis_max ceiling, so the word matches
@@ -245,8 +269,15 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     else:
         top_label = _format_rain_number(rain_axis_max)
         bottom_label = "0"
-    draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
-    draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")
+    # On dry windows, rain_axis_max is always the max(1, ...) placeholder
+    # floor (there's no real rain to size the axis off) - showing "1" up top
+    # implies a rain reading that never happened, so it's dropped entirely
+    # rather than suppressed only on gridline-collision grounds like the
+    # other axis-extreme labels above.
+    if not suppress_max_rain_label and precip_label != "Droog":
+        draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
+    if not suppress_min_rain_label:
+        draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")
 
     # The precipitation label ("Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" /
     # "Droog" - picked in weather_data.py based on the hourly window's actual
@@ -262,9 +293,11 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # shared gridlines' rain-value labels, which communicate the rain
     # scale without it. Snow/dry never set any_gridline_labeled (their
     # gridline numbers have no self-explanatory unit/word the way rain's
-    # do), so their side label always shows, same as before this feature -
-    # as does rain/hail's on the rare day narrow enough that every
-    # gridline collides with the axis extremes and none get drawn.
+    # do), so their side label always shows, same as before this feature.
+    # (Every gridline label now always draws regardless of proximity to the
+    # axis extremes, and v=0 - hence at least one gridline - is always in
+    # range since min_temp <= 0 <= max_temp, so any_gridline_labeled is
+    # unconditionally True whenever show_rain_gridline_labels is True.)
     if not (show_temp_gridlines and any_gridline_labeled):
         side_label = precip_label.removesuffix(" [mm]") if show_intensity_labels else precip_label
         regen_x = plot_x1 + 10
