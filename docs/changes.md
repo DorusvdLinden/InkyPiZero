@@ -1892,6 +1892,43 @@ and that `"category"` mode's existing suppression is unchanged.
 
 ---
 
+### 51. Match the rotated precip side label to the axis numbers' size/weight
+Branch `feature/precip-side-label-match-axis-font`
+
+Per explicit user ask: the rotated side label ("Regen [mm]" etc.) used
+`font_bold` (bold, 14px) - noticeably smaller than the axis/gridline
+numbers next to it (`font_axis`, bold, 18px). Switched the `_vertical_text`
+call to `font_axis` so both read as one consistent scale.
+
+A real conflict surfaced during testing, not assumed away: the rotated
+label's height (post-rotation) is the text's own *pre-rotation width* -
+at `font_axis`, `"Sneeuw [cm]"` (the longest of the four `precip_label`
+values) needs ~110px, but the plot itself is only ~104px tall, so it
+visibly overlapped the top/bottom axis-extreme numbers (confirmed via a
+zoomed render crop before concluding anything). `"Regen [mm]"`/
+`"Hagel [mm]"`/`"Droog"` all fit within 1px or less - verified directly per
+explicit user request to double-check, not assumed from the snow case.
+Rather than shrinking every label to accommodate the one outlier (or
+accepting a visible defect on snow days), new `_pick_side_label_font`
+tries `font_axis` first and falls back to the original `font_bold` only
+for whichever label's rotated height would actually exceed the plot - same
+shrink-to-fit spirit as `canvas.py`'s existing `_fit_font`/
+`widgets/forecast.py`'s own copy, adapted for height instead of width
+since the text is rotated.
+
+**Active** - current design. Verified: `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes) all pass. Visually confirmed via zoomed
+crops of all four `precip_label` cases (rain/hail/snow/dry, gridlines and
+compact) and a real live rainy location (Mumbai) that rain/hail/dry now
+render bigger and bolder with no overlap, and that snow correctly falls
+back to the smaller font with no overlap either.
+
+---
+
 ## Pruned branches
 
 - `real-icons` (was local-only) - fully merged (entry 2) via PR #1, zero
