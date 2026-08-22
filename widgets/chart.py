@@ -65,18 +65,6 @@ def _vertical_text(draw_target: Image.Image, position, text, font, color):
     draw_target.paste(rotated, (int(x), int(y - rotated.height // 2)), rotated)
 
 
-def _pick_side_label_font(text, font_axis, font_fallback, max_height):
-    """The rotated side label's height (post-rotation) is the text's own
-    *width* pre-rotation - font_axis (matching the gridline/axis numbers'
-    size+weight, per explicit user ask) fits every real precip_label except
-    "Sneeuw [cm]", the longest one, which overflows a ~104px-tall plot by a
-    few px at that size. Falls back to font_fallback (the original,
-    smaller size) only for whichever label actually needs it, rather than
-    shrinking every label to accommodate the one long outlier."""
-    w = font_axis.getbbox(text)[2]
-    return font_axis if (w + 2) <= max_height else font_fallback
-
-
 def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
     x = plot_x0
     while x < plot_x1:
@@ -85,7 +73,7 @@ def _dotted_horizontal(draw, y, plot_x0, plot_x1, color, width=2):
 
 
 def render_chart(image: Image.Image, region, hourly, sun_events, text_color, icon_lookup,
-                  graph_icon_step, font_small, font_bold, font_axis, unit_label_temp, precip_label,
+                  graph_icon_step, font_small, font_axis, unit_label_temp, precip_label,
                   show_temp_gridlines: bool = False, rain_axis_format: str = "mm"):
     draw = ImageDraw.Draw(image)
     n = len(hourly)
@@ -148,15 +136,14 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         color = PALETTE.chart_warm if (t1 + t2) >= 0 else PALETTE.chart_cool
         draw.line([(x1, y1), (x2, y2)], fill=color, width=5, joint="curve")
 
-    # Set True below only when show_temp_gridlines mode actually draws at
-    # least one gridline label - read further down to decide whether the
-    # vertical precip side-label should stand in for it.
-    any_gridline_labeled = False
-    # Widest gridline rain NUMBER actually drawn (mm format only - category
-    # words are measured separately and always suppress the side label, see
-    # below) - the side label's x position is pushed past this so the two
-    # don't occupy the same horizontal band, since the vertical label spans
-    # the plot's full height and a gridline number can land anywhere in it.
+    # Widest rain NUMBER actually drawn anywhere in the right-side column -
+    # interior gridline values (mm format only) and/or the top/bottom
+    # axis-extreme numbers (tracked further down) - the side label's x
+    # position is pushed past this so the two never occupy the same
+    # horizontal band, since the vertical label spans the plot's full
+    # height and a number can land anywhere in it. Category-format
+    # intensity words are handled separately (always suppress the side
+    # label instead - see below), not folded into this.
     max_rain_number_w = 0
 
     # Set True below whenever a gridline sits close enough to the top/bottom
@@ -213,7 +200,6 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
             draw.text((plot_x0 - 6 - unit_w, y), label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="rm")
 
             if show_rain_gridline_labels:
-                any_gridline_labeled = True
                 # Shared axis: temp and rain map onto the exact same
                 # plot_y0..plot_y1 pixel range (two scales, one set of
                 # lines - y_temp(max_temp)/y_rain(rain_axis_max) are both
@@ -307,43 +293,39 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # other axis-extreme labels above.
     if not suppress_max_rain_label and precip_label != "Droog":
         draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
+        if not show_intensity_labels:
+            max_rain_number_w = max(max_rain_number_w, font_axis.getbbox(top_label)[2])
     if not suppress_min_rain_label:
         draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")
+        if not show_intensity_labels:
+            max_rain_number_w = max(max_rain_number_w, font_axis.getbbox(bottom_label)[2])
 
     # The precipitation label ("Regen [mm]" / "Hagel [mm]" / "Sneeuw [cm]" /
     # "Droog" - picked in weather_data.py based on the hourly window's actual
-    # weather codes) sits a flat 2mm (~10px) gap off the axis line - no
-    # decimal-point alignment to worry about, since the numbers above it
-    # (rain_axis_max, always a whole number) and the intensity-band words
-    # both have no decimal point to align to. In intensity-label mode the
-    # "[mm]" unit suffix is dropped - it's no longer accurate once the axis
-    # isn't showing millimeters. Dropped only when BOTH a rain/hail gridline
-    # label was actually drawn (any_gridline_labeled, only ever set True
-    # when show_rain_gridline_labels - see above) AND those are the wide
-    # intensity words (show_intensity_labels/"category" format) - "motrgn"
-    # etc. is wide enough at font_axis to genuinely collide with the
-    # rotated side label's own span. In plain "mm" format the gridline
-    # value is just a short number (_format_rain_number_int, no decimal) -
-    # RIGHT_MARGIN was sized for the widest intensity word, so a bare
-    # number leaves real unused width there and the side label still fits
-    # alongside it, per explicit user ask. Snow/dry never set
-    # any_gridline_labeled (their gridline numbers have no self-explanatory
-    # unit/word the way rain's do), so their side label always shows,
-    # same as before this feature. (Every gridline label now always draws
-    # regardless of proximity to the axis extremes, and v=0 - hence at
-    # least one gridline - is always in range since min_temp <= 0 <=
-    # max_temp, so any_gridline_labeled is unconditionally True whenever
-    # show_rain_gridline_labels is True.)
-    if not (show_temp_gridlines and any_gridline_labeled and show_intensity_labels):
-        side_label = precip_label.removesuffix(" [mm]") if show_intensity_labels else precip_label
-        # Default gap off the axis line (10) unless mm-format gridline
-        # numbers were drawn in this same column (max_rain_number_w > 0) -
-        # then push past the widest one actually drawn, so the rotated
-        # label (which spans the plot's full height) doesn't land on top
-        # of a number instead of beside it.
+    # weather codes) sits a flat 2mm (~10px) gap off the axis line. Always
+    # suppressed when show_intensity_labels ("category" format) - the
+    # intensity words ("motrgn" etc, up to 60px at font_axis) are drawn as
+    # the axis-extreme labels in EVERY screen mode (not just gridlines -
+    # suppress_max_rain_label/suppress_min_rain_label only get set inside
+    # the show_temp_gridlines branch, so in "original" mode these always
+    # draw unsuppressed), and are too wide to push the side label past
+    # without exceeding RIGHT_MARGIN and clipping off-canvas - confirmed via
+    # a real render before this was caught as a live bug (rain_original_category.png
+    # showed "Regen" overlapping "licht" - a regression from entry 51's
+    # font-size bump, not present when the side label used the smaller
+    # font_bold). In plain-number mode, the side label always shows,
+    # positioned past the widest NUMBER actually drawn anywhere in this
+    # column - gridline values (tracked above) and/or the top/bottom
+    # axis-extreme numbers (tracked just above, when not suppressed) -
+    # rather than a fixed offset, so it never lands on top of one
+    # regardless of screen mode or where a given day's numbers fall.
+    # Per explicit user ask, this also means the side label no longer needs
+    # a smaller fallback font (_pick_side_label_font, entry 51) for
+    # "Sneeuw [cm]" - every plain-number-mode label now renders at font_axis
+    # size, consistent with the numbers next to it.
+    if not show_intensity_labels:
         regen_x = plot_x1 + 6 + max_rain_number_w + 6 if max_rain_number_w else plot_x1 + 10
-        side_label_font = _pick_side_label_font(side_label, font_axis, font_bold, plot_h)
-        _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), side_label, side_label_font, text_color)
+        _vertical_text(image, (regen_x, (plot_y0 + plot_y1) // 2), precip_label, font_axis, text_color)
 
     # x-axis hour labels + tick marks - same cadence as the icon strip
     # below, so each icon sits directly under its hour's label instead of

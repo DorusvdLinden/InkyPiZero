@@ -1916,7 +1916,12 @@ shrink-to-fit spirit as `canvas.py`'s existing `_fit_font`/
 `widgets/forecast.py`'s own copy, adapted for height instead of width
 since the text is rotated.
 
-**Active** - current design. Verified: `scripts/test_precip_scenarios.py`,
+**Superseded by entry 52's positioning fix for the shrink-to-fit mechanism
+specifically** (the font-size match itself is still active) - see that
+entry for why, and for a second bug this same font-size bump silently
+introduced that entry 51's own testing missed (`"original"` screen mode +
+`rain_axis_format="category"`). Original verification, kept for the
+record: `scripts/test_precip_scenarios.py`,
 `scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
 `scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
 `scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
@@ -1926,6 +1931,77 @@ crops of all four `precip_label` cases (rain/hail/snow/dry, gridlines and
 compact) and a real live rainy location (Mumbai) that rain/hail/dry now
 render bigger and bolder with no overlap, and that snow correctly falls
 back to the smaller font with no overlap either.
+
+---
+
+### 52. Position the side label past axis-extreme numbers instead of shrinking it
+Branch `feature/side-label-clear-axis-extremes`
+
+Entry 51's shrink-to-fit fallback (`_pick_side_label_font`) fixed
+`"Sneeuw [cm]"` overlapping the top/bottom axis-extreme numbers by
+rendering it smaller than the other three precip labels - a real fix, but
+one the user pointed out (plan-only request) treated the symptom rather
+than the actual cause: the collision is horizontal (the rotated label's
+column overlaps the numbers' column at `plot_x1 + 6` vs `plot_x1 + 10`),
+not really a size problem, and there was real unused width to the right
+that a repositioning could use instead.
+
+**Investigating the plan surfaced a second, independent bug already live
+on `main`, not part of what was asked but caught before shipping anything
+new**: entry 51's font-size bump also silently broke `"original"`
+(non-gridline) screen mode combined with `rain_axis_format="category"`.
+The old suppression check
+(`show_temp_gridlines and any_gridline_labeled and show_intensity_labels`)
+only ever suppressed the side label inside gridlines/compact mode -
+`"original"` mode always draws its own axis-extreme label as a wide
+intensity word ("licht", "motrgn", up to 60px at the bumped font size) at
+the same `plot_x1 + 6` position, unsuppressed, and the side label was
+never being suppressed to make room for it there. Confirmed via a real
+render before concluding anything (`rain_original_category.png` showed
+"Regen" directly overlapping "licht").
+
+**Fix, addressing both**:
+- Side label suppression simplified to just `show_intensity_labels` -
+  true in every screen mode now, not gated on `show_temp_gridlines`/
+  `any_gridline_labeled` - since intensity words are always too wide to
+  push the label past without exceeding `RIGHT_MARGIN` and clipping off
+  the canvas edge.
+- In plain-number mode (the common case), the label is now always shown,
+  positioned past the widest NUMBER actually drawn anywhere in the
+  right-side column - not just interior gridline values (entry 49/50's
+  `max_rain_number_w`) but now also the top/bottom axis-extreme numbers
+  (`top_label`/`bottom_label`), whose widths get folded into the same
+  accumulator right where they're drawn, respecting the existing
+  suppression/`"Droog"`-skip logic already governing whether they draw at
+  all.
+- With the label now never landing in the same column as a number, entry
+  51's shrink-to-fit fallback (`_pick_side_label_font`) is no longer
+  needed and was removed - every precip label (including `"Sneeuw [cm]"`)
+  now renders at the same consistent `font_axis` size.
+- Dead code removed alongside: `any_gridline_labeled` (only used by the
+  old suppression check) and the now-unused `font_bold` parameter on
+  `render_chart` (only used by the deleted fallback) - `canvas.py`'s call
+  site updated to match the narrower signature.
+- A fresh-context review flagged, as a side effect rather than a bug: this
+  same generalization also closes a latent overlap risk that existed on
+  `main` before this entry, in `"original"` + `"mm"` mode with a 2-digit
+  `rain_axis_max` (previously positioned at the old fixed `plot_x1 + 10`
+  regardless of the axis-extreme number's own width) - not something
+  anyone had hit yet, but a real correctness improvement noticed in
+  passing, not designed for.
+
+**Active** - current design. Verified: `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py` pass; a fresh-context subagent
+review traced every rain-axis-number draw site into `max_rain_number_w`,
+confirmed `RIGHT_MARGIN=82`'s budget holds (including a synthetic 2-digit
+`"original"`+`"mm"` worst case, rendered not just computed), confirmed no
+dangling references to the removed function/parameter/variable anywhere in
+the repo, and confirmed `canvas.py`'s call site lines up with the new
+signature. Visually re-confirmed via zoomed crops across every
+`precip_label` x screen-mode x `rain_axis_format` combination (rain/hail/
+snow/dry, original/gridlines/compact, mm/category) plus a real live rainy
+location (Mumbai) - the `rain_original_category.png` collision this entry
+set out to fix is gone, and every other combination remains collision-free.
 
 ---
 
