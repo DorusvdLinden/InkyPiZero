@@ -76,7 +76,7 @@ class WeatherCanvas:
         text_cx = region.x + int(region.w * 0.68)
         font_temp = self.assets.font("bold", 64)
         font_unit = self.assets.font("bold", 24)
-        font_small = self.assets.font("bold", 15)
+        font_small = self.assets.font("bold", 19)
 
         temp_str = str(data.current_temp)
         temp_y = region.y + int(region.h * 0.42)
@@ -84,8 +84,12 @@ class WeatherCanvas:
         temp_w = draw.textlength(temp_str, font=font_temp)
         draw.text((text_cx + temp_w / 2 + 4, temp_y - 22), data.temp_unit, font=font_unit, fill=self.text_color, anchor="lm")
 
-        draw.text((text_cx, temp_y + 34), f"Gevoelstemp. {data.feels_like}°", font=font_small, fill=self.text_color, anchor="mm")
-        draw.text((text_cx, temp_y + 56),
+        # Bigger than the original 15px, and pushed further down toward the
+        # region's own bottom edge (region.bottom, not the chart below it -
+        # CHART_AREA.y is fixed independently in layout.py) to reclaim the
+        # gap that used to sit unused between these two lines and the chart.
+        draw.text((text_cx, temp_y + 40), f"Gevoelstemp. {data.feels_like}°", font=font_small, fill=self.text_color, anchor="mm")
+        draw.text((text_cx, temp_y + 74),
                    f"{data.last_night_low}° / {data.day_high}° / {data.next_night_low}°",
                    font=font_small, fill=self.text_color, anchor="mm")
 

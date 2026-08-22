@@ -1618,6 +1618,56 @@ this shipped.
 
 ---
 
+### 46. Gridline labels win axis-extreme collisions; bigger current-conditions text
+Branch `feature/chart-label-swap-current-conditions-font`
+
+Two small polish fixes:
+
+- In `show_temp_gridlines` mode ("gridlines"/"compact"), when a 10°
+  gridline lands close enough to the chart's max/min-temp axis-extreme
+  label to collide with it, entry 45's code suppressed the *gridline's*
+  label and kept the axis-extreme one. Per explicit user ask ("When the
+  max temp and the highest dotted line temp label overlap, remove the
+  max temp label instead of the dotted line label"), this is now
+  flipped: the axis-extreme label (`suppress_max_temp_label`/
+  `suppress_min_temp_label`) is skipped and the gridline's own label -
+  which, on rain/hail windows, also carries the shared rain reading -
+  always draws instead. Extended the same swap to the rain-axis top/
+  bottom extreme labels (`suppress_max_rain_label`/
+  `suppress_min_rain_label`) for the same collision risk on the right
+  side.
+- A fresh-context subagent review caught a real bug in that rain-side
+  extension: it originally reused the temp-side proximity check
+  (`near_max`/`near_min`, measured against `max_temp_y`/`min_temp_y`),
+  which silently breaks on a degenerate all-hours-exactly-0°C window -
+  `temp_span`'s `or 1` fallback decouples `min_temp_y` from its normal
+  `plot_y1` position, and the wrongly-derived signal could suppress a
+  rain-axis label that wasn't actually colliding with anything,
+  disappearing off the chart. Fixed by checking rain-side proximity
+  against `plot_y0`/`plot_y1` directly (always the true rain-axis
+  extremes by construction) instead of the temp-derived `max_temp_y`/
+  `min_temp_y` - identical behavior in every normal (non-degenerate)
+  case, correct in the edge case too. Verified via a crafted 24-hour
+  all-0°C-with-rain fixture, both before and after the fix.
+- `canvas.py`'s current-conditions panel (top-left "Gevoelstemp. X°" and
+  "min / day-high / min" lines) bumped from bold-15 to bold-19, with
+  their vertical offsets adjusted (`temp_y + 40`/`temp_y + 74`, was
+  `+34`/`+56`) to reclaim unused whitespace between that panel and the
+  chart below - `CHART_AREA`'s position in `layout.py` is untouched, so
+  the chart itself doesn't shift. Verified no overflow/overlap via both
+  real renders and direct `textbbox` measurements against the widest
+  realistic case (double-digit negative temps, both font families).
+
+**Active** - current design. Verified: `scripts/test_locations.py`,
+`scripts/test_precip_scenarios.py`, `scripts/test_pollen_scenarios.py`,
+`scripts/test_display_freshness.py`, and `scripts/test_palette_sync.py`
+all pass; visually confirmed across live renders (Mumbai, Phoenix,
+McMurdo Antarctica, Sittard rain-category) and the crafted degenerate
+fixture above. Fresh-context subagent review surfaced and this session
+fixed the isothermal-rain-label bug before shipping.
+
+---
+
 ## Pruned branches
 
 - `real-icons` (was local-only) - fully merged (entry 2) via PR #1, zero
