@@ -52,6 +52,23 @@ def _format_rain_number_int(v: float) -> str:
     return str(round(v))
 
 
+def _disambiguate_rain_number(v: float, conflicting_label: str) -> str:
+    """One decimal place (_format_rain_number's own rounding) can itself
+    round right back to the same whole number as conflicting_label - e.g.
+    v=0.9902 rounds to 1.0 at one decimal, and the trailing ".0" gets
+    dropped, producing "1" again - silently reintroducing the exact
+    duplicate this exists to prevent (a real gap, caught by review before
+    shipping). Escalates to two decimals only if one wasn't enough; if even
+    that still collides (v is essentially exactly the conflicting integer),
+    gives up rather than showing unrealistic precision for a rain/snow
+    reading - a case that arguably isn't a meaningful duplicate anymore."""
+    for decimals in (1, 2):
+        candidate = f"{round(v, decimals):g}"
+        if candidate != conflicting_label:
+            return candidate
+    return candidate
+
+
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
     """Pastes text rotated 90 degrees (bottom-to-top), left edge at `position`."""
     bbox = font.getbbox(text)
@@ -145,6 +162,22 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # intensity words are handled separately (always suppress the side
     # label instead - see below), not folded into this.
     max_rain_number_w = 0
+    # The previous gridline iteration's whole-number-rounded rain value
+    # (plain-number mode only) - lets each gridline detect, without a
+    # second pass, whether it would otherwise show the exact same digits as
+    # the one just below it (rain_at_y is monotonic in v, so any such
+    # collision is always between adjacent gridlines).
+    prev_gridline_int_label = None
+    # The topmost interior gridline's own rain NUMBER (plain-number mode
+    # only) - stays None whenever no gridlines were drawn (show_temp_gridlines
+    # False) or none carry a rain label. Used below to drop the top
+    # axis-extreme label specifically when it would show the exact same
+    # digits as the gridline just below it - a real, reported case: a
+    # near-dry day (rain_axis_max clamped to the 1mm placeholder floor) can
+    # round both the axis extreme AND the topmost gridline's rain_at_y to
+    # "1", and they're not close enough in *pixels* to trip the proximity
+    # suppression above, so the same number visibly appeared twice.
+    topmost_gridline_rain_label = None
 
     # Set True below whenever a gridline sits close enough to the top/bottom
     # axis extreme that its label would otherwise collide with that
@@ -213,11 +246,34 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
                 # slack for an interior gridline to cross a band boundary
                 # the real data never reached.
                 rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
-                rain_label = _rain_intensity_label(rain_at_y) if show_intensity_labels else _format_rain_number_int(rain_at_y)
+                if show_intensity_labels:
+                    rain_label = _rain_intensity_label(rain_at_y)
+                else:
+                    int_label = _format_rain_number_int(rain_at_y)
+                    # rain_at_y increases monotonically as v increases (see
+                    # above), so two gridlines can only round to the same
+                    # whole number if they're adjacent - checking just the
+                    # previous iteration catches every such run. Falls back
+                    # to a decimal (_disambiguate_rain_number) only for
+                    # whichever gridline actually needs it, rather than
+                    # showing a decimal everywhere - per explicit user ask,
+                    # a whole-number match between two dotted lines (a real
+                    # reported case) reads as a duplicate even though they
+                    # mark genuinely different heights.
+                    rain_label = (
+                        _disambiguate_rain_number(rain_at_y, int_label)
+                        if int_label == prev_gridline_int_label else int_label
+                    )
+                    prev_gridline_int_label = int_label
                 draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
                 if not show_intensity_labels:
                     label_w = font_axis.getbbox(rain_label)[2]
                     max_rain_number_w = max(max_rain_number_w, label_w)
+                    # v ascends towards grid_end each iteration, i.e. y moves
+                    # towards plot_y0 (up) - the last write below always ends
+                    # up holding the topmost gridline's own label once the
+                    # loop finishes.
+                    topmost_gridline_rain_label = rain_label
                 suppress_max_rain_label = suppress_max_rain_label or near_max_rain
                 suppress_min_rain_label = suppress_min_rain_label or near_min_rain
             v += 10
@@ -290,8 +346,15 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # floor (there's no real rain to size the axis off) - showing "1" up top
     # implies a rain reading that never happened, so it's dropped entirely
     # rather than suppressed only on gridline-collision grounds like the
-    # other axis-extreme labels above.
-    if not suppress_max_rain_label and precip_label != "Droog":
+    # other axis-extreme labels above. Also dropped whenever it would show
+    # the exact same digits as the topmost interior gridline
+    # (topmost_gridline_rain_label) - a real reported case: on a
+    # near-dry day, rain_axis_max clamps to the 1mm placeholder floor, and
+    # the topmost gridline's own rain_at_y (close to but under
+    # rain_axis_max) can round to that same "1" - the two aren't
+    # necessarily close enough in *pixels* to trip suppress_max_rain_label
+    # above, so the identical number was visibly appearing twice.
+    if not suppress_max_rain_label and precip_label != "Droog" and top_label != topmost_gridline_rain_label:
         draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
         if not show_intensity_labels:
             max_rain_number_w = max(max_rain_number_w, font_axis.getbbox(top_label)[2])

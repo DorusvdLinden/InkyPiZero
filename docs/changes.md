@@ -2005,6 +2005,70 @@ set out to fix is gone, and every other combination remains collision-free.
 
 ---
 
+### 53. Deduplicate the rain axis's number labels
+Branch `fix/rain-axis-duplicate-labels`
+
+User report from the real deployed display: the rain axis showed the digit
+"1" twice. Root-caused with a real before/after reproduction (not assumed):
+on a near-dry day, `rain_axis_max` clamps to the `max(1, ...)` placeholder
+floor, and the topmost interior gridline's own `rain_at_y` (close to but
+under 1) can round to "1" too - landing far enough in *pixels* from the
+axis-extreme label to dodge the existing proximity-based suppression
+(`near_max_rain`/`suppress_max_rain_label`, which only checks pixel
+distance, not value equality), so both labels drew.
+
+Two fixes, both per explicit user ask:
+- **"Drop the maximum if it is the same number"**: new
+  `topmost_gridline_rain_label` tracks the topmost interior gridline's own
+  label (the loop's last write, since `y_temp(v)` decreases as `v`
+  ascends towards `grid_end`). The top axis-extreme label's draw condition
+  gained `and top_label != topmost_gridline_rain_label`.
+- **"Show decimals when needed [at] the dotted lines"**: a second,
+  independent duplicate class - two *adjacent* interior gridlines rounding
+  to the same whole number (unrelated to the axis-extreme). New
+  `prev_gridline_int_label` tracks each gridline's plain int-rounded value;
+  `rain_at_y` is monotonic in `v`, so a same-value collision can only ever
+  involve the immediately preceding gridline - checking just that one
+  catches every such run without a second pass. On a collision, the
+  colliding gridline falls back to a decimal instead of the bare integer.
+
+**A real gap in the decimal fallback, caught by a fresh-context review
+before shipping**: the first version of the fallback just called the
+existing `_format_rain_number` (one decimal, trailing zero dropped via
+`:g`) - but that can itself round right back to the same whole number it
+was supposed to disambiguate from (e.g. `0.9902` rounds to `1.0` at one
+decimal, and `:g` drops the trailing `.0`, producing `"1"` again -
+silently reintroducing the exact duplicate one level down). Fixed with new
+`_disambiguate_rain_number`, which escalates from one decimal to two only
+if one wasn't enough. A second review pass mapped the function's own
+residual limit precisely (a 2,000,000-sample fuzz test found the failure
+window is exactly `v` within ±0.005 of the conflicting integer) - narrow
+enough, and visually inconsequential enough when hit, to accept rather
+than chase with a third decimal place (the same boundary problem recurs
+one decimal place down regardless, an asymptotic limit of
+round-and-compare disambiguation, not a fixable oversight).
+
+New `scripts/test_chart_axis_labels.py` (5 tests, calls `render_chart`
+directly with crafted `HourPoint` lists and spies on `ImageDraw.Draw.text`
+to assert no two rain-axis strings are ever identical) - each of the three
+bugs above is independently reproduced and locked in as a regression test,
+including one found via brute-force search over realistic integer
+temperatures (`max_temp=31`, a trace of rain) specifically for the
+decimal-escalation case, not just the review's abstract counter-example.
+
+**Active** - current design. Verified: new `scripts/test_chart_axis_labels.py`
+(5/5 - each confirmed to genuinely fail against the pre-fix code, not just
+pass trivially), `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes) all pass. Two fresh-context subagent review
+passes - the first caught the decimal-fallback gap above before it shipped,
+the second confirmed the fix's own residual limit is real but acceptable.
+
+---
+
 ## Pruned branches
 
 - `real-icons` (was local-only) - fully merged (entry 2) via PR #1, zero
