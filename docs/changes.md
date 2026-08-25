@@ -2067,6 +2067,63 @@ locations, all 3 screen modes) all pass. Two fresh-context subagent review
 passes - the first caught the decimal-fallback gap above before it shipped,
 the second confirmed the fix's own residual limit is real but acceptable.
 
+**Superseded by entry 54's disambiguation strategy** (the axis-extreme
+"drop the maximum" fix and the overall dedup architecture are unchanged
+and still active - only `_disambiguate_rain_number`'s own internals were
+replaced, per a follow-up explicit user ask for coarser, "nicer" output).
+
+---
+
+### 54. Show half-steps, not arbitrary decimals, at colliding gridlines
+Branch `fix/rain-gridline-half-step-disambiguation`
+
+Explicit user ask, as a follow-up to entry 53: "set dotted lines for rain
+to whole numbers or 0.5 if needed, not 0.8 rounded to 1" - entry 53's
+`_disambiguate_rain_number` escalated to arbitrary 1-2 decimal precision
+of the raw computed value (e.g. `"0.97"`), which reads as needlessly
+precise for what's a geometric scale marker, not a real reading (the same
+reasoning entry 49 already applied to the non-colliding case). Rewritten
+to round to the nearest half-step instead (`round(v * 2) / 2`) - a
+colliding gridline now shows a whole number or an `"X.5"` value, nothing
+in between.
+
+**A real, measured tradeoff, not silently accepted** - half-step
+granularity is coarser than entry 53's decimal escalation, so it resolves
+fewer collisions: a value close enough to the conflicting integer (now a
+much wider window than entry 53's ±0.005) still rounds right back to it.
+Confirmed via the existing `scripts/test_chart_axis_labels.py` fixtures:
+the "many packed gridlines" scenario (an extreme, unrealistic-for-Sittard
+40+ degree single-day temperature swing) that entry 53 fully resolved now
+shows a genuine residual duplicate again. Rather than reject the tradeoff
+or silently paper over it, checked directly against real fetched data for
+all 14 of `scripts/test_locations.py`'s diverse locations (both
+gridlines/compact mode, a dedicated ad-hoc verification pass, not the
+existing crash-safety-only test) before accepting it - none of them
+reproduced the collision; it only manifests in the kind of extreme,
+synthetic multi-collision scenario the test suite constructs specifically
+to probe the edge, not in realistic day-to-day use for this deployment.
+
+`scripts/test_chart_axis_labels.py` updated to match: the old
+"escalates to two decimals" test (no longer applicable - there's no
+escalation anymore) replaced with a direct unit test of
+`_disambiguate_rain_number`'s half-step behavior, a single-collision
+scenario confirming the fallback engages correctly (`max_temp=25`, a trace
+of rain), and a new test that deliberately documents the "many packed
+gridlines can still collide" case as a known, accepted limit rather than
+an unexamined gap - so a future change to the disambiguation strategy
+doesn't need to rediscover that this tradeoff was already made
+deliberately.
+
+**Active** - current design. Verified: `scripts/test_chart_axis_labels.py`
+(6/6, rewritten), `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes) all pass. Visually confirmed via a real
+live rainy location (Mumbai) that gridline values now show as clean whole
+numbers/half-steps ("2", "1.5", "1", "0").
+
 ---
 
 ## Pruned branches
