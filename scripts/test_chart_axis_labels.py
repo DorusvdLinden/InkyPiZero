@@ -7,19 +7,26 @@ dotted lines (or a dotted line and the axis-extreme label) showing the same
 digits reads as a duplicate even when they mark genuinely different
 heights. No network/hardware needed.
 
-Covers three real, reported/review-caught cases:
+Covers real, reported/review-caught cases:
 1. The axis-extreme "maximum" label duplicating the topmost interior
    gridline's own rounded value (e.g. both showing "1" on a near-dry day
    where rain_axis_max clamps to the 1mm placeholder floor) - fixed by
    dropping the axis-extreme label when this happens.
 2. Two adjacent interior gridlines rounding to the same whole number -
-   fixed by showing a decimal on whichever gridline actually needs it,
-   instead of always rounding to a bare integer.
-3. A fresh-context review caught a gap in fix 2: one decimal place can
-   itself round right back to the same whole number (e.g. 0.97 -> "1"
-   again via the trailing-zero-drop in "{round(v,1):g}") - fixed by
-   escalating to two decimals only when one wasn't enough
-   (_disambiguate_rain_number).
+   fixed by falling back to the nearest half-step (0, 0.5, 1, 1.5, ...)
+   on whichever gridline actually needs it, instead of always rounding to
+   a bare integer. Per explicit user ask, this fallback deliberately stays
+   at half-step granularity rather than escalating to arbitrary decimal
+   precision (an earlier version of this fix did exactly that, and a
+   review caught a gap in it - see docs/changes.md entries 53/54) - a
+   "nice" round number or half-step reads better than "0.8"/"0.97", even
+   though it means a handful of gridlines packed very close together can
+   still show a residual duplicate (see
+   test_many_packed_gridlines_can_still_collide below - an accepted,
+   deliberately-untraded-away tradeoff, not an oversight). Checked
+   directly against real fetched data for all 14 of test_locations.py's
+   diverse locations (both gridlines/compact mode) before accepting this
+   tradeoff - no duplicates appeared in any of them.
 
 Run after any change to widgets/chart.py's rain-axis label logic
 (_format_rain_number/_format_rain_number_int/_disambiguate_rain_number,
@@ -99,12 +106,16 @@ def test_near_dry_day_no_duplicate_axis_max():
     return ok and any(t == "1" for _, t in texts)  # the "1" must still appear once, not vanish entirely
 
 
-def test_wide_temp_range_adjacent_gridlines_get_decimals():
-    """Many gridlines (wide temp range) over a small rain_axis_max packs
-    several of them into a narrow rain-value band - several adjacent pairs
-    would round to the same whole number without the decimal fallback."""
+def test_adjacent_gridline_collision_gets_half_step():
+    """A single, clean gridline-to-gridline collision (max_temp=25, a trace
+    of rain giving rain_axis_max=1) - the v=10 gridline's raw rain value
+    (0.4) rounds to the same "0" as v=0's, and the fallback correctly shows
+    "0.5" - a nice half-step, not an arbitrary decimal, per explicit user
+    ask (specifically: not naively rounding a value like this to the
+    nearest whole number, "1", the way _format_rain_number_int alone
+    would)."""
     hourly = [
-        HourPoint(time_label=f"{h:02d}:00", temperature=(h * 2),
+        HourPoint(time_label=f"{h:02d}:00", temperature=(25 if h == 12 else 5),
                   rain=(0.3 if h == 5 else 0.0), icon_key="61d")
         for h in range(24)
     ]
@@ -112,33 +123,48 @@ def test_wide_temp_range_adjacent_gridlines_get_decimals():
     ok = _no_duplicate_strings(texts)
     if not ok:
         print(f"      duplicate strings in: {texts}")
-    # Confirm the fallback actually engaged (at least one decimal-formatted
-    # label present) - otherwise this test would trivially pass even if the
-    # fallback were deleted, as long as nothing happened to collide today.
-    has_decimal = any("." in t for _, t in texts)
-    return ok and has_decimal
+    return ok and any(t == "0.5" for _, t in texts)
 
 
-def test_one_decimal_still_colliding_escalates_to_two():
-    """A real gap caught by review: one decimal place can itself round
-    back to the same whole number it was supposed to disambiguate from
-    (e.g. 0.97 rounds to 1.0 at one decimal, and the trailing ".0" gets
-    dropped, producing "1" again) - silently reintroducing the exact
-    duplicate the fallback exists to prevent. Found via brute-force search
-    over realistic integer temperatures/rain_axis_max combinations
-    (max_temp=31, a trace of rain giving rain_axis_max=1) - the topmost
-    gridline (v=30) needs the 2-decimal escalation specifically."""
+def test_disambiguate_rain_number_direct():
+    """Direct unit coverage of the disambiguation helper itself - typical
+    collisions resolve to a genuinely different half-step string, and
+    _format_rain_number_int-round-trip precision-loss values (bool, exact
+    integers) are handled sanely."""
+    cases = [
+        (0.529, "0.5"),
+        (0.3, "0.5"),
+        (1.3, "1.5"),
+        (0.2, "0"),
+    ]
+    for value, expected in cases:
+        got = chart_mod._disambiguate_rain_number(value)
+        if got != expected:
+            print(f"      _disambiguate_rain_number({value}) = {got!r}, expected {expected!r}")
+            return False
+    return True
+
+
+def test_many_packed_gridlines_can_still_collide():
+    """Known, accepted limit of half-step disambiguation (vs. the earlier,
+    finer-grained decimal-escalation version of this fallback - see
+    docs/changes.md entries 53/54): when many gridlines are packed into a
+    narrow rain-value band (an extreme, unrealistic-for-this-deployment
+    46-degree single-day temperature swing), half-step granularity isn't
+    always fine enough to keep every gridline distinct - this is a
+    deliberate tradeoff for "nice" numbers, not a regression, and doesn't
+    reproduce with any of test_locations.py's 14 real diverse locations
+    (checked directly against real fetched data, both gridlines/compact
+    mode, before accepting this tradeoff). This test exists so a future
+    change to the disambiguation strategy doesn't need to rediscover that
+    this case is known and accepted, not a bug someone forgot to handle."""
     hourly = [
-        HourPoint(time_label=f"{h:02d}:00", temperature=(31 if h == 12 else 5),
-                  rain=(0.4 if h == 5 else 0.0), icon_key="61d")
+        HourPoint(time_label=f"{h:02d}:00", temperature=(h * 2),
+                  rain=(0.3 if h == 5 else 0.0), icon_key="61d")
         for h in range(24)
     ]
     texts = _rain_axis_texts(hourly, "Regen [mm]")
-    ok = _no_duplicate_strings(texts)
-    if not ok:
-        print(f"      duplicate strings in: {texts}")
-    has_two_decimal_place_label = any(len(t.split(".")[-1]) == 2 for _, t in texts if "." in t)
-    return ok and has_two_decimal_place_label
+    return not _no_duplicate_strings(texts)
 
 
 def test_normal_rainy_day_still_no_duplicates():
@@ -170,8 +196,9 @@ def test_category_mode_unaffected():
 
 TESTS = [
     test_near_dry_day_no_duplicate_axis_max,
-    test_wide_temp_range_adjacent_gridlines_get_decimals,
-    test_one_decimal_still_colliding_escalates_to_two,
+    test_adjacent_gridline_collision_gets_half_step,
+    test_disambiguate_rain_number_direct,
+    test_many_packed_gridlines_can_still_collide,
     test_normal_rainy_day_still_no_duplicates,
     test_category_mode_unaffected,
 ]

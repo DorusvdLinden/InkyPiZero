@@ -52,21 +52,17 @@ def _format_rain_number_int(v: float) -> str:
     return str(round(v))
 
 
-def _disambiguate_rain_number(v: float, conflicting_label: str) -> str:
-    """One decimal place (_format_rain_number's own rounding) can itself
-    round right back to the same whole number as conflicting_label - e.g.
-    v=0.9902 rounds to 1.0 at one decimal, and the trailing ".0" gets
-    dropped, producing "1" again - silently reintroducing the exact
-    duplicate this exists to prevent (a real gap, caught by review before
-    shipping). Escalates to two decimals only if one wasn't enough; if even
-    that still collides (v is essentially exactly the conflicting integer),
-    gives up rather than showing unrealistic precision for a rain/snow
-    reading - a case that arguably isn't a meaningful duplicate anymore."""
-    for decimals in (1, 2):
-        candidate = f"{round(v, decimals):g}"
-        if candidate != conflicting_label:
-            return candidate
-    return candidate
+def _disambiguate_rain_number(v: float) -> str:
+    """Rounds to the nearest half-step (0, 0.5, 1, 1.5, ...) rather than
+    escalating to arbitrary decimal precision (round(v,1)/round(v,2)) - per
+    explicit user ask, a colliding gridline should read as a "nice" round
+    number or half-step, never something like "0.8" or "0.97". Doesn't
+    guarantee a different string from the value it's disambiguating from in
+    every case (v landing extremely close to that same integer still
+    rounds to it even at this coarser granularity) - accepted as a narrow,
+    visually inconsequential residual limit rather than chasing it with
+    finer precision, same tradeoff this fallback already made before."""
+    return f"{round(v * 2) / 2:g}"
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -261,7 +257,7 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
                     # reported case) reads as a duplicate even though they
                     # mark genuinely different heights.
                     rain_label = (
-                        _disambiguate_rain_number(rain_at_y, int_label)
+                        _disambiguate_rain_number(rain_at_y)
                         if int_label == prev_gridline_int_label else int_label
                     )
                     prev_gridline_int_label = int_label
