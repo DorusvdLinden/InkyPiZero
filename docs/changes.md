@@ -2212,6 +2212,91 @@ duplicate scan against real fetched data for all 14 locations (both
 gridlines/compact mode) found zero duplicates, including a genuine
 decimal-fallback case on real data (Mumbai: "0", "0.3", "1").
 
+**Refined by entry 56** (the search architecture stays active; the
+decimal threshold and the axis-extreme handling both changed).
+
+---
+
+### 56. Prefer uniformly-stepped gridlines; drop the redundant top extreme
+Branch `fix/rain-axis-uniform-gridline-steps`
+
+User report from the real deployed display: "the axis shows 0, 2, 5 & 7
+on same [pixel] intervals, this is not correct." Root-caused with real
+live data (not assumed): Sittard's actual gridline heights mapped to
+perfectly *linear* raw rain values (0, 2.33, 4.67, 7 - confirmed via
+direct computation against the live fetch), but entry 55's search only
+checked for **distinct** labels - independently rounding each of those
+four evenly-spaced values to the nearest whole number gives "0, 2, 5, 7"
+(steps of 2, 3, 2), each individually the closest integer to its own true
+value, but reading as inconsistent to a viewer who expects evenly spaced
+gridlines to carry evenly stepped numbers.
+
+Explicit user ask, refining entry 55's search rather than replacing it:
+"1 decimal when needed, between 0 and 10mm, above always full integers,
+expand the max when needed... create headspace... no need to show actual
+max at the top."
+
+- `_rain_gridline_labels` now also reports **uniform** - whether every
+  consecutive pair of displayed values differs by the exact same amount,
+  computed from the *displayed* (rounded) values, not the raw ones.
+  `_choose_rain_axis_max` now prefers the smallest candidate that's both
+  distinct AND uniform, falling back to distinct-only (entry 55's
+  behavior) if none is found in the search budget, then to the natural
+  max as a last resort. For Sittard's real case this picks `axis_max=9`
+  over the natural `7` - not the smallest *distinct* value (7 was already
+  distinct), but the smallest *uniform* one, deliberately buying
+  "headspace" above the real data's peak for a clean "0, 3, 6, 9" - per
+  explicit user ask, a confirmed-acceptable tradeoff (same one entry 55
+  already established, just invoked more often now).
+- Decimal-eligibility threshold generalized from a hardcoded `9` to a
+  named `DECIMAL_ELIGIBLE_MAX_MM = 10` constant, matching the user's
+  updated wording.
+
+**A second, independent real bug surfaced immediately after shipping the
+uniform-step fix, caught via direct testing before considering the work
+done**: even with clean interior gridlines ("0, 3, 6"), the *separate*
+axis-extreme label at the true top of the plot doesn't necessarily
+continue that pattern - it sits at whatever pixel height `max_temp`
+actually lands at (not necessarily the next uniform step), and for a real
+day (temps 0-29, not a clean multiple of 10) it showed "8" right after
+"6" set the reader up for the true rain_axis_max, not another "3" -
+breaking the clean progression the fix above had just established.
+Per explicit user ask ("no need to show actual max at the top"), the
+top axis-extreme label is now **never drawn at all** for gridlines-mode
+plain-number rain/hail - the interior gridlines alone carry the reading.
+New `rain_axis_expansion_eligible` names the shared condition (already
+used to gate the search) and now also gates this. As a consequence, the
+previous `topmost_gridline_rain_label` safety net (dropping the
+axis-extreme specifically when it duplicated the topmost gridline) became
+provably unreachable dead code - it could only ever hold a non-`None`
+value under the exact condition that now blocks the top-label draw from
+running at all - so it and its one write-site were removed.
+
+**Verified before considering this done**: a fresh-context review caught
+one docstring inaccuracy in the new test (it narrated a hypothetical
+"pre-diff" value of "8" for the top-extreme that doesn't match what the
+actual pre-this-branch code would have shown - "7", since without the
+uniform-step preference the natural max of 7 was already distinct and
+never expanded) - the test's own functional assertion was already
+correct against real pre-diff code (confirmed by loading and running
+`main`'s actual `chart.py` against the fixture), only the narrative
+comment was off; corrected before shipping.
+
+**Active** - current design. Verified: `scripts/test_chart_axis_labels.py`
+(9/9, extended with 2 new tests: the uniform-step fix and the
+axis-extreme removal, the latter confirmed non-vacuous by running the
+exact fixture against real pre-diff `chart.py` and observing a genuine
+4th "7" label there), `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes, two transient Open-Meteo "service
+overloaded" failures confirmed unrelated on rerun) all pass. Visually
+confirmed via live Sittard data (the exact reported scenario) rendering a
+clean "9, 6, 3, 0" with no stray top value, and a real live rainy
+location (Mumbai) unaffected ("2, 1, 0").
+
 ---
 
 ## Pruned branches
