@@ -2124,6 +2124,94 @@ locations, all 3 screen modes) all pass. Visually confirmed via a real
 live rainy location (Mumbai) that gridline values now show as clean whole
 numbers/half-steps ("2", "1.5", "1", "0").
 
+**Superseded by entry 55's expand-the-max strategy** (the axis-extreme
+"drop the maximum" fix and overall dedup architecture are unchanged and
+still active - only the interior-gridline fallback's own granularity was
+replaced, per a follow-up explicit user ask after hitting a residual
+duplicate this entry's own half-step tradeoff had already flagged as
+possible).
+
+---
+
+### 55. Expand rain_axis_max to avoid gridline collisions, instead of coarsening the display
+Branch `feature/expand-rain-axis-max-to-avoid-collisions`
+
+User report: still seeing "1" twice on the rain axis (rain between 0 and
+1.5mm) - exactly the residual-collision tradeoff entry 54 had flagged as
+possible and checked (but not found) against the 14 real test locations at
+the time. Root cause matched entry 54's own prediction: half-step
+granularity is coarser than needed to separate two gridlines whose true
+values are both close to the same whole number.
+
+Explicit user ask, a more fundamental redesign rather than another
+coarsening tweak: "have the axis have 1 decimal when needed, between 0 and
+9mm, above always have the max and dotted lines at full integers, expand
+the max when needed... no more rounding." Two confirmed forks resolved
+before implementing: (1) expanding `rain_axis_max` also changes the bar
+chart's own scale (the real data's peak can sit below the very top of the
+chart on days needing expansion) - confirmed acceptable; (2) the search
+should be bounded ("a handful of steps"), not unlimited, falling back to
+the natural max if no clean value is found in range - confirmed.
+
+**Architecture**: `rain_axis_max` is no longer just `max(1, ceil(max(rains)))`
+- new `_rain_gridline_labels(axis_max, grid_start, grid_end, min_temp,
+temp_span)` computes every gridline's rain value/label for a *candidate*
+max (a plot_y0/plot_h-independent simplification of the shared-axis
+formula: `rain_at_y = axis_max*(v-min_temp)/temp_span`, since
+`y_temp(v)-plot_y0` cancels out plot_y0/plot_h entirely) using the
+same whole-number/one-decimal-if-≤9mm rounding rule as before, and reports
+whether every gridline came out distinct from every other. New
+`_choose_rain_axis_max` tries the natural max, then a few integer steps
+above it, returning the first collision-free candidate (or the natural
+max if none is found within budget). `grid_start`/`grid_end` moved earlier
+in `render_chart` (pure temp math, cheap) so the search can run before
+`plot_y0`/`plot_h`/`y_rain`/the bars even exist - the *same* `rain_axis_max`
+this search picks is what scales the bars too, not a display-only value,
+so the numbers never lie about where the bars actually reach.
+
+**A real bug caught before shipping, via direct testing against the exact
+scenario that motivated this entry** (max_temp=31): the first version of
+the search's collision check included the axis-extreme's own label
+(`str(axis_max)`) in what counted as a collision - but for some temp
+shapes (the topmost real gridline sitting very close to the day's actual
+high, little "slack" between them) the topmost gridline's value rounds to
+`axis_max` for *every* realistic candidate, a structural property of that
+shape's fractions, not something a bigger max can route around. Every
+candidate 1-7 was rejected, none ever tried, real duplicate persisted.
+Fixed by excluding the axis-extreme from the search's own pass/fail check
+entirely - that specific collision is handled separately (and
+unconditionally) by dropping the redundant axis-extreme label
+(`topmost_gridline_rain_label`, entry 53's mechanism, kept as-is) - the
+search only needs to resolve gridline-vs-gridline collisions among
+themselves, which a bigger max genuinely can fix.
+
+`_disambiguate_rain_number` (entry 54's half-step function) removed
+entirely - its job (deciding a colliding gridline's display value) is now
+folded directly into `_rain_gridline_labels`' own rounding rule.
+
+**Practical effect on the near-dry (originally reported) scenario**: the
+search now keeps `rain_axis_max` at its natural value whenever possible
+(the axis-extreme-vs-topmost case doesn't block a candidate anymore), only
+expanding when a genuine gridline-to-gridline collision exists - less
+aggressive expansion than an earlier draft of this fix, which expanded
+even when the drop-the-axis-extreme mechanism alone would have sufficed.
+
+**Active** - current design. Verified: `scripts/test_chart_axis_labels.py`
+(8/8, rewritten - direct unit coverage of `_rain_gridline_labels`/
+`_choose_rain_axis_max`, the max_temp=31 case that exposed the axis-extreme
+bug above, the >9mm-never-decimal rule, and a 150-degree pathological
+temp-swing case confirming the accepted residual limit still exists at the
+search-budget level, not the granularity level), `scripts/test_precip_scenarios.py`,
+`scripts/test_forecast_rain_scenarios.py`, `scripts/test_forecast_quality_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_display_freshness.py`,
+`scripts/test_palette_sync.py`, `scripts/test_model_blend.py`,
+`scripts/test_station_scenarios.py`, `scripts/test_locations.py` (all 14
+locations, all 3 screen modes, one transient Open-Meteo "service
+overloaded" failure confirmed unrelated on rerun) all pass. A dedicated
+duplicate scan against real fetched data for all 14 locations (both
+gridlines/compact mode) found zero duplicates, including a genuine
+decimal-fallback case on real data (Mumbai: "0", "0.3", "1").
+
 ---
 
 ## Pruned branches
