@@ -57,3 +57,10 @@ reference docs this list feeds into.
   (800px) and `bold_size` grows to ~120px inside a fixed 95px-tall card
   row, overflowing badly. Found via fresh-context review while auditing
   the mm-rain sizing change above, not caused by it.
+
+## Settings
+
+- [ ] Add a `wind_speed_unit` setting (m/s vs Beaufort) for the "Wind"
+  data point, following the `rain_axis_format` setting's pattern. Full
+  implementation plan written to `plans/wind-speed-unit-setting.md`
+  (2026-08-31) - not yet built.
