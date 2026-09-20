@@ -100,9 +100,13 @@ def _choose_rain_step(rains, grid_start, grid_step, max_temp):
 
     Degenerate guard: if max_temp <= grid_start, there's no positive
     headroom above the bottom gridline (e.g. an all-exactly-0-degrees day,
-    or a sub-one-gridline-step day) - no visible lattice to be consistent
-    with, so just return the smallest candidate; bars still render
-    correctly via the exact anchor formula regardless."""
+    or a sub-one-gridline-step day) - just return the smallest candidate.
+    In practice render_chart never reaches this branch: it only calls
+    _choose_rain_step when rain_axis_expansion_eligible is True, and that
+    now requires max_temp > grid_start itself (see render_chart - a render
+    with zero headroom falls back to the ceiling-based scale instead,
+    since the exact-lattice anchor would otherwise map rain values off the
+    top of the plot). Kept as a defensive fallback for any other caller."""
     if max_temp - grid_start <= 0:
         return CANDIDATE_RAIN_STEPS_MM[0]
     required_top = max(MIN_RAIN_AXIS_TOP_MM, max(rains, default=0.0))
