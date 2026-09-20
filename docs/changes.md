@@ -2212,8 +2212,8 @@ duplicate scan against real fetched data for all 14 locations (both
 gridlines/compact mode) found zero duplicates, including a genuine
 decimal-fallback case on real data (Mumbai: "0", "0.3", "1").
 
-**Refined by entry 56** (the search architecture stays active; the
-decimal threshold and the axis-extreme handling both changed).
+**Refined by entry 56, superseded by entry 57** (the ceiling-search
+architecture itself was replaced by an exact fixed-step lattice).
 
 ---
 
@@ -2296,6 +2296,145 @@ overloaded" failures confirmed unrelated on rerun) all pass. Visually
 confirmed via live Sittard data (the exact reported scenario) rendering a
 clean "9, 6, 3, 0" with no stray top value, and a real live rainy
 location (Mumbai) unaffected ("2, 1, 0").
+
+**Superseded by entry 57** (the distinct/uniform search over an axis
+ceiling was replaced by an exact fixed-step lattice - the rounding this
+entry was managing no longer exists).
+
+---
+
+### 57. Exact rain-axis lattice: fixed step, zero rounding, ever
+Branch `feature/exact-rain-axis-lattice`
+
+User ask, verified and confirmed this session by tracing the actual code
+and running `scripts/test_chart_axis_labels.py` against it: even with
+entries 53-56's distinct/uniform search, a gridline's printed rain number
+was still a **rounded approximation** - the line's pixel position was
+fixed by the real (arbitrary) `min_temp`/`max_temp`, and the number shown
+there was `rain_axis_max * (v - min_temp) / temp_span`, rounded. The
+printed digits could be off from the line's true position by up to
+~0.5mm. Explicit new ask: gridline numbers must be **exactly correct,
+zero rounding, ever** - even if that means the bars (previously pinned
+snugly under a "ceiling" axis) shift up or down a bit relative to the old
+rendering. Agreed rule set, refined through several rounds of
+back-and-forth before implementing:
+
+1. The bottom gridline is always exactly 0mm.
+2. A `rain_step` (mm per gridline gap) is chosen from a small clean-number
+   candidate list, instead of an axis-ceiling. Every gridline's value is
+   **defined** as `steps_above_bottom * rain_step` - never interpolated
+   against the real temps, never rounded. The label *is* the definition of
+   the scale at that point, so there's nothing left to round.
+3. Bars use the same fixed step, extended continuously from the bottom
+   gridline's own pixel position (`y_temp(grid_start)`) via a constant
+   pixels-per-gridline ratio - not a ratio against a single ceiling value.
+   Algebraically: a real rain value equal to `k * rain_step` maps to
+   exactly the same pixel the k-th gridline sits at, by construction (not
+   by search-and-hope).
+4. `rain_step` escalates upward (a small bounded candidate list, ascending
+   scan, first match wins - both conditions below are monotonic in
+   `rain_step`, so no two-tier fallback is needed) until **both**:
+   a. the value at the true top of the plot (`max_temp`'s position) is
+      **>= 3mm** (`MIN_RAIN_AXIS_TOP_MM`) - replacing the old
+      `max(1, ceil(max(rains)))` 1mm placeholder floor, so a dry/near-dry
+      day shows a properly-scaled axis instead of a near-zero one; and
+   b. the real day's max rain doesn't get clipped above the plot top.
+5. Decimal display is now a property of the chosen step itself
+   (`rain_step < 1` -> one decimal everywhere; `>= 1` -> whole numbers
+   everywhere), not a per-line collision fallback - collisions are
+   structurally impossible now (consecutive gridlines differ by exactly
+   `rain_step`).
+6. **New this round**: a day whose temps cross 0 or 1 multiples of 10
+   (which, given `min_temp`/`max_temp` always clamp to include 0, reduces
+   in practice to "the whole day stays within roughly ±10°C of freezing")
+   would otherwise get only a single "0" gridline - not enough to read a
+   rain scale off of. Falls back to a 5-degree grid for that render
+   instead, usually giving 2-3 reference lines instead of at most 1
+   (an even narrower day - within one 5-degree bucket of 0 - still gets
+   only 1), labeled identically to any other gridline on both the temp and
+   rain sides. This is a temp-gridline-density fix independent of the
+   rain-axis logic - it also benefits snow/dry windows' temp lines.
+7. Only applies where the old expansion already applied
+   (`rain_axis_expansion_eligible`: gridlines mode + rain/hail + `"mm"`
+   format). Category-word mode, snow, and dry windows are untouched -
+   **and** additionally requires real headroom above the bottom gridline
+   (see the bug below), which a sufficiently narrow render can also fail.
+
+**Candidate step list** (`CANDIDATE_RAIN_STEPS_MM`): `0.5, 1, 2, 3, 5, 10,
+20, 50, 100, 200, 500, 1000, 2000, 5000` - the `1-10` decade gets an extra
+`3` (so the 3mm floor escalates minimally instead of jumping straight to
+5). `0.2` was considered and dropped after verifying it's mathematically
+unreachable: it needs a headroom-to-gridline-gap ratio of >=15, which even
+the coldest temperature ever recorded on Earth (Vostok Station,
+Antarctica, -89.2degC) only reaches ~8-9. `0.5` itself is only reachable
+on an entire day at or below 0degC with a low around -60degC or colder -
+real, if rare, for extreme-cold climates; confirmed via
+`test_no_step_below_1mm_for_realistic_temps` that a realistic -40..0 day
+never picks a sub-1mm step.
+
+**A real bug caught via the algebra during design, before it ever
+shipped**: under the exact-lattice anchor, `y_rain(0)` lands exactly on
+the `v = grid_start` gridline's own pixel row, whose label is now always
+"0". The old separate bottom axis-extreme "0" label was gated only by a
+near-`plot_y1` proximity check, which wouldn't reliably catch this new
+coincidence - it would have drawn a second, overlapping "0" on essentially
+every eligible render. Fixed by unconditionally suppressing **both** the
+top and bottom rain axis-extreme labels whenever
+`rain_axis_expansion_eligible` (previously only the top was
+unconditionally dropped, per entry 56).
+
+**A second, more serious bug caught by a fresh-context review before
+shipping**: the exact-lattice anchor assumes `grid_start` sits at or near
+the *bottom* of the visible plot, with real headroom above it up to
+`max_temp`. On a day squeezed inside a single grid_step-degree window -
+e.g. an entire freezing-rain day between -3degC and -0.7degC, a plausible
+real scenario, not a contrived one - `grid_start` can land exactly AT
+`max_temp` itself (the plot's true top, zero headroom). The anchor formula
+(`y_grid_start - (v/rain_step)*px_per_gridline`) then maps every positive
+rain value to a pixel *above* `y_grid_start`, i.e. above the plot's own
+top - confirmed via direct testing before the fix: a zero-rain hour drew a
+full-plot-height bar (top pinned to `plot_y0` itself, since the 3%-height
+skip check couldn't help - for rain=0 in this broken state,
+`plot_y1 - top` was already at its maximum possible value), and a real
+2mm-rain hour drew a bar top hundreds of pixels above the entire 480px
+canvas. `render_chart` draws directly onto the shared canvas with no
+clipping to its own region, so this would have painted outside the chart
+widget's area entirely on real hardware. Fixed by adding
+`max_temp > grid_start` to `rain_axis_expansion_eligible` itself - a
+render with zero headroom now falls back to the safe, bounded
+ceiling-based scale (same as snow/dry/category), losing exact gridline
+labels for that one render but never corrupting the canvas. The single
+gridline in that state draws no rain-side label at all (matching snow/
+dry's treatment); the axis-extreme top/bottom labels, now active again in
+that fallback, carry the reading instead. An accepted residual limit for
+an already-narrow edge case, not a design goal that was walked back.
+
+**Design decision worth recording**: the bar rectangle's *bottom* edge
+stays pinned to `plot_y1` (pure visual "grounding" fill), only the *top*
+(the value-bearing edge) uses the new exact mapping. Anchoring the bottom
+edge to the lattice's own zero point (`y_temp(grid_start)`) instead would
+leave a visible gap under short bars on any sub-freezing, non-multiple-
+of-10 day - not something requested, so the old grounding behavior was
+kept.
+
+**Active** - current design, replacing entries 55-56's ceiling-search
+approach entirely. Verified: `scripts/test_chart_axis_labels.py` (16/16,
+substantially rewritten - direct unit coverage of `_choose_rain_step`/
+`_rain_step_top_value`/`_rain_gridline_value`/`_format_rain_gridline_value`,
+the 3mm floor, clipping-driven escalation, the extreme-cold fractional-step
+case, an end-to-end exactness proof that a gridline's drawn y and a bar's
+drawn top y agree within float epsilon for the same value, the bottom-"0"-
+duplicate regression, dry-window non-routing, the 5-degree fallback on
+both the positive and negative side plus a control case confirming it
+doesn't fire when unnecessary, and a direct regression test for the
+zero-headroom bug above asserting every bar top stays within the plot's
+own bounds), `scripts/test_precip_scenarios.py`,
+`scripts/test_pollen_scenarios.py`, `scripts/test_palette_sync.py`,
+`scripts/test_locations.py` (all 14 locations, all 3 screen modes) all
+pass. Visually confirmed via live Sittard data (clean "10°/2mm, 0°/0mm"
+gridlines) and a crafted narrow-range (2-7degC) fixture showing the new
+5-degree fallback line ("5°/3mm") with a bar correctly landing between it
+and "0°/0mm".
 
 ---
 

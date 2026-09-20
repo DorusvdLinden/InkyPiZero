@@ -36,142 +36,111 @@ def _rain_intensity_label(mm_per_hour: float) -> str:
     return "hevig"
 
 
-def _format_rain_number(v: float) -> str:
-    """One decimal, trailing zero dropped - used for the rain axis's own
-    top-extreme label (a real data point). See _format_rain_number_int for
-    the shared temp/rain gridlines' rain value, which drops the decimal
-    entirely."""
-    return f"{round(v, 1):g}"
-
-
 def _format_rain_number_int(v: float) -> str:
-    """Rounded to a whole number, no decimal - the shared temp/rain
-    gridlines' rain value (drawn at the dotted lines) is a geometric scale
-    marker, not a real reading, so a decimal there added precision the
-    label was never trying to convey. Per explicit user ask."""
+    """Rounded to a whole number, no decimal - used for the non-eligible
+    (category mode / snow / dry) axis-extreme label, which still rounds an
+    axis-ceiling value. See _format_rain_gridline_value for the shared
+    temp/rain gridlines' exact-lattice value, which never needs rounding."""
     return str(round(v))
 
 
-# Rain-axis decimal eligibility threshold, per explicit user ask: "between
-# 0 and 10 [mm] show x.y, above [that], whole full integers only". Applied
-# to whichever rain_axis_max a render ends up choosing, not the real data's
-# own max - a day whose real peak is 8mm but whose chosen axis expanded to
-# 11mm (for uniform steps - see _choose_rain_axis_max) loses decimal
-# eligibility, matching the same "no need to show actual max" simplicity
-# principle: the chosen axis scale is what governs display, not the data.
-DECIMAL_ELIGIBLE_MAX_MM = 10
+# Minimum value the rain axis must reach at the true top of the plot (the
+# max_temp position), per explicit user ask - replaces the old
+# max(1, ceil(real max rain)) 1mm placeholder floor with a more generous
+# 3mm minimum, so a dry/near-dry day still shows a properly-scaled axis
+# instead of a near-zero one.
+MIN_RAIN_AXIS_TOP_MM = 3.0
+
+# Clean, human-readable mm-per-gridline increments, smallest first -
+# _choose_rain_step scans this ascending and returns the first one that
+# clears both the floor and the no-clipping requirement (see below).
+# Decade-by-decade [1,2,5] pattern, except the 1-10 decade also gets an
+# extra "3" (so the 3mm floor escalates minimally rather than jumping
+# straight to 5), and everything below 1 is capped at 0.5 - the next step
+# down, 0.2, was verified (see docs/changes.md) to be mathematically
+# unreachable even at the coldest temperature ever recorded on Earth
+# (Vostok Station, Antarctica, -89.2degC), so it's not included. 0.5 itself
+# is only reachable on an entire day at or below 0degC with a low around
+# -60degC or colder - real, if rare, for extreme-cold climates.
+CANDIDATE_RAIN_STEPS_MM = (
+    0.5,
+    1, 2, 3, 5,
+    10, 20, 50,
+    100, 200, 500,
+    1000, 2000, 5000,
+)
 
 
-def _rain_gridline_labels(axis_max, grid_start, grid_end, min_temp, temp_span):
-    """Computes the shared-axis rain value/label at every temp gridline
-    for a candidate rain_axis_max, purely from temp values -
-    plot_y0/plot_h-independent, since y_temp(v) - plot_y0 =
-    (max_temp - v)/temp_span*plot_h regardless of plot_y0's absolute
-    position, which simplifies render_chart's rain_at_y formula down to
-    axis_max*(v - min_temp)/temp_span. Lets this run standalone during
-    _choose_rain_axis_max's search (before plot_y0/plot_h even exist) and
-    be reused as-is once a candidate is chosen, rather than recomputing
-    with duplicated logic at draw time.
-
-    Rounding: whole number by default; falls back to one decimal place
-    (never more - per explicit user ask, no more escalating/coarsening
-    tricks like earlier versions of this fallback) only for whichever
-    gridline would otherwise show the exact same digits as the one just
-    below it, and only when axis_max is small enough
-    (<=DECIMAL_ELIGIBLE_MAX_MM) that a decimal is meaningful - above that,
-    always whole numbers, matching the axis's own top-extreme (always
-    axis_max itself, always a whole number). rain_at_y is monotonic in v,
-    so a same-value collision can only ever involve the immediately
-    preceding gridline - checking just that one catches every such run.
-
-    distinct only checks gridlines against EACH OTHER, deliberately
-    excluding the top axis-extreme (=axis_max itself): for some temp
-    shapes (grid_end very close to max_temp - little "slack" between the
-    topmost real gridline and the actual high), the topmost gridline's
-    value rounds to axis_max for every realistic candidate regardless of
-    how far the max expands - a structural property of that shape, not
-    something a bigger max can route around. render_chart doesn't even
-    draw the axis-extreme label in the case this search applies to (per
-    explicit user ask, "no need to show actual max at the top" - the
-    interior gridlines already carry the reading), so folding this into
-    the search's pass/fail would just make it fail for that shape without
-    ever finding anything better, for a collision that's moot anyway.
-
-    uniform checks something different and additional: even when every
-    gridline's label is individually distinct, INDEPENDENTLY rounding each
-    one can still make evenly-spaced gridlines show unevenly-spaced
-    numbers - e.g. raw values 0, 2.33, 4.67, 7 round to "0, 2, 5, 7" (steps
-    of 2, 3, 2), each individually the closest whole number to its own
-    true value, but reading as inconsistent to a viewer who expects evenly
-    spaced gridlines to carry evenly stepped values (a real reported
-    case). uniform is True only when every consecutive pair of displayed
-    values differs by the exact same amount.
-
-    Returns (labels, distinct, uniform) - labels is [(v, rain_at_y,
-    label), ...]."""
-    labels = []
-    displayed_values = []
-    prev_int_label = None
-    seen = set()
-    distinct = True
-    for v in range(grid_start, grid_end + 1, 10):
-        rain_at_y = axis_max * (v - min_temp) / temp_span
-        int_label = _format_rain_number_int(rain_at_y)
-        if int_label == prev_int_label and axis_max <= DECIMAL_ELIGIBLE_MAX_MM:
-            label = _format_rain_number(rain_at_y)
-            displayed_values.append(round(rain_at_y, 1))
-        else:
-            label = int_label
-            displayed_values.append(round(rain_at_y))
-        prev_int_label = int_label
-        if label in seen:
-            distinct = False
-        seen.add(label)
-        labels.append((v, rain_at_y, label))
-    diffs = {b - a for a, b in zip(displayed_values, displayed_values[1:])}
-    uniform = len(diffs) <= 1  # 0 or 1 gridlines has nothing to compare, trivially uniform
-    return labels, distinct, uniform
+def _rain_step_top_value(rain_step, grid_start, grid_step, max_temp):
+    """The rain value that would sit at the true top of the plot (the
+    max_temp position) for a candidate rain_step -
+    plot_y0/plot_h-independent (same trick the old rain_axis_max search
+    used), so this can run before those exist. steps_of_headroom =
+    (max_temp - grid_start)/grid_step is the (not necessarily whole)
+    number of gridline-gaps between the bottom gridline and the true top
+    of the plot."""
+    return rain_step * (max_temp - grid_start) / grid_step
 
 
-def _choose_rain_axis_max(rains, grid_start, grid_end, min_temp, temp_span):
-    """Searches upward from the natural max(1, ceil(max(rains))) for a
-    rain_axis_max that reads as a normal, evenly-stepped chart axis,
-    instead of accepting the natural max's collisions/uneven steps and
-    patching them after the fact - per explicit user ask ("expand the max
-    when needed... create headspace... no need to show [the] actual max at
-    the top"). Since rain_axis_max also sets the bar chart's own scale,
-    this means the real data's peak can sit a little below the very top of
-    the chart on days where expansion is needed, rather than always
-    touching it - an accepted, explicitly-requested tradeoff, not an
-    oversight.
+def _choose_rain_step(rains, grid_start, grid_step, max_temp):
+    """Picks the smallest candidate rain_step (mm per gridline gap) such
+    that every gridline's rain value - defined directly as
+    steps_above_bottom * rain_step, never interpolated against the real
+    min/max temps and never rounded - reads as a properly-scaled, never-
+    clipped axis. Escalates upward (bounded to CANDIDATE_RAIN_STEPS_MM)
+    until BOTH:
+    1. the value at the true top of the plot is >= MIN_RAIN_AXIS_TOP_MM
+       (replaces the old 1mm placeholder floor), and
+    2. the real day's max rain doesn't get clipped above the plot top
+       (i.e. the top-of-plot value is also >= the real max rain).
+    Both conditions are monotonically easier to satisfy as rain_step
+    grows, so a single ascending scan (first match wins) is correct - no
+    two-tier fallback needed the way the old distinct/uniform search
+    required.
 
-    Two-tier preference, both bounded to a handful of steps above the
-    natural max (per explicit user ask - a bounded search, not an
-    unlimited one):
-    1. Prefer the smallest candidate that's both distinct AND uniform
-       (every gridline shows a genuinely different number, evenly
-       stepped) - the ideal, normal-chart-axis-looking case.
-    2. If none of the tried candidates achieve that, fall back to the
-       smallest merely-distinct one (no duplicate numbers, but possibly
-       uneven steps) - still strictly better than doing nothing.
-    3. If even that fails, fall back to the natural max itself;
-       render_chart's own per-line decimal fallback and the
-       topmost-gridline-vs-axis-extreme check remain as a safety net for
-       whatever's left, so a pathological case never leaves a truly
-       unhandled duplicate, just possibly an accepted residual one."""
-    natural_max = max(1, math.ceil(max(rains, default=0)))
-    candidates = range(natural_max, natural_max + 6)
-    results = [
-        (candidate, *_rain_gridline_labels(candidate, grid_start, grid_end, min_temp, temp_span)[1:])
-        for candidate in candidates
-    ]
-    for candidate, distinct, uniform in results:
-        if distinct and uniform:
-            return candidate
-    for candidate, distinct, _uniform in results:
-        if distinct:
-            return candidate
-    return natural_max
+    Degenerate guard: if max_temp <= grid_start, there's no positive
+    headroom above the bottom gridline (e.g. an all-exactly-0-degrees day,
+    or a sub-one-gridline-step day) - just return the smallest candidate.
+    In practice render_chart never reaches this branch: it only calls
+    _choose_rain_step when rain_axis_expansion_eligible is True, and that
+    now requires max_temp > grid_start itself (see render_chart - a render
+    with zero headroom falls back to the ceiling-based scale instead,
+    since the exact-lattice anchor would otherwise map rain values off the
+    top of the plot). Kept as a defensive fallback for any other caller."""
+    if max_temp - grid_start <= 0:
+        return CANDIDATE_RAIN_STEPS_MM[0]
+    required_top = max(MIN_RAIN_AXIS_TOP_MM, max(rains, default=0.0))
+    for step in CANDIDATE_RAIN_STEPS_MM:
+        if _rain_step_top_value(step, grid_start, grid_step, max_temp) >= required_top - 1e-9:
+            return step
+    return CANDIDATE_RAIN_STEPS_MM[-1]
+
+
+def _rain_gridline_value(v, grid_start, grid_step, rain_step):
+    """The exact rain value AT a temp gridline v - defined directly as
+    (number of gridline-gaps above the bottom gridline) * rain_step, never
+    interpolated against the real min/max temps and never rounded. v and
+    grid_start are always exact multiples of grid_step by construction (see
+    render_chart), so steps_above_bottom is always a whole number."""
+    return (v - grid_start) / grid_step * rain_step
+
+
+def _rain_step_needs_decimal(rain_step) -> bool:
+    """Decimal display is a property of the chosen step itself, not a
+    per-line collision fallback (there's nothing left to collide - see
+    _rain_gridline_value's docstring): a step below 1mm needs one decimal
+    place to be meaningful, a step of 1mm or more never does."""
+    return rain_step < 1
+
+
+def _format_rain_gridline_value(value, rain_step) -> str:
+    """One decimal iff the chosen step itself is fractional; otherwise a
+    plain whole number - see _rain_step_needs_decimal. Consecutive
+    gridline values differ by exactly rain_step, so two gridlines can
+    never round to the same displayed string."""
+    if _rain_step_needs_decimal(rain_step):
+        return f"{value:.1f}"
+    return str(round(value))
 
 
 def _vertical_text(draw_target: Image.Image, position, text, font, color):
@@ -216,10 +185,30 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     temp_span = (max_temp - min_temp) or 1
     # Cheap to compute unconditionally (pure temp math) even though only
     # show_temp_gridlines mode draws the actual dotted lines at these -
-    # needed early so _choose_rain_axis_max's search (below) can run
-    # before plot_y0/plot_h/y_rain even exist.
-    grid_start = math.ceil(min_temp / 10) * 10
-    grid_end = math.floor(max_temp / 10) * 10
+    # needed early so _choose_rain_step's search (below) can run before
+    # plot_y0/plot_h/y_rain even exist.
+    #
+    # Narrow-swing fallback (per explicit user ask): a day whose temps
+    # never cross a multiple of 10, or cross only one, would otherwise get
+    # at most 1 gridline - not enough to read a rain scale off of. In that
+    # case, fall back to a 5-degree grid for this render instead, usually
+    # giving 2-3 reference lines (an even narrower day - within one
+    # 5-degree bucket of 0, e.g. -3degC to +4degC - still gets only 1).
+    # This is a temp-gridline-density fix independent of the rain-axis
+    # logic below - it also benefits snow/dry windows' temp lines, which
+    # never go through the rain-eligible branch. See the headroom guard on
+    # rain_axis_expansion_eligible below for a related edge case this
+    # narrow band can also trigger on the rain side.
+    grid_start10 = math.ceil(min_temp / 10) * 10
+    grid_end10 = math.floor(max_temp / 10) * 10
+    standard_count = int((grid_end10 - grid_start10) / 10) + 1 if grid_end10 >= grid_start10 else 0
+    if standard_count <= 1:
+        grid_step = 5
+        grid_start = math.ceil(min_temp / 5) * 5
+        grid_end = math.floor(max_temp / 5) * 5
+    else:
+        grid_step = 10
+        grid_start, grid_end = grid_start10, grid_end10
     # Rain/hail windows (mm/h), when rain_axis_format="category" (a
     # DisplayConfig/web-UI setting - "mm" is the default), label the rain
     # axis with intensity words instead of raw numbers. Snow (cm/h, a
@@ -234,22 +223,36 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # chart's original gridline-mode behavior (temp-only gridlines, side
     # label always shown) rather than gaining unlabeled bare numbers.
     show_rain_gridline_labels = precip_label in INTENSITY_LABELED_PRECIP
-    # The expansion search (see _choose_rain_axis_max) only applies where a
-    # collision is even possible: plain-number gridline labels actually
-    # get drawn. Category mode's intensity words and snow/dry's absent
-    # gridline numbers use the natural (real-data) max unchanged.
-    rain_axis_expansion_eligible = show_temp_gridlines and show_rain_gridline_labels and not show_intensity_labels
+    # The exact-lattice logic (see _choose_rain_step) only applies where
+    # plain-number gridline labels actually get drawn. Category mode's
+    # intensity words and snow/dry's absent gridline numbers use the
+    # natural (real-data) max unchanged, via the old axis-ceiling scheme.
+    #
+    # `max_temp > grid_start` is a genuine correctness requirement, not
+    # just a cosmetic gate: the lattice anchors 0mm at y_temp(grid_start)
+    # and increases upward from there, which only maps onto the plot
+    # correctly when grid_start sits below max_temp with real headroom.
+    # On a narrow day squeezed inside a single grid_step-degree window
+    # (temp_span < grid_step - e.g. an entire day between -3degC and
+    # -0.7degC, common in a freezing-rain scenario), grid_start can land
+    # AT max_temp itself (the plot's true top), which would otherwise
+    # anchor 0mm at plot_y0 and map every positive rain value to a
+    # negative, off-canvas y - a real bug caught via direct testing (a
+    # zero-rain hour drew a full-plot-height bar, a 2mm hour drew a bar
+    # top hundreds of pixels above the entire image). Falling back to the
+    # non-eligible ceiling-based scale in this residual case keeps bars
+    # correctly bounded within the plot, at the cost of exact gridline
+    # labeling for that one squeezed render - an accepted residual limit,
+    # not a regression (this scenario never had gridline-accurate labels
+    # under any design; it now safely renders instead of corrupting).
+    rain_axis_expansion_eligible = (
+        show_temp_gridlines and show_rain_gridline_labels and not show_intensity_labels
+        and max_temp > grid_start
+    )
     if rain_axis_expansion_eligible:
-        rain_axis_max = _choose_rain_axis_max(rains, grid_start, grid_end, min_temp, temp_span)
+        rain_step = _choose_rain_step(rains, grid_start, grid_step, max_temp)
     else:
         rain_axis_max = max(1, math.ceil(max(rains, default=0)))
-    # Precomputed once the final rain_axis_max is known, reused verbatim
-    # inside the gridline-drawing loop below instead of recomputing the
-    # same rounding logic there - see _rain_gridline_labels.
-    rain_gridline_label_by_v = {}
-    if rain_axis_expansion_eligible:
-        _labels, _distinct, _uniform = _rain_gridline_labels(rain_axis_max, grid_start, grid_end, min_temp, temp_span)
-        rain_gridline_label_by_v = {v: label for v, _rain_at_y, label in _labels}
 
     band = plot_w / n
     xs = [plot_x0 + band * (i + 0.5) for i in range(n)]
@@ -257,8 +260,21 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     def y_temp(v):
         return plot_y0 + (max_temp - v) / temp_span * plot_h
 
-    def y_rain(v):
-        return plot_y0 + (rain_axis_max - v) / rain_axis_max * plot_h
+    if rain_axis_expansion_eligible:
+        # Exact lattice: y_rain(0) is anchored to the bottom gridline's own
+        # pixel row (y_temp(grid_start)), extended continuously via a fixed
+        # pixels-per-gridline ratio - not a ratio against a single ceiling
+        # value, so a real rain value maps to the same pixel a gridline
+        # showing that exact value would sit at (see docs/changes.md for
+        # the algebraic proof).
+        px_per_gridline = grid_step * plot_h / temp_span
+        y_grid_start = y_temp(grid_start)
+
+        def y_rain(v):
+            return y_grid_start - (v / rain_step) * px_per_gridline
+    else:
+        def y_rain(v):
+            return plot_y0 + (rain_axis_max - v) / rain_axis_max * plot_h
 
     y_zero = y_temp(0)
 
@@ -266,9 +282,9 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # highlight strip alone (drawn at a fixed height) reads as a solid false
     # floor across hours with essentially no rain
     for x, rain in zip(xs, rains):
-        if rain < rain_axis_max * 0.03:
-            continue
         top = y_rain(rain)
+        if (plot_y1 - top) < 0.03 * plot_h:
+            continue
         w = band * 0.85
         draw.rectangle([x - w / 2, top, x + w / 2, plot_y1], fill=(*PALETTE.chart_cool, 130))
         draw.rectangle([x - w / 2, top, x + w / 2, min(top + 3, plot_y1)], fill=(*PALETTE.chart_cool, 230))
@@ -314,8 +330,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         max_temp_y, min_temp_y = y_temp(max_temp), y_temp(min_temp)
         # loop-invariant - unit_label_temp never changes per iteration
         unit_w = font_axis.getbbox(unit_label_temp)[2]
-        # grid_start/grid_end computed earlier, before rain_axis_max's own
-        # expansion search needed them.
+        # grid_start/grid_end/grid_step computed earlier, before
+        # _choose_rain_step needed them.
         v = grid_start
         while v <= grid_end:
             y = y_temp(v)
@@ -342,34 +358,38 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
             label = f"{v}°"
             draw.text((plot_x0 - 6 - unit_w, y), label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="rm")
 
-            if show_rain_gridline_labels:
+            # show_intensity_labels always draws (its ceiling-based
+            # rain_axis_max is always well-defined); the plain-number
+            # lattice path only draws when rain_axis_expansion_eligible -
+            # on the rare narrow-range render where that's False (see the
+            # headroom guard above), this gridline gets no rain label at
+            # all, same treatment as snow/dry - the axis-extreme labels
+            # (now active, since the non-eligible ceiling path is in
+            # effect) carry the reading instead.
+            if show_rain_gridline_labels and (show_intensity_labels or rain_axis_expansion_eligible):
                 # Shared axis: temp and rain map onto the exact same
-                # plot_y0..plot_y1 pixel range (two scales, one set of
-                # lines - y_temp(max_temp)/y_rain(rain_axis_max) are both
-                # exactly plot_y0, y_temp(min_temp)/y_rain(0) both exactly
-                # plot_y1) - label the rain value at this same height
-                # instead of drawing a second independent rain grid. This
-                # is a geometric scale marker like the temp side, not a
-                # per-hour reading - in category mode it can occasionally
-                # read one band "worse" than the nearby actual-peak axis
-                # label if rain_axis_max's ceil-rounding leaves enough
-                # slack for an interior gridline to cross a band boundary
-                # the real data never reached.
+                # plot_y0..plot_y1 pixel range - label the rain value at
+                # this same height instead of drawing a second independent
+                # rain grid. This is a geometric scale marker like the temp
+                # side. In "mm" format it's now an EXACT lattice value
+                # (steps_above_bottom * rain_step, see
+                # _rain_gridline_value) - never interpolated against the
+                # real min/max temps and never rounded, so the line's pixel
+                # position and its printed number are always exactly
+                # consistent with each other.
                 if show_intensity_labels:
                     rain_at_y = rain_axis_max * (1 - (y - plot_y0) / plot_h)
                     rain_label = _rain_intensity_label(rain_at_y)
                 else:
-                    # Precomputed once for the final (possibly expanded)
-                    # rain_axis_max, before this loop even started - see
-                    # rain_gridline_label_by_v / _rain_gridline_labels.
-                    rain_label = rain_gridline_label_by_v[v]
+                    rain_value = _rain_gridline_value(v, grid_start, grid_step, rain_step)
+                    rain_label = _format_rain_gridline_value(rain_value, rain_step)
                 draw.text((plot_x1 + 6, y), rain_label, font=font_axis, fill=PALETTE.chart_zero_line, anchor="lm")
                 if not show_intensity_labels:
                     label_w = font_axis.getbbox(rain_label)[2]
                     max_rain_number_w = max(max_rain_number_w, label_w)
                 suppress_max_rain_label = suppress_max_rain_label or near_max_rain
                 suppress_min_rain_label = suppress_min_rain_label or near_min_rain
-            v += 10
+            v += grid_step
     else:
         # dashed actual min/max lines - skip whichever one exactly coincides
         # with its axis extreme (min_temp/max_temp clamp to 0, so e.g. the min
@@ -432,39 +452,42 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     if show_intensity_labels:
         top_label = _rain_intensity_label(max(rains))
         bottom_label = _rain_intensity_label(min(rains))
-    else:
+    elif not rain_axis_expansion_eligible:
         # rain_axis_max is always a whole number (the natural max(1,
-        # ceil(...)) or one of _choose_rain_axis_max's integer candidates)
-        # - _format_rain_number_int makes that invariant explicit rather
-        # than relying on _format_rain_number's :g formatting happening to
-        # produce the same clean string for a whole-number input.
+        # ceil(...)) placeholder) - _format_rain_number_int makes that
+        # invariant explicit. Only computed here (not in eligible mode,
+        # where rain_axis_max doesn't exist and neither label is ever
+        # drawn - see below).
         top_label = _format_rain_number_int(rain_axis_max)
         bottom_label = "0"
+    else:
+        top_label = bottom_label = None
     # On dry windows, rain_axis_max is always the max(1, ...) placeholder
     # floor (there's no real rain to size the axis off) - showing "1" up top
     # implies a rain reading that never happened, so it's dropped entirely
     # rather than suppressed only on gridline-collision grounds like the
     # other axis-extreme labels above.
     #
-    # Also dropped unconditionally whenever rain_axis_expansion_eligible -
-    # per explicit user ask ("no need to show actual max at the top"), the
-    # interior gridlines already carry a clean, uniformly-stepped reading
-    # of the scale in that case (that's the whole point of the expansion
-    # search - see _choose_rain_axis_max), and the axis-extreme's own
-    # value doesn't necessarily continue that pattern (it sits at the true
-    # edge of the plot, wherever max_temp happens to land, not at the next
-    # uniform step) - a real observed case: interior gridlines "0, 3, 6"
-    # plus an axis-extreme "8" a step later, breaking the clean
-    # progression rather than extending it. (This also makes the previous
-    # per-gridline "does the axis-extreme duplicate the topmost gridline"
-    # check moot for this case, since the label isn't drawn at all here -
-    # that check only ever mattered for gridline-mode plain-number rain
-    # windows, exactly the case now covered by this blanket skip.)
+    # Both the top AND bottom axis-extreme labels are also dropped
+    # unconditionally whenever rain_axis_expansion_eligible - per explicit
+    # user ask ("no need to show actual max at the top"), the interior
+    # gridlines now carry an exact, always-consistent reading of the scale
+    # (see _choose_rain_step/_rain_gridline_value), so a separate
+    # axis-extreme label adds nothing and can actively duplicate one: under
+    # the exact lattice, y_rain(0) lands exactly on the v=grid_start
+    # gridline's own pixel row, whose label is already always "0" - so an
+    # un-suppressed bottom axis-extreme label would draw a second,
+    # overlapping "0" on top of it. The top axis-extreme has the mirror
+    # problem (it sits at the true edge of the plot, wherever max_temp
+    # happens to land, not at the next lattice step, so it could show a
+    # value that breaks the clean progression the interior gridlines just
+    # established - a real observed case: interior gridlines "0, 3, 6" plus
+    # an axis-extreme "8" a step later).
     if not rain_axis_expansion_eligible and not suppress_max_rain_label and precip_label != "Droog":
         draw.text((plot_x1 + 6, y_rain(rain_axis_max)), top_label, font=font_axis, fill=text_color, anchor="lm")
         if not show_intensity_labels:
             max_rain_number_w = max(max_rain_number_w, font_axis.getbbox(top_label)[2])
-    if not suppress_min_rain_label:
+    if not rain_axis_expansion_eligible and not suppress_min_rain_label:
         draw.text((plot_x1 + 6, y_rain(0)), bottom_label, font=font_axis, fill=text_color, anchor="lm")
         if not show_intensity_labels:
             max_rain_number_w = max(max_rain_number_w, font_axis.getbbox(bottom_label)[2])
