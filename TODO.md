@@ -1,5 +1,11 @@
 # pi_weather_display - known issues & ideas
 
+- **InkyPiZero**: weather-only e-ink display on a Raspberry Pi with a Pimoroni Inky Impression panel, drawn with Pillow: current weather, hourly chart, forecast, air quality and pollen.
+- Status (2026-11-22): built; last work 2026-09-20 (exact rain-axis gridlines).
+- Open: choice of the new half-cloudy icon, moon-phase text overlap on forecast cards.
+- Next: the wind speed unit setting (plans/wind-speed-unit-setting.md).
+- Details: README.md, docs/settings.md.
+
 Running list of things found during development/testing that aren't fixed yet.
 Add to this whenever something rough turns up; check items off (don't delete
 them) once fixed. Grouped by area, open items first in each group. See also
