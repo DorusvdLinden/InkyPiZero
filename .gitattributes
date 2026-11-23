@@ -1,0 +1,42 @@
+# Line-ending policy: LF everywhere except Windows batch files.
+# Used twice: as the machine-wide fallback ~/.config/git/attributes
+# (see git/setup-line-endings.sh) and copied as .gitattributes into every
+# repo, so clones elsewhere (Pi, NAS, GitHub web edits) get the same rules.
+
+# Text files: stored and checked out as LF (binaries auto-detected).
+* text=auto eol=lf
+
+# Windows batch files break with LF - keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Explicit binaries (belt and braces on top of auto-detection).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.bmp binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.gz binary
+*.ogg binary
+*.wav binary
+*.mp3 binary
+*.mp4 binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.bin binary
+*.exe binary
+*.dll binary
+*.stl binary
+*.3mf binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+*.db binary
+*.sqlite binary
