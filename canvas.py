@@ -14,9 +14,10 @@ def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
 
 
 def _data_point_value_text(dp: dict) -> str:
-    value_parts = [dp["direction"]] if dp.get("direction") else []
-    value_parts.append(str(dp["measurement"]))
-    value_text = " ".join(value_parts)
+    # Three spaces after the wind direction ("NW   3 m/s"), so the compass
+    # letters read as separate from the speed (user ask, 2026-11-24).
+    direction = f"{dp['direction']}   " if dp.get("direction") else ""
+    value_text = f"{direction}{dp['measurement']}"
     if dp.get("unit"):
         value_text += f"{dp.get('unit_separator', ' ')}{dp['unit']}"
     return value_text
