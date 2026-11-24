@@ -58,7 +58,6 @@ def _config_from_form(form) -> tuple[DisplayConfig, list[str]]:
     _set("time_format", str)
     _set("forecast_days", int)
     _set("graph_icon_step", int)
-    values["show_moon_phase"] = form.get("show_moon_phase") == "on"
     _set("background_color", str)
     _set("text_color", str)
     _set("inky_saturation", float)

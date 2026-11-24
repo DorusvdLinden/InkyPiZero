@@ -74,6 +74,12 @@ automatically, without being asked each time.
   covers the Beaufort breakpoints, the `wind_speed_unit` setting (whole m/s
   vs Beaufort number) and the UV label - no network/hardware needed. Run
   this after any change to the wind/UV data points in `weather_data.py`.
+- **Always test the forecast card layout**: `python scripts/test_forecast_card_layout.py`
+  covers `widgets/forecast.py`'s card budget for 1-14 cards (text inside
+  the card, no overlaps, mm text size) and old settings files loading -
+  no network/hardware needed. Run this after any change to
+  `widgets/forecast.py`, `layout.forecast_card` or the `forecast_days`
+  limit.
 
 ## Documentation maintenance
 

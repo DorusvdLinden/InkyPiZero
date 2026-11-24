@@ -12,9 +12,8 @@ class DisplayConfig:
     longitude: float = 5.8993687
     timezone: str = "Europe/Amsterdam"
     time_format: str = "24h"       # "24h" | "12h"
-    forecast_days: int = 7
+    forecast_days: int = 7  # 1-14, see settings_store.MAX_FORECAST_DAYS
     graph_icon_step: int = 2
-    show_moon_phase: bool = False
     background_color: str = "#ffffff"
     text_color: str = "#000000"
     inky_saturation: float = 0.0

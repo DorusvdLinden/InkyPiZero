@@ -32,7 +32,7 @@ decide how much actually happens:
      changed since the last refresh, **or**
    - More than `force_refresh_max_stale_minutes` has passed since the
      last refresh (keeps slower-moving details - forecast cards, the
-     hourly chart, "Laatste update", sunrise/sunset, moon phase - from
+     hourly chart, "Laatste update", sunrise/sunset - from
      going stale indefinitely during a long stretch of unchanged
      weather), **or**
    - A screen-mode button press or a web-UI settings save requested an
@@ -396,8 +396,8 @@ the icon (changed 2026-08-15 - was a smaller `normal`-weight size before,
 capped at 12px regardless of card width).
 
 The number/unit font shares its *ideal* size with the day-label/temps
-text (`bold_size = max(10, int(region.w * 0.15))`, one shared local
-instead of two separately-computed copies of the same formula) but
+text (`bold_size` from `widgets/forecast.py::compute_card_layout`, one
+shared value instead of two separately-computed copies) but
 shrinks below it if the card doesn't have room
 (`widgets/forecast.py::_fit_stacked_lines`, 1px-step shrink-to-fit, checking
 width and height together per candidate size rather than sequentially - a
@@ -407,16 +407,21 @@ land with at least a 1px gap above the day-label row, not literally
 touching it). If no size satisfies both width and height, the text is
 omitted entirely (same as a dry day) rather than ever drawn overflowing
 or colliding. The day-name/code itself (e.g. "zo") has always shared the
-same bold size/weight as the temps text below it - the mm-rain text now
-matches all three **at `forecast_days` 5 through 10** (the default, 7,
-falls in the middle of that band). Below 5 (wider cards), `icon_size`
-caps out independently of card width while `bold_size` keeps growing, so
-the mm-text's fixed vertical budget stops growing with it and it shrinks
-well below `bold_size`; above 10 (narrower cards), `available_width`
-alone becomes the binding constraint and the text shrinks or, eventually,
-omits itself entirely, same as before this change. Not an unconditional
-match at every setting - a known gap outside that band, not silently
-pretending otherwise (see `TODO.md`).
+same bold size/weight as the temps text below it.
+
+Since `docs/changes.md` entry 61 the whole card shares one vertical
+budget (`compute_card_layout`): padding 6, icon, gap 4, two text lines,
+padding 4, inside the fixed 95px card. The text gets the largest size up
+to the old width formula (`int(w * 0.15)`) that fits the card width and
+still leaves the icon at least 35px (and tall enough for the mm text at
+the same size); the icon gets the rest, capped at `min(w * 0.85, h * 0.45)`.
+At 6-10 cards this gives exactly the old sizes (7 cards: 42px icon, 15px
+text); at 5 or fewer the text no longer runs past the card bottom (21px
+text, 37px icon), and the mm text now matches the day label at every
+`forecast_days` from 1 to 10. Above 10 the narrow card's width is the
+binding constraint: the text shrinks (down to 8px) and the mm text may be
+left out. There is no moon phase on the cards any more (removed in entry
+61).
 
 See `scripts/test_forecast_rain_scenarios.py` for this as executable,
 deterministic assertions (dry, both sides of the 0.2mm boundary exactly,
@@ -579,9 +584,8 @@ axis, not a return of the unit-system toggle.
 | `latitude`, `longitude` | Sittard, NL (51.0004365, 5.8993687) | Location passed to every Open-Meteo/Nominatim request, and used to resolve/cache the nearest RIVM station for "Kwaliteit & Pollen" (see above - re-resolved automatically when this changes). The header's location name is Dutch inside the Netherlands, English everywhere else (`weather_data.get_nearest_location_name`) |
 | `timezone` | `"Europe/Amsterdam"` | IANA tz name; only used as a fallback if Open-Meteo's response omits its own `timezone` field |
 | `time_format` | `"24h"` | `"24h"` \| `"12h"` - hour labels on the chart and the header's "Laatste update" time |
-| `forecast_days` | `7` | Number of forecast cards shown in the bottom row (today is excluded from the row itself; `fetch_snapshot` internally requests `forecast_days + 1` days from Open-Meteo) |
+| `forecast_days` | `7` | Number of forecast cards shown in the bottom row, **1-14** (today is excluded from the row itself; `fetch_snapshot` internally requests `forecast_days + 1` days from Open-Meteo, whose forecast stops at 16 days, and with this app's model blend the 16th day comes back empty - so 14 is the most with real data; `settings_store.MAX_FORECAST_DAYS`). A trailing day without data is left out rather than shown as 0°/0°. |
 | `graph_icon_step` | `2` | Draw an hourly weather icon (and x-axis tick/label) every Nth hour on the chart, instead of every hour |
-| `show_moon_phase` | `False` | Whether forecast cards show the moon-phase icon + illumination % (bottom-left of each card) |
 | `background_color` | `"#ffffff"` | Canvas background (hex) |
 | `text_color` | `"#000000"` | Default text/line color (hex) |
 | `inky_saturation` | `0.0` | 0.0-1.0 blend between the panel's desaturated and fully-saturated native palettes (see [Color palette](#color-palette-widgetspalettepy) below) - changing it automatically re-syncs every widget color (`widgets.palette.PALETTE`), not just the final quantization step |

@@ -10,7 +10,7 @@ This project uses various fonts and icons, each with specific licensing terms. B
 
 ## Icons
 
-Weather condition icons, moon phases, and sunrise/sunset icons are recolored PNGs
+Weather condition icons, moon phases (no longer drawn since `docs/changes.md` entry 61), and sunrise/sunset icons are recolored PNGs
 rendered from [erikflowers/weather-icons](https://github.com/erikflowers/weather-icons)
 SVG source (`svg/wi-*.svg`), converted at build time - see `docs/icons.md`'s
 "Regenerating icons" section for how to regenerate them. Icons:

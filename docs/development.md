@@ -16,7 +16,7 @@ python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 
 # 2. Install dependencies (the minimal set - no inky needed for local testing)
-pip install pillow requests pytz astral
+pip install pillow requests pytz
 
 # 3. Render to a file instead of a real display
 python main.py --mock-output output.png
@@ -81,6 +81,10 @@ python main.py --mock-output output.png
   number (whole m/s, or the Beaufort number via `wind_speed_unit`), the
   Beaufort breakpoints and the plain "UV-index" label - no network/hardware
   needed.
+- `python scripts/test_forecast_card_layout.py` - covers the forecast
+  card's vertical budget (`compute_card_layout`) for 1-14 cards, dry and
+  rainy: all text inside the card, no overlaps, mm text at the day-label
+  size; plus loading an old settings file - no network/hardware needed.
 - `python scripts/test_palette_sync.py` - covers `widgets.palette.PALETTE`
   staying synced to whatever `inky_saturation` the current render's config
   specifies (see [settings.md](./settings.md)'s "Color palette" section) -

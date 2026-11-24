@@ -1,9 +1,9 @@
 # pi_weather_display - known issues & ideas
 
 - **InkyPiZero**: weather-only e-ink display on a Raspberry Pi with a Pimoroni Inky Impression panel, drawn with Pillow: current weather, hourly chart, forecast, air quality and pollen.
-- Status (2026-11-24): built; Nov batch in progress on feature/nov-2026-batch (rounding, rain zero, wind unit done).
-- Open: half-cloudy icon choice; forecast-card text overflow at <=5 days.
-- Next: forecast cards without moon phase, black night moon icons, fewer display refreshes (plans/).
+- Status (2026-11-24): built; Nov batch in progress on feature/nov-2026-batch (rounding, rain zero, wind unit, forecast cards done).
+- Open: half-cloudy icon choice; tiny mm decimal at 10+ days.
+- Next: black night moon icons, fewer display refreshes (plans/).
 - Details: README.md, docs/settings.md.
 
 Running list of things found during development/testing that aren't fixed yet.
@@ -28,7 +28,7 @@ reference docs this list feeds into.
 
 ## Forecast cards
 
-- [ ] With `show_moon_phase=True` and a wide rain amount (e.g. a 2-digit
+- [x] With `show_moon_phase=True` and a wide rain amount (e.g. a 2-digit
   mm value), the moon-phase percentage row at the bottom of the card can
   visually overlap the day-name/high-low-temp text above it. Confirmed
   pre-existing (not a regression from the 2026-08-15 mm-stacking change
@@ -36,7 +36,7 @@ reference docs this list feeds into.
   `git stash`), found during that change's fresh-context review, unrelated
   to it. Neither `temps_y`'s two text lines nor `moon_y` account for each
   other's actual height when both are shown.
-- [ ] The mm-rain text's bold size (`widgets/forecast.py`'s `bold_size`,
+- [x] The mm-rain text's bold size (`widgets/forecast.py`'s `bold_size`,
   shared with the day-label/temps font since 2026-08-15) only actually
   *matches* the day-label/temps size at `forecast_days` 5 through 10 -
   below 5, `icon_size` caps out independently of card width
@@ -54,7 +54,7 @@ reference docs this list feeds into.
   budget - *was* fixed as part of that change, since it was a
   self-contained arithmetic error rather than the architectural gap this
   item describes; it's what widened the matching band from 7-10 to 5-10.)
-- [ ] Related, pre-existing, unrelated to any 2026-08-15 change: the
+- [x] Related, pre-existing, unrelated to any 2026-08-15 change: the
   day-label/high-low-temp text itself (`font_bold` in
   `widgets/forecast.py`, `bold_size = max(10, int(region.w * 0.15))`) has
   no shrink-to-fit at all, unlike every other piece of forecast-card
@@ -63,6 +63,16 @@ reference docs this list feeds into.
   (800px) and `bold_size` grows to ~120px inside a fixed 95px-tall card
   row, overflowing badly. Found via fresh-context review while auditing
   the mm-rain sizing change above, not caused by it.
+- Fixed 2026-11-24 (docs/changes.md entry 61): the three items above -
+  the moon phase is gone from the cards, and one vertical budget
+  (`compute_card_layout`) keeps the text inside the card and the mm text
+  at the day-label size up to 10 days.
+- [ ] At 10+ days the mm text's decimal point is nearly invisible at the
+  small size ("0.2 mm" reads as "02 mm" on the render). Pre-existing,
+  seen in the entry-61 renders.
+- [ ] `forecast_days` max is 14 because the model blend's 16th day comes
+  back empty; if `OPEN_METEO_MODELS_PARAM` changes, recheck
+  `settings_store.MAX_FORECAST_DAYS`.
 
 ## Chart
 

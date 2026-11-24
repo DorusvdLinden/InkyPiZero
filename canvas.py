@@ -204,4 +204,4 @@ class WeatherCanvas:
             return
         for i, day in enumerate(data.daily):
             region = layout.forecast_card(i, count)
-            forecast_widget.draw_forecast_card(image, region, day, self.assets, self.text_color, self.config.show_moon_phase)
+            forecast_widget.draw_forecast_card(image, region, day, self.assets, self.text_color)

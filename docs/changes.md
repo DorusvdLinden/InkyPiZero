@@ -1021,7 +1021,8 @@ tracked separately):
   at the `target_date` line and updated `docs/icons.md`'s note from
   "worth double-checking" to verified.
 
-**Active** - current design. Verified: regenerated the full icon set
+**Active, partly outdated by entry 61** (the moon phase it verified is no
+longer drawn) - current design. Verified: regenerated the full icon set
 (`scripts/generate_icons.py`, using a fresh local `erikflowers/weather-icons`
 clone) and confirmed every icon other than the `02d`/`02n` removal and `96d`
 addition rendered byte-identical; visually inspected the regenerated
@@ -2522,6 +2523,47 @@ charted, so no axis logic is involved; data is still fetched in m/s.
 numbers incl. boundaries, unchanged descriptions, both modes, description
 from the raw speed, UV label), palette and location tests. Renders of
 both modes in `mock_display_output/wind_speed_unit/`.
+
+### 61. Forecast cards: moon phase removed, one vertical budget, 1-14 days
+(2026-11-24, plan: `plans/forecast-card-vertical-budget.md`)
+
+Three open TODO items shared one cause: the card's rows were placed
+independently and nothing checked they fit the fixed 95px card.
+Measured: the moon-phase row overlapped the day-name/high-low text at the
+default 7 days (not only with wide rain amounts), the text ran past the
+card bottom at 5 cards or fewer (294px tall at 1 card), and the mm text
+shrank below the day label there.
+
+- **Moon phase removed** (user decision, after comparing three placements
+  in `mock_display_output/forecast_card_budget/moon_options/`): the card
+  drawing, the moon calculation, `get_moon_phase_name` /
+  `get_moon_phase_icon_key`, the `show_moon_phase` setting (config, web
+  UI, validator) and the `astral` dependency. An existing settings file
+  with `show_moon_phase` still loads (unknown keys are ignored). The
+  phase PNGs stay in `assets/icons/` and the generator, unused. The night
+  icons `01n`/`022n` are separate and unchanged.
+- **One vertical budget**, `widgets/forecast.py::compute_card_layout`:
+  the text gets the largest size (up to the old `w * 0.15`) that fits the
+  card width and leaves the icon at least 35px and tall enough for the mm
+  text at the same size; the icon gets the remaining height, capped as
+  before. 6-10 cards keep exactly their old sizes (7 cards: 42px icon,
+  15px text); 5 or fewer now fit (21px text, 37px icon) and the mm text
+  matches the day label from 1 to 10 cards.
+- **`forecast_days` 1-14** (`settings_store.MAX_FORECAST_DAYS`, `max` on
+  the web input). Above 15 the Open-Meteo fetch failed outright; at 15 the
+  render crashed, because with this app's model blend the 16th day comes
+  back all-null. `_parse_forecast` now also stops at the first day
+  without data instead of crashing.
+
+Supersedes the moon-phase parts of earlier entries (e.g. 35's offset
+check; the overlap reports in later entries).
+
+**Active.** Verified: new `scripts/test_forecast_card_layout.py` (1-14
+cards × dry/rainy: all text inside the card, no overlaps, mm text size
+matches up to 10 cards, 7-card geometry unchanged, no moon text, old
+settings file loads, 14 accepted / 15 rejected), the forecast rain and
+quality scenarios, and all 14 locations × 3 modes. Renders at 1, 3, 5, 7,
+10 and 14 cards in `mock_display_output/forecast_card_budget/`.
 
 ---
 

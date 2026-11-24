@@ -47,14 +47,10 @@
         </select>
       </label>
       <label>Aantal dagen vooruit (forecast_days)
-        <input type="number" min="1" step="1" name="forecast_days" value="{{ config.forecast_days }}" required>
+        <input type="number" min="1" max="14" step="1" name="forecast_days" value="{{ config.forecast_days }}" required>
       </label>
       <label>Icoon-interval grafiek (graph_icon_step, in uren)
         <input type="number" min="1" step="1" name="graph_icon_step" value="{{ config.graph_icon_step }}" required>
-      </label>
-      <label class="checkbox">
-        <input type="checkbox" name="show_moon_phase" {{ "checked" if config.show_moon_phase }}>
-        Maanfase tonen op weerkaarten
       </label>
     </fieldset>
 

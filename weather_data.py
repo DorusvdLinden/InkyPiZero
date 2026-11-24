@@ -9,11 +9,10 @@ import os
 import time
 import tomllib
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 
 import pytz
 import requests
-from astral import moon
 
 from config import DisplayConfig
 from widgets.palette import native_colors
@@ -96,30 +95,6 @@ def round_half_up(x: float) -> int:
     rounding: 2.5 -> 2) that made the header, chart and forecast cards
     disagree - docs/changes.md entry 58. Never produces "-0"."""
     return math.floor(x + 0.5)
-
-
-def get_moon_phase_name(phase_age: float) -> str:
-    thresholds = [
-        (1.0, "newmoon"), (7.0, "waxingcrescent"), (8.5, "firstquarter"),
-        (14.0, "waxinggibbous"), (15.5, "fullmoon"), (22.0, "waninggibbous"),
-        (23.5, "lastquarter"), (29.0, "waningcrescent"),
-    ]
-    for threshold, phase_name in thresholds:
-        if phase_age <= threshold:
-            return phase_name
-    return "newmoon"
-
-
-def get_moon_phase_icon_key(phase_name: str, lat: float) -> str:
-    """Southern hemisphere sees waxing/waning and quarter phases mirrored."""
-    if lat < 0:
-        mirror = {
-            "waxingcrescent": "waningcrescent", "waningcrescent": "waxingcrescent",
-            "waxinggibbous": "waninggibbous", "waninggibbous": "waxinggibbous",
-            "firstquarter": "lastquarter", "lastquarter": "firstquarter",
-        }
-        phase_name = mirror.get(phase_name, phase_name)
-    return phase_name
 
 
 # WMO weather codes that mean "snow" / "hail" is actually falling, used to
@@ -452,8 +427,6 @@ class DayForecast:
     icon_key: str
     high: int
     low: int
-    moon_phase_pct: str
-    moon_icon_key: str
     precip_mm: float
     rain_expected: bool
     # Computed every render but not currently drawn anywhere - see
@@ -890,7 +863,7 @@ def _quality_tier_and_color(high_c: float, precip_mm: float, quality_config: dic
     return worst_tier, color, precip_tier != tier_order[0]
 
 
-def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]:
+def _parse_forecast(daily_data, tz, saturation: float) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
     temp_max = daily_data.get("temperature_2m_max", [])
@@ -900,28 +873,14 @@ def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]
 
     forecast = []
     for i in range(len(times)):
+        # The model blend can return trailing days with no data at all
+        # (all-null 16th day, 2026-11-24) - stop there rather than crash
+        # or show a made-up 0°/0° card.
+        if i >= len(temp_max) or i >= len(temp_min) or temp_max[i] is None or temp_min[i] is None:
+            break
         dt = datetime.fromisoformat(times[i]).replace(tzinfo=timezone.utc).astimezone(tz)
         code = weather_codes[i] if i < len(weather_codes) else 0
         icon_key = map_weather_code_to_icon(code, is_day=1)
-
-        # +1: the phase for the night *following* this card's daytime date,
-        # not the phase at midnight of that date itself - verified against
-        # public reference dates 2026-08-15 (Icon-Plan.md item 3): the +1
-        # target_date matched the published 2026-09-10 new moon and
-        # 2026-09-26 full moon within 0.34/0.04 days, vs. 2.20/0.97 days
-        # unshifted.
-        target_date: date = dt.date() + timedelta(days=1)
-        try:
-            phase_age = moon.phase(target_date)
-            phase_name = get_moon_phase_name(phase_age)
-            lunar_cycle_days = 29.530588853
-            phase_fraction = phase_age / lunar_cycle_days
-            illum_pct = (1 - math.cos(2 * math.pi * phase_fraction)) / 2 * 100
-        except Exception as e:
-            logger.error(f"Error calculating moon phase for {target_date}: {e}")
-            illum_pct = 0
-            phase_name = "newmoon"
-        moon_icon_key = get_moon_phase_icon_key(phase_name, lat)
 
         precip_mm = float(precip_sums[i]) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
         # Tier from the raw high, not the display-rounded int below - a
@@ -939,8 +898,6 @@ def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]
             icon_key=icon_key,
             high=round_half_up(temp_max[i]) if i < len(temp_max) else 0,
             low=round_half_up(temp_min[i]) if i < len(temp_min) else 0,
-            moon_phase_pct=f"{illum_pct:.0f}",
-            moon_icon_key=moon_icon_key,
             precip_mm=precip_mm,
             rain_expected=precip_mm >= FORECAST_DRY_MM_THRESHOLD,
             quality_border_color=quality_border_color,
@@ -1316,7 +1273,7 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     station_rain = station.rain_mm if station else None
     current_icon_key = _apply_station_rain_override(current_icon_key, station_rain)
 
-    daily_forecast = _parse_forecast(daily, tz, config.latitude, config.inky_saturation)
+    daily_forecast = _parse_forecast(daily, tz, config.inky_saturation)
     data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation,
                                      config.wind_speed_unit)
     hourly, sun_events, precip_label = _parse_hourly(
