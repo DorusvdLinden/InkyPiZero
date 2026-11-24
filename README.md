@@ -31,9 +31,11 @@ Pi Zero W) that can't comfortably run a headless browser.
   [settings.md](./docs/settings.md)
 - No plugins, no playlist scheduling - the *rendering* is a periodic
   `systemd` timer job (e.g. every 10 minutes), not a persistent service.
-  The physical panel itself only actually refreshes when the current
-  icon/temperature changes (or at least once an hour regardless) - not
-  every single tick, sparing the display unnecessary wear/flash - see
+  The physical panel itself only actually refreshes when the weather type
+  changes (e.g. cloudy to rain), the temperature moves 2° or more, or
+  every 2 hours regardless - not every single tick, sparing the display
+  unnecessary wear/flash (the panel only supports a full, flashing
+  refresh) - see
   [settings.md](./docs/settings.md)
 - A small always-on web UI (settings, WiFi management, shutdown) runs
   independently of that render timer - see [settings.md](./docs/settings.md)

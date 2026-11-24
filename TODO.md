@@ -1,9 +1,9 @@
 # pi_weather_display - known issues & ideas
 
 - **InkyPiZero**: weather-only e-ink display on a Raspberry Pi with a Pimoroni Inky Impression panel, drawn with Pillow: current weather, hourly chart, forecast, air quality and pollen.
-- Status (2026-11-24): built; Nov batch in progress on feature/nov-2026-batch (rounding, rain zero, wind unit, forecast cards, black moon icons done).
-- Open: half-cloudy icon choice; tiny mm decimal at 10+ days.
-- Next: fewer display refreshes (plans/fewer-display-refreshes.md).
+- Status (2026-11-24): built; Nov batch (rounding, rain zero, wind unit, forecast cards, black moon icons, fewer refreshes) on feature/nov-2026-batch, deployed to the Pi, not merged.
+- Open: half-cloudy icon choice; tiny mm decimal at 10+ days; hourly icon timezone bug for non-local locations.
+- Next: measure refreshes/day on the Pi; merge the batch when approved.
 - Details: README.md, docs/settings.md.
 
 Running list of things found during development/testing that aren't fixed yet.
@@ -92,6 +92,14 @@ reference docs this list feeds into.
   times (`timezone=auto`) and `datetime.fromisoformat(...).astimezone(tz)`
   treats a naive time as the *machine's* local time. No effect on the Pi
   (configured and system timezone are both Europe/Amsterdam).
+
+## Display refresh
+
+- [x] The panel refreshed ~33 times a day (66 in 48h, incl. 2-5 an hour at
+  night), each a full flashing refresh. Fixed 2026-11-24: weather groups,
+  `refresh_temp_delta` 2, stale timer 120 min (docs/changes.md entry 63).
+- [ ] Measure refreshes per day from the Pi's journal a few days after
+  deploying entry 63 (baseline 66 / 48h; expected ~10-14 a day).
 
 ## Settings
 

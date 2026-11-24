@@ -66,6 +66,7 @@ def _config_from_form(form) -> tuple[DisplayConfig, list[str]]:
     _set("wind_speed_unit", str)
     _set("min_update_interval_minutes", int)
     _set("force_refresh_max_stale_minutes", int)
+    _set("refresh_temp_delta", int)
     values["station_enabled"] = form.get("station_enabled") == "on"
     _set("station_type", str)
     _set("station_base_url", str)

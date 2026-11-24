@@ -66,8 +66,10 @@ def main():
     logger.info("Fetching weather data")
     data = fetch_snapshot(config)
     max_stale = timedelta(minutes=config.force_refresh_max_stale_minutes)
-    if not forced and not display_freshness.should_update_display(data.current_icon_key, data.current_temp, now, max_stale):
-        logger.info("Skipping display update - icon/temp unchanged and last refresh was under force_refresh_max_stale_minutes")
+    if not forced and not display_freshness.should_update_display(
+            data.current_icon_key, data.current_temp, now, max_stale, temp_delta=config.refresh_temp_delta):
+        logger.info("Skipping display update - weather group unchanged, temperature within refresh_temp_delta, "
+                    "and last refresh was under force_refresh_max_stale_minutes")
         return
 
     image = render_canvas(config, data, screen_mode=args.screen_mode)

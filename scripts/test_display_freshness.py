@@ -142,6 +142,74 @@ def test_record_check_does_not_clobber_display_state():
     return still_unchanged is False
 
 
+# --- docs/changes.md entry 63: weather groups + temperature threshold ---
+
+def test_one_degree_change_waits_with_delta_2():
+    _reset()
+    display_freshness.record_display("04d", 2, NOW)
+    later = NOW + timedelta(minutes=10)
+    return display_freshness.should_update_display("04d", 3, later, MAX_STALE, temp_delta=2) is False
+
+
+def test_two_degree_change_refreshes_with_delta_2():
+    _reset()
+    display_freshness.record_display("04d", 2, NOW)
+    later = NOW + timedelta(minutes=10)
+    return (display_freshness.should_update_display("04d", 4, later, MAX_STALE, temp_delta=2) is True
+            and display_freshness.should_update_display("04d", 0, later, MAX_STALE, temp_delta=2) is True)
+
+
+def test_flapping_temperature_does_not_refresh():
+    """The night pattern seen in the Pi's journal: -2, -3, -2, -3 ... every
+    tick. Compared against what's on screen (-3), never 2 degrees off."""
+    _reset()
+    display_freshness.record_display("01n", -3, NOW)
+    results = [display_freshness.should_update_display("01n", t, NOW + timedelta(minutes=10 * i), MAX_STALE,
+                                                       temp_delta=2)
+               for i, t in enumerate([-2, -3, -2, -3, -2], start=1)]
+    return results == [False] * 5
+
+
+def test_slow_drift_refreshes_once_it_adds_up():
+    _reset()
+    display_freshness.record_display("04d", 5, NOW)
+    first = display_freshness.should_update_display("04d", 6, NOW + timedelta(minutes=10), MAX_STALE, temp_delta=2)
+    second = display_freshness.should_update_display("04d", 7, NOW + timedelta(minutes=20), MAX_STALE, temp_delta=2)
+    return first is False and second is True
+
+
+def test_icon_change_within_group_waits():
+    _reset()
+    display_freshness.record_display("01d", 10, NOW)  # clear day -> clear night (sunset)
+    later = NOW + timedelta(minutes=10)
+    ok = display_freshness.should_update_display("01n", 10, later, MAX_STALE, temp_delta=2) is False
+    _reset()
+    display_freshness.record_display("51d", 10, NOW)  # drizzle -> showers, both rain
+    ok = ok and display_freshness.should_update_display("09d", 10, later, MAX_STALE, temp_delta=2) is False
+    return ok
+
+
+def test_icon_group_change_refreshes():
+    _reset()
+    display_freshness.record_display("04d", 10, NOW)  # cloudy -> rain
+    later = NOW + timedelta(minutes=10)
+    return display_freshness.should_update_display("53d", 10, later, MAX_STALE, temp_delta=2) is True
+
+
+def test_stale_timer_still_refreshes_with_threshold():
+    _reset()
+    display_freshness.record_display("04d", 10, NOW)
+    later = NOW + timedelta(hours=2)
+    return display_freshness.should_update_display("04d", 11, later, timedelta(hours=2), temp_delta=2) is True
+
+
+def test_unknown_icon_key_is_its_own_group():
+    _reset()
+    display_freshness.record_display("04d", 10, NOW)
+    later = NOW + timedelta(minutes=10)
+    return display_freshness.should_update_display("brand-new-icon", 10, later, MAX_STALE, temp_delta=2) is True
+
+
 TESTS = [
     test_first_run_always_updates,
     test_unchanged_within_max_stale_skips,
@@ -157,6 +225,14 @@ TESTS = [
     test_check_past_min_interval_runs,
     test_first_check_always_runs,
     test_record_check_does_not_clobber_display_state,
+    test_one_degree_change_waits_with_delta_2,
+    test_two_degree_change_refreshes_with_delta_2,
+    test_flapping_temperature_does_not_refresh,
+    test_slow_drift_refreshes_once_it_adds_up,
+    test_icon_change_within_group_waits,
+    test_icon_group_change_refreshes,
+    test_stale_timer_still_refreshes_with_threshold,
+    test_unknown_icon_key_is_its_own_group,
 ]
 
 

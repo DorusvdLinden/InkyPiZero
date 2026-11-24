@@ -112,6 +112,7 @@ FIELD_VALIDATORS = {
     "wind_speed_unit": _valid_wind_speed_unit,
     "min_update_interval_minutes": _valid_nonnegative_int,
     "force_refresh_max_stale_minutes": _valid_positive_int,
+    "refresh_temp_delta": _valid_positive_int,
     "station_enabled": _valid_bool,
     "station_type": _valid_station_type,
     "station_base_url": _valid_optional_str,

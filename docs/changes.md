@@ -2587,6 +2587,43 @@ cloud in `022n` stays blue.
 in `mock_display_output/night_icons_black/`, night locations in
 `scripts/test_locations.py`, and a forced refresh on the Pi.
 
+### 63. Fewer display refreshes: weather groups, a 2-degree threshold, 2-hour stale timer
+(2026-11-24, plan: `plans/fewer-display-refreshes.md`)
+
+The panel flashed often: the Pi's journal showed 66 refreshes in 48 hours
+(~33 a day), including 2-5 an hour at night. Every icon change and every
+1-degree change refreshed, and a temperature near a rounding boundary
+flipped back and forth (e.g. -2/-3), costing a refresh each time; plus a
+forced refresh every hour.
+
+Each refresh flashing heavily can't be changed in software: the Spectra 6
+(E673) panel and Pimoroni's driver only do a full refresh, and partial
+updates on these panels are reported to tint whites blue and ghost.
+Decision: keep the full refresh, refresh less often.
+
+- **Weather groups** (`display_freshness.ICON_GROUPS`): only a change of
+  group (clear / partly cloudy / cloudy / fog / rain / snow / thunder)
+  refreshes right away; a day/night swap or drizzle to showers waits.
+- **`refresh_temp_delta`** (new setting, default 2): refresh right away only
+  when the temperature is 2 degrees or more from the one on screen.
+  Compared against what's shown, so flapping doesn't refresh but slow drift
+  still does once it adds up.
+- **`force_refresh_max_stale_minutes`** default 60 -> 120.
+- Quiet hours were considered and rejected: it refreshes at night under
+  the same rules.
+
+Expected roughly 10-14 refreshes a day instead of ~33; to be measured
+from the journal after a few days.
+
+Note for the Pi: its saved settings file pins
+`force_refresh_max_stale_minutes: 60`, so the new default doesn't apply
+there until that value is changed (done on deploy, via the settings file).
+
+**Active.** Verified: 8 new tests in `scripts/test_display_freshness.py`
+(1-degree waits, 2-degree refreshes, the -2/-3 flapping pattern, slow
+drift, same-group icon changes wait, group change refreshes, stale timer,
+unknown icon keys), plus the settings page on the Pi.
+
 ---
 
 ## Pruned branches

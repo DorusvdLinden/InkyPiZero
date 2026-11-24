@@ -81,6 +81,13 @@
       <p class="hint">Hoe lang het scherm onveranderd mag blijven terwijl het hoofdicoon/de
         temperatuur gelijk blijven, zodat langzamer veranderende details (voorspelkaarten, de
         grafiek, "Laatste update") niet oneindig verouderen.</p>
+      <label>Temperatuurverschil voor directe verversing in graden (refresh_temp_delta)
+        <input type="number" min="1" step="1" name="refresh_temp_delta" value="{{ config.refresh_temp_delta }}" required>
+      </label>
+      <p class="hint">Het scherm ververst direct als de temperatuur minstens dit aantal graden
+        afwijkt van wat er staat, of als het soort weer verandert (bijv. bewolkt naar regen).
+        Kleinere veranderingen wachten op de maximale tijd hierboven. Elke verversing laat het
+        scherm een tijdje knipperen.</p>
     </fieldset>
 
     <fieldset>

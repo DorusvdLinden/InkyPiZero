@@ -71,7 +71,7 @@ python main.py --mock-output output.png
   fail-soft fallback (missing/invalid file) since that's exactly the kind
   of thing a hand-edited file can break in ways live testing won't catch.
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
-  skip/force decision (see [settings.md](./settings.md)'s "Display refresh
+  skip/force decision (weather groups, `refresh_temp_delta`, stale timer) (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.
 - `python scripts/test_temperature_rounding.py` - covers the single
   temperature-rounding rule (`weather_data.round_half_up`) and that the

@@ -53,7 +53,8 @@ automatically, without being asked each time.
 - **Always test display-freshness logic**: `python scripts/test_display_freshness.py`
   covers `display_freshness.py`'s two throttles - `should_run_check`/`record_check`
   (the configurable `min_update_interval_minutes` pre-fetch check) and
-  `should_update_display`/`record_display` (icon/temp changed, `force_refresh_max_stale_minutes`
+  `should_update_display`/`record_display` (weather group changed, temperature
+  moved `refresh_temp_delta` or more, `force_refresh_max_stale_minutes`
   elapsed, a forced-refresh sentinel pending) - against a temp state directory - no
   network/hardware needed. Run this after any change to `display_freshness.py`,
   `main.py`'s real-hardware render path, or the forced-refresh sentinel calls in

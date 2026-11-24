@@ -11,9 +11,14 @@ Two independent throttles, both configurable (config.py/the web UI):
     fetching weather data - if less than `min_interval` has passed since
     the last check attempt (config.min_update_interval_minutes).
   - should_update_display/record_display: once data's been fetched, skip
-    the actual display push if the main icon/temperature are unchanged
-    and less than `max_stale` has passed since the last real refresh
-    (config.force_refresh_max_stale_minutes).
+    the actual display push unless the main icon's weather *group* changed
+    (clear / partly cloudy / cloudy / fog / rain / snow / thunder), the
+    temperature moved at least `temp_delta` degrees from what's on screen
+    (config.refresh_temp_delta), or `max_stale` has passed since the last
+    real refresh (config.force_refresh_max_stale_minutes). Before
+    docs/changes.md entry 63 any icon change and any 1-degree change
+    refreshed - ~33 full-panel flashes a day, many from a temperature
+    flapping across a rounding boundary.
 Both read/write the same state file - _load_state()/_write_state() do a
 read-modify-write so recording one doesn't clobber the other's fields."""
 
@@ -73,15 +78,43 @@ def record_check(now: datetime) -> None:
     _write_state({"last_check_time": now.isoformat()})
 
 
-def should_update_display(icon_key: str, temp, now: datetime, max_stale: timedelta) -> bool:
+# Weather groups for the refresh decision: a change *within* a group
+# (day <-> night icon, drizzle <-> rain <-> showers, light <-> heavy snow)
+# waits for the stale timer instead of flashing the panel right away.
+ICON_GROUPS = {
+    "01d": "clear", "01n": "clear",
+    "022d": "partly_cloudy", "022n": "partly_cloudy",
+    "04d": "cloudy",
+    "50d": "fog", "48d": "fog",
+    "51d": "rain", "53d": "rain", "09d": "rain", "10d": "rain", "10n": "rain",
+    "56d": "rain", "57d": "rain",  # sleet/freezing rain
+    "71d": "snow", "73d": "snow", "13d": "snow", "77d": "snow",
+    "11d": "thunder", "96d": "thunder",
+}
+
+
+def icon_group(icon_key) -> str:
+    """Unknown keys are their own group, so a new icon still refreshes."""
+    return ICON_GROUPS.get(icon_key, f"other:{icon_key}")
+
+
+def should_update_display(icon_key: str, temp, now: datetime, max_stale: timedelta,
+                          temp_delta: int = 1) -> bool:
     """True if the physical display should be refreshed this tick: no
-    prior state (first run), the main icon or temperature changed since
-    the last refresh, or max_stale has elapsed since the last refresh -
-    keeps slower-changing details (forecast cards, the hourly chart, the
-    "Laatste update" timestamp) from going stale indefinitely during a
-    stretch of unchanged weather."""
+    prior state (first run), the main icon's weather group changed, the
+    temperature is at least temp_delta degrees from the one last shown, or
+    max_stale has elapsed since the last refresh - keeps slower-changing
+    details (forecast cards, the hourly chart, the "Laatste update"
+    timestamp) from going stale indefinitely during a stretch of unchanged
+    weather. Compared against what's *on screen*, so slow drift still
+    refreshes once it adds up to temp_delta."""
     state = _load_state()
-    if state.get("icon_key") != icon_key or state.get("temp") != temp:
+    if "icon_key" not in state or icon_group(state.get("icon_key")) != icon_group(icon_key):
+        return True
+    try:
+        if abs(temp - state["temp"]) >= temp_delta:
+            return True
+    except (KeyError, TypeError):
         return True
     try:
         last_display_time = datetime.fromisoformat(state["last_display_time"])

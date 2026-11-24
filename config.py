@@ -40,7 +40,11 @@ class DisplayConfig:
     # icon/temperature haven't changed, so slower-moving details (forecast
     # cards, the hourly chart, "Laatste update") don't go stale forever.
     # See display_freshness.py.
-    force_refresh_max_stale_minutes: int = 60
+    force_refresh_max_stale_minutes: int = 120
+    # Minimum change (degrees) in the current temperature, versus the one on
+    # screen, that refreshes the panel right away; smaller drift waits for
+    # force_refresh_max_stale_minutes. See display_freshness.py.
+    refresh_temp_delta: int = 2
     # Pluggable local weather-station source for "actual" (not modeled)
     # current temperature/rain - see weather_data.STATION_ADAPTERS. No real
     # station is wired up yet (only "generic_http", a placeholder) - these
