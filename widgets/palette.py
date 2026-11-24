@@ -52,7 +52,9 @@ class Palette:
 
         # icons (scripts/generate_icons.py)
         self.sun = c["orange"]
-        self.moon = c["yellow"]
+        # Black since docs/changes.md entry 62 (was yellow; the yellow
+        # 01n/022n are kept as 01n-yellow.png / 022n-yellow.png).
+        self.moon = c["black"]
         self.cloud = c["blue"]
         self.fog = c["black"]
         self.storm = c["black"]

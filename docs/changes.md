@@ -2565,6 +2565,28 @@ settings file loads, 14 accepted / 15 rejected), the forecast rain and
 quality scenarios, and all 14 locations × 3 modes. Renders at 1, 3, 5, 7,
 10 and 14 cards in `mock_display_output/forecast_card_budget/`.
 
+### 62. Night moon icons in black
+(2026-11-24, plan: `plans/black-night-moon-icons.md`)
+
+The moon in the night condition icons `01n` (clear night) and `022n`
+(moon behind a cloud) is black instead of yellow (user ask): they show in
+the hourly icon strip and the large current-conditions icon at night. The
+cloud in `022n` stays blue.
+
+- `PALETTE.moon` is black; `01n`/`022n` regenerated with
+  `scripts/generate_icons.py` (checked: the generator reproduces every
+  other icon byte-for-byte; only the moon-coloured ones differ).
+- The old yellow versions are kept as `01n-yellow.png` / `022n-yellow.png`.
+- The unused moon-phase PNGs (entry 61) were not replaced and stay
+  yellow; regenerating the full set would turn them black too, harmless
+  since nothing loads them.
+- Shapes are unchanged (same pixel area), and the generation-time extra
+  thickening of `01n` still looks right in black, so it was kept.
+
+**Active.** Verified: comparison renders at the real sizes (30/42/102px)
+in `mock_display_output/night_icons_black/`, night locations in
+`scripts/test_locations.py`, and a forced refresh on the Pi.
+
 ---
 
 ## Pruned branches

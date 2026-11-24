@@ -16,11 +16,13 @@ the dev-time generator `scripts/generate_icons.py`.
 `docs/images/icon_overview.png` whenever an icon is added, removed, or
 recolored.*
 
-## Source assets (31 files, `assets/icons/`)
+## Source assets (35 files, `assets/icons/`)
 
 | File(s) | Category |
 |---|---|
-| `01d.png` / `01n.png` | Clear sky (day/night) - `01n` gets extra generation-time thickening, see below |
+| `01d.png` / `01n.png` | Clear sky (day/night) - `01n` gets extra generation-time thickening, see below. The moon in `01n` and `022n` is **black** since `docs/changes.md` entry 62 (`PALETTE.moon`) |
+| `01n-yellow.png` / `022n-yellow.png` | The previous yellow-moon `01n`/`022n`, kept for comparison; not loaded at runtime |
+| `022d-new.png` / `022n-new.png` | Candidate redesign of the half-cloudy composite, awaiting a decision (`TODO.md`); not loaded at runtime |
 | `022d.png` / `022n.png` | "Half cloudy" composite (day/night) - hand-built, see below |
 | `04d.png` | Overcast |
 | `50d.png`, `48d.png` | Fog |

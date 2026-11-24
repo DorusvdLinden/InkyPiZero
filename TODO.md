@@ -1,9 +1,9 @@
 # pi_weather_display - known issues & ideas
 
 - **InkyPiZero**: weather-only e-ink display on a Raspberry Pi with a Pimoroni Inky Impression panel, drawn with Pillow: current weather, hourly chart, forecast, air quality and pollen.
-- Status (2026-11-24): built; Nov batch in progress on feature/nov-2026-batch (rounding, rain zero, wind unit, forecast cards done).
+- Status (2026-11-24): built; Nov batch in progress on feature/nov-2026-batch (rounding, rain zero, wind unit, forecast cards, black moon icons done).
 - Open: half-cloudy icon choice; tiny mm decimal at 10+ days.
-- Next: black night moon icons, fewer display refreshes (plans/).
+- Next: fewer display refreshes (plans/fewer-display-refreshes.md).
 - Details: README.md, docs/settings.md.
 
 Running list of things found during development/testing that aren't fixed yet.
@@ -83,6 +83,15 @@ reference docs this list feeds into.
 - [x] Rain axis "0" floated partway up the chart in gridlines mode, with
   a bar under every dry hour (10 Nov photo). Fixed 2026-11-24 - the axis
   bottom snaps down to a gridline (docs/changes.md entry 59).
+
+- [ ] Pre-existing, found 2026-11-24 (not from the Nov batch - identical on
+  `main`): for a location whose timezone differs from the machine's own
+  (e.g. Tokyo in `scripts/test_locations.py` run on a Europe/Amsterdam
+  PC), the hourly strip's day/night icons and sunrise/sunset markers are
+  shifted by the timezone difference. Open-Meteo returns naive local
+  times (`timezone=auto`) and `datetime.fromisoformat(...).astimezone(tz)`
+  treats a naive time as the *machine's* local time. No effect on the Pi
+  (configured and system timezone are both Europe/Amsterdam).
 
 ## Settings
 
