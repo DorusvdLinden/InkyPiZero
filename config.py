@@ -12,9 +12,8 @@ class DisplayConfig:
     longitude: float = 5.8993687
     timezone: str = "Europe/Amsterdam"
     time_format: str = "24h"       # "24h" | "12h"
-    forecast_days: int = 7
+    forecast_days: int = 7  # 1-14, see settings_store.MAX_FORECAST_DAYS
     graph_icon_step: int = 2
-    show_moon_phase: bool = False
     background_color: str = "#ffffff"
     text_color: str = "#000000"
     inky_saturation: float = 0.0
@@ -27,6 +26,11 @@ class DisplayConfig:
     # widgets/chart.py). "category" only applies to rain/hail windows -
     # snow/dry always show a plain number regardless.
     rain_axis_format: str = "mm"
+    # "ms" | "beaufort" - the "Wind" data point's number: whole m/s, or the
+    # Beaufort number (0-12, "bft"). Display only: data is always fetched
+    # in m/s, and wind is never charted, so no axis logic is involved
+    # (unlike the reverted imperial toggle, docs/changes.md entry 25).
+    wind_speed_unit: str = "ms"
     # 0 = no extra throttling beyond the fixed 10-minute systemd timer tick
     # (install/pi-weather-display.timer) - raising this skips a check
     # entirely (before even fetching weather data) until this many minutes
@@ -36,7 +40,11 @@ class DisplayConfig:
     # icon/temperature haven't changed, so slower-moving details (forecast
     # cards, the hourly chart, "Laatste update") don't go stale forever.
     # See display_freshness.py.
-    force_refresh_max_stale_minutes: int = 60
+    force_refresh_max_stale_minutes: int = 120
+    # Minimum change (degrees) in the current temperature, versus the one on
+    # screen, that refreshes the panel right away; smaller drift waits for
+    # force_refresh_max_stale_minutes. See display_freshness.py.
+    refresh_temp_delta: int = 2
     # Pluggable local weather-station source for "actual" (not modeled)
     # current temperature/rain - see weather_data.STATION_ADAPTERS. No real
     # station is wired up yet (only "generic_http", a placeholder) - these

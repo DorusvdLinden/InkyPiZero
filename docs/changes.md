@@ -1021,7 +1021,8 @@ tracked separately):
   at the `target_date` line and updated `docs/icons.md`'s note from
   "worth double-checking" to verified.
 
-**Active** - current design. Verified: regenerated the full icon set
+**Active, partly outdated by entry 61** (the moon phase it verified is no
+longer drawn) - current design. Verified: regenerated the full icon set
 (`scripts/generate_icons.py`, using a fresh local `erikflowers/weather-icons`
 clone) and confirmed every icon other than the `02d`/`02n` removal and `96d`
 addition rendered byte-identical; visually inspected the regenerated
@@ -2417,8 +2418,10 @@ leave a visible gap under short bars on any sub-freezing, non-multiple-
 of-10 day - not something requested, so the old grounding behavior was
 kept.
 
-**Active** - current design, replacing entries 55-56's ceiling-search
-approach entirely. Verified: `scripts/test_chart_axis_labels.py` (16/16,
+**Active, partly outdated by entry 59** - the 0mm anchor floating above
+the plot bottom (and the bar-grounding note above) is fixed by entry 59's
+axis snap; everything else stands. Current design, replacing entries
+55-56's ceiling-search approach entirely. Verified: `scripts/test_chart_axis_labels.py` (16/16,
 substantially rewritten - direct unit coverage of `_choose_rain_step`/
 `_rain_step_top_value`/`_rain_gridline_value`/`_format_rain_gridline_value`,
 the 3mm floor, clipping-driven escalation, the extreme-cold fractional-step
@@ -2435,6 +2438,191 @@ pass. Visually confirmed via live Sittard data (clean "10°/2mm, 0°/0mm"
 gridlines) and a crafted narrow-range (2-7degC) fixture showing the new
 5-degree fallback line ("5°/3mm") with a bar correctly landing between it
 and "0°/0mm".
+
+### 58. One temperature-rounding rule; the chart plots real temperatures
+(2026-11-24, plan: `plans/consistent-temperature-rounding.md`)
+
+A photo of the live panel (Sittard, 22 November, 20:36) showed a header
+of "-1° / 5° / -1°" while the chart's temperature line sat flat at 0 all
+night. Cause: the same Open-Meteo floats were rounded three different
+ways. The chart's hourly temps and the forecast cards' high/low used
+`int()` (truncation toward zero: a -0.7 night became 0, and 2.9 became 2),
+and the header's night lows and the current/feels-like temperature used
+Python's `round()` (banker's rounding: 2.5 became 2). Truncation also
+caused the chart's staircase look: whole-degree plateaus with steep
+ramps between them.
+
+Now:
+- `weather_data.round_half_up` is the one rule for every whole number
+  shown (halves round up: -0.6 -> -1, -0.5 -> 0, 2.5 -> 3; never "-0").
+  Used for the forecast high/low, header night lows, current temperature
+  and feels-like.
+- `HourPoint.temperature` keeps the unrounded float. The chart draws the
+  real curve and rounds only the numbers it prints (axis-end labels,
+  original mode's dashed min/max labels).
+- Original mode compares *printed* values when deciding to skip a dashed
+  min/max line or the 0° freezing line, so a 0.3° low doesn't draw a
+  second "0°" next to the axis's own "0°C".
+
+The middle "5°" in that photo was correct: it's today's daily high, which
+happened before the chart's 20:00 start.
+
+**Active.** Verified: new `scripts/test_temperature_rounding.py` (rounding
+values, header/chart agreement on a -0.7 night, axis below 0 in both chart
+styles, no duplicate 0° line), plus the existing chart, precip and
+location tests. Before/after renders of the photo's night in
+`mock_display_output/temperature_rounding/`.
+
+### 59. Rain 0 is always the chart bottom (gridlines/compact mode)
+(2026-11-24, plan: `plans/rain-zero-at-chart-bottom.md`)
+
+A photo of the live panel (Sittard, 10 November, temps -2..7°C) showed
+the rain axis "0" partway up the chart and a solid bar under every dry
+hour. Cause: entry 57's exact lattice anchors 0mm on the lowest
+temperature gridline (`grid_start`, 0° that day), but the axis bottom was
+the real low (-2°), and bars are drawn from the plot bottom. On most
+sub-freezing days rain 0 floated above the bottom, and a 0mm hour drew a
+bar up to it. Entry 57 kept the bars grounded on purpose but didn't
+notice this side effect.
+
+Fix (chosen over separate rain ticks, or bars starting at the 0 line):
+in gridlines/compact mode the temperature axis bottom snaps down to the
+next gridline (`floor(min_temp / grid_step) * grid_step`, e.g. -2 -> -5),
+so the plot bottom *is* the lowest gridline and every gridline label
+stays exact. The 10°/5° step choice still uses the real temperatures.
+As a guard, a 0mm hour never draws a bar, whatever the scale.
+
+Cost (accepted): on a cold day the temperature curve uses less of the
+height, e.g. a -0.7°C night now spans -5..2. The zero-headroom fallback
+from entry 57 now only triggers when every hour sits exactly on one
+gridline value. Original mode is unchanged.
+
+**Active.** Verified: new `test_rain_zero_is_plot_bottom_and_dry_hours_draw_no_bar`
+in `scripts/test_chart_axis_labels.py` (the photo's day: one "0" label on
+the plot bottom, one bar per wet hour, evenly stepped labels), the other
+chart tests, precip scenarios and all 14 locations × 3 modes. Before/after
+renders in `mock_display_output/rain_zero_bottom/`.
+
+### 60. Wind speed unit setting (m/s or Beaufort), whole m/s, plain UV label
+(2026-11-24, plan: `plans/wind-speed-unit-setting.md`)
+
+- New `wind_speed_unit` setting (`"ms"` default, or `"beaufort"`), web UI
+  only, following `rain_axis_format`'s pattern. Beaufort shows the number
+  0-12 with unit "bft" (`get_beaufort_number`, sharing one breakpoint
+  table with the existing `get_beaufort_description_nl`).
+- In m/s mode the speed is a whole number, rounded half up with entry
+  58's `round_half_up` ("1 m/s", not "0.82 m/s"). The Dutch description
+  always uses the unrounded speed.
+- The UV data point's label is plain "UV-index": the old "1-12" range was
+  wrong (UV starts at 0) and added nothing.
+
+Lower risk than entry 25's reverted unit-system toggle: wind is never
+charted, so no axis logic is involved; data is still fetched in m/s.
+
+**Active.** Verified: new `scripts/test_wind_scenarios.py` (Beaufort
+numbers incl. boundaries, unchanged descriptions, both modes, description
+from the raw speed, UV label), palette and location tests. Renders of
+both modes in `mock_display_output/wind_speed_unit/`.
+
+### 61. Forecast cards: moon phase removed, one vertical budget, 1-14 days
+(2026-11-24, plan: `plans/forecast-card-vertical-budget.md`)
+
+Three open TODO items shared one cause: the card's rows were placed
+independently and nothing checked they fit the fixed 95px card.
+Measured: the moon-phase row overlapped the day-name/high-low text at the
+default 7 days (not only with wide rain amounts), the text ran past the
+card bottom at 5 cards or fewer (294px tall at 1 card), and the mm text
+shrank below the day label there.
+
+- **Moon phase removed** (user decision, after comparing three placements
+  in `mock_display_output/forecast_card_budget/moon_options/`): the card
+  drawing, the moon calculation, `get_moon_phase_name` /
+  `get_moon_phase_icon_key`, the `show_moon_phase` setting (config, web
+  UI, validator) and the `astral` dependency. An existing settings file
+  with `show_moon_phase` still loads (unknown keys are ignored). The
+  phase PNGs stay in `assets/icons/` and the generator, unused. The night
+  icons `01n`/`022n` are separate and unchanged.
+- **One vertical budget**, `widgets/forecast.py::compute_card_layout`:
+  the text gets the largest size (up to the old `w * 0.15`) that fits the
+  card width and leaves the icon at least 35px and tall enough for the mm
+  text at the same size; the icon gets the remaining height, capped as
+  before. 6-10 cards keep exactly their old sizes (7 cards: 42px icon,
+  15px text); 5 or fewer now fit (21px text, 37px icon) and the mm text
+  matches the day label from 1 to 10 cards.
+- **`forecast_days` 1-14** (`settings_store.MAX_FORECAST_DAYS`, `max` on
+  the web input). Above 15 the Open-Meteo fetch failed outright; at 15 the
+  render crashed, because with this app's model blend the 16th day comes
+  back all-null. `_parse_forecast` now also stops at the first day
+  without data instead of crashing.
+
+Supersedes the moon-phase parts of earlier entries (e.g. 35's offset
+check; the overlap reports in later entries).
+
+**Active.** Verified: new `scripts/test_forecast_card_layout.py` (1-14
+cards × dry/rainy: all text inside the card, no overlaps, mm text size
+matches up to 10 cards, 7-card geometry unchanged, no moon text, old
+settings file loads, 14 accepted / 15 rejected), the forecast rain and
+quality scenarios, and all 14 locations × 3 modes. Renders at 1, 3, 5, 7,
+10 and 14 cards in `mock_display_output/forecast_card_budget/`.
+
+### 62. Night moon icons in black
+(2026-11-24, plan: `plans/black-night-moon-icons.md`)
+
+The moon in the night condition icons `01n` (clear night) and `022n`
+(moon behind a cloud) is black instead of yellow (user ask): they show in
+the hourly icon strip and the large current-conditions icon at night. The
+cloud in `022n` stays blue.
+
+- `PALETTE.moon` is black; `01n`/`022n` regenerated with
+  `scripts/generate_icons.py` (checked: the generator reproduces every
+  other icon byte-for-byte; only the moon-coloured ones differ).
+- The old yellow versions are kept as `01n-yellow.png` / `022n-yellow.png`.
+- The unused moon-phase PNGs (entry 61) were not replaced and stay
+  yellow; regenerating the full set would turn them black too, harmless
+  since nothing loads them.
+- Shapes are unchanged (same pixel area), and the generation-time extra
+  thickening of `01n` still looks right in black, so it was kept.
+
+**Active.** Verified: comparison renders at the real sizes (30/42/102px)
+in `mock_display_output/night_icons_black/`, night locations in
+`scripts/test_locations.py`, and a forced refresh on the Pi.
+
+### 63. Fewer display refreshes: weather groups, a 2-degree threshold, 2-hour stale timer
+(2026-11-24, plan: `plans/fewer-display-refreshes.md`)
+
+The panel flashed often: the Pi's journal showed 66 refreshes in 48 hours
+(~33 a day), including 2-5 an hour at night. Every icon change and every
+1-degree change refreshed, and a temperature near a rounding boundary
+flipped back and forth (e.g. -2/-3), costing a refresh each time; plus a
+forced refresh every hour.
+
+Each refresh flashing heavily can't be changed in software: the Spectra 6
+(E673) panel and Pimoroni's driver only do a full refresh, and partial
+updates on these panels are reported to tint whites blue and ghost.
+Decision: keep the full refresh, refresh less often.
+
+- **Weather groups** (`display_freshness.ICON_GROUPS`): only a change of
+  group (clear / partly cloudy / cloudy / fog / rain / snow / thunder)
+  refreshes right away; a day/night swap or drizzle to showers waits.
+- **`refresh_temp_delta`** (new setting, default 2): refresh right away only
+  when the temperature is 2 degrees or more from the one on screen.
+  Compared against what's shown, so flapping doesn't refresh but slow drift
+  still does once it adds up.
+- **`force_refresh_max_stale_minutes`** default 60 -> 120.
+- Quiet hours were considered and rejected: it refreshes at night under
+  the same rules.
+
+Expected roughly 10-14 refreshes a day instead of ~33; to be measured
+from the journal after a few days.
+
+Note for the Pi: its saved settings file pins
+`force_refresh_max_stale_minutes: 60`, so the new default doesn't apply
+there until that value is changed (done on deploy, via the settings file).
+
+**Active.** Verified: 8 new tests in `scripts/test_display_freshness.py`
+(1-degree waits, 2-degree refreshes, the -2/-3 flapping pattern, slow
+drift, same-group icon changes wait, group change refreshes, stale timer,
+unknown icon keys), plus the settings page on the Pi.
 
 ---
 

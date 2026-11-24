@@ -9,11 +9,10 @@ import os
 import time
 import tomllib
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 
 import pytz
 import requests
-from astral import moon
 
 from config import DisplayConfig
 from widgets.palette import native_colors
@@ -88,28 +87,14 @@ def format_time(dt: datetime, time_format: str, hour_only: bool = False) -> str:
     return dt.strftime(fmt).lstrip("0")
 
 
-def get_moon_phase_name(phase_age: float) -> str:
-    thresholds = [
-        (1.0, "newmoon"), (7.0, "waxingcrescent"), (8.5, "firstquarter"),
-        (14.0, "waxinggibbous"), (15.5, "fullmoon"), (22.0, "waninggibbous"),
-        (23.5, "lastquarter"), (29.0, "waningcrescent"),
-    ]
-    for threshold, phase_name in thresholds:
-        if phase_age <= threshold:
-            return phase_name
-    return "newmoon"
-
-
-def get_moon_phase_icon_key(phase_name: str, lat: float) -> str:
-    """Southern hemisphere sees waxing/waning and quarter phases mirrored."""
-    if lat < 0:
-        mirror = {
-            "waxingcrescent": "waningcrescent", "waningcrescent": "waxingcrescent",
-            "waxinggibbous": "waninggibbous", "waninggibbous": "waxinggibbous",
-            "firstquarter": "lastquarter", "lastquarter": "firstquarter",
-        }
-        phase_name = mirror.get(phase_name, phase_name)
-    return phase_name
+def round_half_up(x: float) -> int:
+    """The one rounding rule for every whole number shown on the panel
+    (temperatures, wind speed): halves round up, so -0.6 -> -1, -0.5 -> 0,
+    2.5 -> 3. Replaces a mix of int() (truncates toward zero, so a -0.7
+    night showed as 0 on the chart) and Python's round() (banker's
+    rounding: 2.5 -> 2) that made the header, chart and forecast cards
+    disagree - docs/changes.md entry 58. Never produces "-0"."""
+    return math.floor(x + 0.5)
 
 
 # WMO weather codes that mean "snow" / "hail" is actually falling, used to
@@ -168,17 +153,26 @@ def get_wind_icon_rotation(wind_deg: float) -> float:
     return (wind_deg + 180) % 360
 
 
-def get_beaufort_description_nl(speed_ms: float) -> str:
-    levels = [
-        (0.3, "Windstil"), (1.6, "Zwakke wind"), (3.4, "Zwakke wind"),
-        (5.5, "Matige wind"), (8.0, "Matige wind"), (10.8, "Vrij krachtige wind"),
-        (13.9, "Krachtige wind"), (17.2, "Harde wind"), (20.8, "Stormachtig"),
-        (24.5, "Storm"), (28.5, "Zware storm"), (32.7, "Zeer zware storm"),
-    ]
-    for upper_bound, description in levels:
+# Standard Beaufort breakpoints (m/s): Beaufort N covers speeds below
+# _BEAUFORT_UPPER_BOUNDS_MS[N]; at or above the last bound it's 12.
+_BEAUFORT_UPPER_BOUNDS_MS = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7]
+_BEAUFORT_DESCRIPTIONS_NL = [
+    "Windstil", "Zwakke wind", "Zwakke wind", "Matige wind", "Matige wind",
+    "Vrij krachtige wind", "Krachtige wind", "Harde wind", "Stormachtig",
+    "Storm", "Zware storm", "Zeer zware storm", "Orkaan",
+]
+
+
+def get_beaufort_number(speed_ms: float) -> int:
+    """0-12 on the Beaufort scale, from the unrounded speed."""
+    for number, upper_bound in enumerate(_BEAUFORT_UPPER_BOUNDS_MS):
         if speed_ms < upper_bound:
-            return description
-    return "Orkaan"
+            return number
+    return 12
+
+
+def get_beaufort_description_nl(speed_ms: float) -> str:
+    return _BEAUFORT_DESCRIPTIONS_NL[get_beaufort_number(speed_ms)]
 
 
 def get_humidity_drop_count(humidity) -> int:
@@ -413,7 +407,9 @@ def get_uv_beam_points(uv_index, beam_count=10, cx=60, cy=60, core_r=24, min_len
 @dataclass
 class HourPoint:
     time_label: str
-    temperature: int
+    # Unrounded degC: the chart plots the real curve and rounds only the
+    # numbers it prints (round_half_up), so a -0.7 night dips below 0.
+    temperature: float
     rain: float
     icon_key: str
     is_day_start: bool = False  # True at the first hour of a new calendar date
@@ -431,8 +427,6 @@ class DayForecast:
     icon_key: str
     high: int
     low: int
-    moon_phase_pct: str
-    moon_icon_key: str
     precip_mm: float
     rain_expected: bool
     # Computed every render but not currently drawn anywhere - see
@@ -869,7 +863,7 @@ def _quality_tier_and_color(high_c: float, precip_mm: float, quality_config: dic
     return worst_tier, color, precip_tier != tier_order[0]
 
 
-def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]:
+def _parse_forecast(daily_data, tz, saturation: float) -> list[DayForecast]:
     times = daily_data.get("time", [])
     weather_codes = daily_data.get("weathercode", [])
     temp_max = daily_data.get("temperature_2m_max", [])
@@ -879,33 +873,19 @@ def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]
 
     forecast = []
     for i in range(len(times)):
+        # The model blend can return trailing days with no data at all
+        # (all-null 16th day, 2026-11-24) - stop there rather than crash
+        # or show a made-up 0°/0° card.
+        if i >= len(temp_max) or i >= len(temp_min) or temp_max[i] is None or temp_min[i] is None:
+            break
         dt = datetime.fromisoformat(times[i]).replace(tzinfo=timezone.utc).astimezone(tz)
         code = weather_codes[i] if i < len(weather_codes) else 0
         icon_key = map_weather_code_to_icon(code, is_day=1)
 
-        # +1: the phase for the night *following* this card's daytime date,
-        # not the phase at midnight of that date itself - verified against
-        # public reference dates 2026-08-15 (Icon-Plan.md item 3): the +1
-        # target_date matched the published 2026-09-10 new moon and
-        # 2026-09-26 full moon within 0.34/0.04 days, vs. 2.20/0.97 days
-        # unshifted.
-        target_date: date = dt.date() + timedelta(days=1)
-        try:
-            phase_age = moon.phase(target_date)
-            phase_name = get_moon_phase_name(phase_age)
-            lunar_cycle_days = 29.530588853
-            phase_fraction = phase_age / lunar_cycle_days
-            illum_pct = (1 - math.cos(2 * math.pi * phase_fraction)) / 2 * 100
-        except Exception as e:
-            logger.error(f"Error calculating moon phase for {target_date}: {e}")
-            illum_pct = 0
-            phase_name = "newmoon"
-        moon_icon_key = get_moon_phase_icon_key(phase_name, lat)
-
         precip_mm = float(precip_sums[i]) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
-        # Tier from the raw (un-truncated) high, not the display-rounded
-        # int below - int() truncates toward zero, so e.g. -0.3 -> 0 would
-        # otherwise land a real "-5 to 0 C" day one tier too nice. The
+        # Tier from the raw high, not the display-rounded int below - a
+        # rounded -0.3 -> 0 would otherwise land a real "-5 to 0 C" day one
+        # tier too nice. The
         # rain_expected this also returns is intentionally discarded (`_`)
         # in favor of FORECAST_DRY_MM_THRESHOLD below - see that
         # constant's comment for why they're kept as two separate knobs
@@ -916,10 +896,8 @@ def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]
         forecast.append(DayForecast(
             day_label=format_day_abbr_nl(dt),
             icon_key=icon_key,
-            high=int(temp_max[i]) if i < len(temp_max) else 0,
-            low=int(temp_min[i]) if i < len(temp_min) else 0,
-            moon_phase_pct=f"{illum_pct:.0f}",
-            moon_icon_key=moon_icon_key,
+            high=round_half_up(temp_max[i]) if i < len(temp_max) else 0,
+            low=round_half_up(temp_min[i]) if i < len(temp_min) else 0,
             precip_mm=precip_mm,
             rain_expected=precip_mm >= FORECAST_DRY_MM_THRESHOLD,
             quality_border_color=quality_border_color,
@@ -974,7 +952,7 @@ def _night_day_temps(hourly_data, daily_data, tz, current_time) -> tuple[int | N
                 continue
             if start <= dt_hourly < end:
                 values.append(temp)
-        return round(min(values)) if values else None
+        return round_half_up(min(values)) if values else None
 
     last_night_low = _min_in_window(midnight_today, sunrise_today)
     next_night_low = _min_in_window(sunset_today, sunrise_tomorrow)
@@ -1049,7 +1027,7 @@ def _parse_hourly(hourly_data, tz, time_format, sunrises, sunsets) -> tuple[list
         prev_date = dt.date()
         hourly.append(HourPoint(
             time_label=format_time(dt, time_format, hour_only=True),
-            temperature=int(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0,
+            temperature=float(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0.0,
             rain=precip_values[i] if i < len(precip_values) else 0,
             icon_key=map_weather_code_to_icon(code, is_day),
             is_day_start=is_day_start,
@@ -1091,7 +1069,8 @@ def _value_max_today(times, values, tz, current_date):
     return best
 
 
-def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: float) -> list[dict]:
+def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: float,
+                       wind_speed_unit: str = "ms") -> list[dict]:
     data_points = []
     current_data = weather_data.get("current", {})
     hourly_data = weather_data.get("hourly", {})
@@ -1099,10 +1078,16 @@ def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: floa
 
     wind_speed = current_data.get("windspeed", 0)
     wind_deg = current_data.get("winddirection", 0)
+    # Shown as a whole number either way (entry 60): m/s rounded half up,
+    # or the Beaufort number. The description always uses the raw speed.
+    if wind_speed_unit == "beaufort":
+        wind_measurement, wind_unit = get_beaufort_number(wind_speed), "bft"
+    else:
+        wind_measurement, wind_unit = round_half_up(wind_speed), SPEED_UNIT
     data_points.append({
         "kind": "wind",
         "label": get_beaufort_description_nl(wind_speed),
-        "measurement": wind_speed, "unit": SPEED_UNIT,
+        "measurement": wind_measurement, "unit": wind_unit,
         "direction": get_wind_direction_abbr_nl(wind_deg),
         "rotation": get_wind_icon_rotation(wind_deg),
     })
@@ -1129,7 +1114,7 @@ def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: floa
     uv_beams = get_uv_beam_points(uv_index_raw)
     uv_index = round(uv_index_raw) if uv_index_raw is not None else "N/A"
     data_points.append({
-        "kind": "uv", "label": "UV-index 1-12", "measurement": uv_index, "unit": uv_rating,
+        "kind": "uv", "label": "UV-index", "measurement": uv_index, "unit": uv_rating,
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
@@ -1288,8 +1273,9 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     station_rain = station.rain_mm if station else None
     current_icon_key = _apply_station_rain_override(current_icon_key, station_rain)
 
-    daily_forecast = _parse_forecast(daily, tz, config.latitude, config.inky_saturation)
-    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation)
+    daily_forecast = _parse_forecast(daily, tz, config.inky_saturation)
+    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation,
+                                     config.wind_speed_unit)
     hourly, sun_events, precip_label = _parse_hourly(
         weather_data.get("hourly", {}), tz, config.time_format,
         daily.get("sunrise", []), daily.get("sunset", []),
@@ -1311,11 +1297,11 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         current_date=format_date_nl(dt),
         location=location,
         current_icon_key=current_icon_key,
-        current_temp=round(station_temp if station_temp is not None else current.get("temperature", 0)),
+        current_temp=round_half_up(station_temp if station_temp is not None else current.get("temperature", 0)),
         # Always from Open-Meteo, never the station - no generic station API
         # reliably publishes a computed apparent-temperature figure (needs
         # wind+humidity), a known limitation until a real vendor is picked.
-        feels_like=round(current.get("apparent_temperature", current.get("temperature", 0))),
+        feels_like=round_half_up(current.get("apparent_temperature", current.get("temperature", 0))),
         temp_unit=TEMP_UNIT,
         last_night_low=last_night_low,
         day_high=day_high,

@@ -1,5 +1,23 @@
 # Troubleshooting
 
+## The screen flashes a lot when it refreshes
+
+That's how this panel works: the Inky Impression 7.3" (Spectra 6, E673)
+only supports a full refresh, which flashes the whole screen for roughly
+20-30 seconds. Pimoroni's driver has no partial or fast mode, and forcing
+partial updates on Spectra 6 panels is reported to tint the whites blue
+and leave ghosting, so this app doesn't try (checked 2026-11-24, see
+`plans/fewer-display-refreshes.md`).
+
+What you can change is how *often* it refreshes, in the web UI under
+"Ververssnelheid" (see [settings.md](./settings.md)'s "Display refresh
+cadence"): raise `refresh_temp_delta` or `force_refresh_max_stale_minutes`
+for fewer refreshes. To see how often it actually refreshed:
+
+```bash
+journalctl -u pi-weather-display.service --since "-24h" | grep -c "Displaying image"
+```
+
 ## Timer/service not running
 
 Check whether the timer is active:

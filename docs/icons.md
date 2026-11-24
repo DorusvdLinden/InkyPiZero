@@ -16,11 +16,13 @@ the dev-time generator `scripts/generate_icons.py`.
 `docs/images/icon_overview.png` whenever an icon is added, removed, or
 recolored.*
 
-## Source assets (31 files, `assets/icons/`)
+## Source assets (35 files, `assets/icons/`)
 
 | File(s) | Category |
 |---|---|
-| `01d.png` / `01n.png` | Clear sky (day/night) - `01n` gets extra generation-time thickening, see below |
+| `01d.png` / `01n.png` | Clear sky (day/night) - `01n` gets extra generation-time thickening, see below. The moon in `01n` and `022n` is **black** since `docs/changes.md` entry 62 (`PALETTE.moon`) |
+| `01n-yellow.png` / `022n-yellow.png` | The previous yellow-moon `01n`/`022n`, kept for comparison; not loaded at runtime |
+| `022d-new.png` / `022n-new.png` | Candidate redesign of the half-cloudy composite, awaiting a decision (`TODO.md`); not loaded at runtime |
 | `022d.png` / `022n.png` | "Half cloudy" composite (day/night) - hand-built, see below |
 | `04d.png` | Overcast |
 | `50d.png`, `48d.png` | Fog |
@@ -167,8 +169,7 @@ steps).
 | `canvas.py:77-82` | Current-conditions large icon | `int(region.h * 0.62)`, `region = layout.CURRENT_TEMPERATURE` (`h=165`) | `(102, 102)` | No |
 | `canvas.py:179-184` | Visibility data-point icon | `int(box.w * 0.55)`, `int(box.h * 0.55)` - `box` varies by screen mode/grid | original 2x3 grid: `(50, 30)`; compact `icon_left` 2x2: `(41, 45)` | No |
 | `widgets/chart.py:212-216` (`ICON_SIZE = 30`) | Hourly icon strip (every `graph_icon_step` hours) + sunrise/sunset markers | fixed constant | `(30, 30)` | **Yes** (default strength) |
-| `widgets/forecast.py:14-20` | Daily forecast-card icon | `int(min(region.w * 0.85, region.h * 0.45))`, `region.h = FORECAST_ROW.h = 95` | `~(42, 42)` at `forecast_days=7` (height-bound) | **Yes** (default strength) |
-| `widgets/forecast.py:27-33` | Moon-phase icon on forecast card (`show_moon_phase` only) | fixed constant | `(14, 14)` | **Yes** (default strength) |
+| `widgets/forecast.py` (`compute_card_layout`) | Daily forecast-card icon | the card height left after the text, capped at `int(min(region.w * 0.85, region.h * 0.45))`, `region.h = FORECAST_ROW.h = 95` | `(42, 42)` at `forecast_days=7`; `(37, 37)` at 5 or fewer | **Yes** (default strength) |
 | `widgets/icons.py:139-140` (`draw_humidity_drops`) | 5 humidity droplets (3-over-2) | `drop_h = int(region.h * 0.42)`, `drop_w = int(drop_h * 28/38)` | original grid (`h=55`): `(16, 23)` per drop | No |
 
 `widgets/gauge.py` draws the wind compass, pressure gauge, UV sunburst, and
@@ -183,7 +184,14 @@ its own cell (see `docs/changes.md` entry 22).
 dev-only contact sheet (`mock_display_output/icon_overviews/`) - not a
 runtime call site, listed here only so it isn't mistaken for one.
 
-## Moon phases (`weather_data.py`)
+## Moon phases (unused since entry 61)
+
+**Not drawn any more.** The moon phase was removed from the forecast cards
+(and the code below with it) in `docs/changes.md` entry 61. The eight phase
+PNGs stay in `assets/icons/` and in `scripts/generate_icons.py` (generated
+assets are kept), but nothing loads them at runtime. The night condition
+icons `01n` and `022n` are separate and still used. The rest of this section
+describes the removed code, for the record.
 
 `get_moon_phase_name(phase_age)` buckets the lunar age (days) into 8 phases:
 
@@ -208,8 +216,8 @@ that day). Verified 2026-08-15 (Icon-Plan.md item 3) against the published
 within 0.34/0.04 days, vs. 2.20/0.97 days unshifted - confirms the offset is
 correct, not a bug.
 
-Only drawn on forecast cards, gated by `config.show_moon_phase` (default
-`False`).
+Was only drawn on forecast cards, gated by the removed
+`config.show_moon_phase` setting (default `False`).
 
 ## Known gaps
 

@@ -1,3 +1,6 @@
+import math
+from dataclasses import dataclass
+
 from PIL import ImageDraw
 
 from widgets.icons import thicken_icon
@@ -71,7 +74,60 @@ def _fit_stacked_lines(assets, top_text: str, bottom_text: str, max_size: int, m
     return None
 
 
-def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
+# Card vertical budget (docs/changes.md entry 61). Rows top to bottom:
+# padding, weather icon, gap, day label, high/low, padding - all inside the
+# fixed card height (layout.FORECAST_ROW.h, 95px).
+CARD_TOP_PAD = 6
+CARD_BOTTOM_PAD = 4
+ICON_TEXT_GAP = 4
+# The icon is never squeezed below this (or below its own width/height cap,
+# if that's smaller) to make room for bigger text - so a wide card at a low
+# forecast_days gets moderately sized text instead of huge text over a
+# tiny icon.
+MIN_ICON_SIZE = 35
+MIN_BOLD_SIZE = 8  # only reached by narrow cards' width shrink (>=14 days)
+
+
+@dataclass(frozen=True)
+class CardLayout:
+    icon_size: int
+    bold_size: int
+    top_y: int    # icon top
+    temps_y: int  # day label's top; the high/low line sits one line below
+
+
+def compute_card_layout(region, assets, day_label: str, temps_text: str) -> CardLayout:
+    """Largest bold size (up to the old width formula, w * 0.15) whose two
+    text lines fit the card width and still leave the icon at least
+    MIN_ICON_SIZE (and tall enough for the mm text at the same size); the icon then gets the remaining height, capped as
+    before (min(w * 0.85, h * 0.45)). Cards that already fit (5-10
+    forecast_days) keep exactly their old sizes; before this, at 5 days or
+    fewer the text ran past the card bottom (up to 294px tall at 1 day)."""
+    icon_cap = int(min(region.w * 0.85, region.h * 0.45))
+    min_icon = min(MIN_ICON_SIZE, icon_cap)
+    max_text_w = region.w - 6
+    bold_max = max(10, int(region.w * 0.15))
+    chosen = MIN_BOLD_SIZE
+    for size in range(bold_max, MIN_BOLD_SIZE - 1, -1):
+        icon_room = region.h - CARD_TOP_PAD - ICON_TEXT_GAP - 2 * (size + 1) - CARD_BOTTOM_PAD
+        # The icon must also be tall enough for a rainy card's two-line mm
+        # text at this same size (see _fit_stacked_lines: centered on the
+        # icon, 1.5 line-heights tall, 1px clear of temps_y) - otherwise
+        # the mm text would shrink below the day label on rainy cards.
+        if icon_room < max(min_icon, math.ceil(1.5 * (size + 1)) + 2):
+            continue
+        font = assets.font("bold", size)
+        if font.getlength(day_label) <= max_text_w and font.getlength(temps_text) <= max_text_w:
+            chosen = size
+            break
+    icon_room = region.h - CARD_TOP_PAD - ICON_TEXT_GAP - 2 * (chosen + 1) - CARD_BOTTOM_PAD
+    icon_size = max(1, min(icon_cap, icon_room))
+    top_y = region.y + CARD_TOP_PAD
+    return CardLayout(icon_size=icon_size, bold_size=chosen, top_y=top_y,
+                      temps_y=top_y + icon_size + ICON_TEXT_GAP)
+
+
+def draw_forecast_card(image, region, day, assets, text_color):
     draw = ImageDraw.Draw(image)
     # Plain black border - the weather-quality classification pipeline
     # (weather_data.py: weather_quality.toml, _load_weather_quality_config,
@@ -84,19 +140,11 @@ def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
         radius=8, outline=PALETTE.card_border, width=2,
     )
 
-    icon_size = int(min(region.w * 0.85, region.h * 0.45))
+    temps_text = f"{day.high}° / {day.low}°"
+    card = compute_card_layout(region, assets, day.day_label, temps_text)
+    icon_size, bold_size, top_y, temps_y = card.icon_size, card.bold_size, card.top_y, card.temps_y
     icon = assets.icon(day.icon_key, (icon_size, icon_size))
     cx = region.center[0]
-    top_y = region.y + 6
-
-    temps_y = top_y + icon_size + 4
-    # Shared with the mm-rain text below (one source of truth for "the
-    # card's bold text size") rather than each computing its own copy of
-    # this formula - the user's explicit ask was to match the mm-rain
-    # (and day-code, already matching) style to the day-label/temps size.
-    # Only a guaranteed exact match when the mm-rain text doesn't need to
-    # shrink - see the comment where it's used below.
-    bold_size = max(10, int(region.w * 0.15))
 
     mm_number = None  # mm_font/mm_top_y/mm_line_h are only read below when this is set
     mm_unit = "mm"
@@ -110,19 +158,14 @@ def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
         # shrunk below it otherwise - checked jointly for width (narrow
         # cards at high forecast_days) AND height (the two-line block's
         # height above temps_y) per candidate size (see
-        # _fit_stacked_lines) so a smaller size satisfying both isn't
-        # skipped just because a larger one already passed the width check
-        # alone. No artificial floor on the available width - if no size
-        # in range satisfies both, skip the text entirely (icon stays
-        # centered, as on a dry day) rather than ever drawing something
-        # that overflows the card or collides with the day-label row below
-        # it. bold_size is only an exact size match at forecast_days 5-10
-        # (see docs/settings.md) - below 5, icon_size caps out
-        # independently of card width while bold_size keeps growing, so
-        # the vertical budget above temps_y stops growing with it and
-        # this shrinks below bold_size well before running out of
-        # available_width; above 10, available_width itself becomes the
-        # binding constraint instead (see TODO.md).
+        # _fit_stacked_lines). No artificial floor on the available width -
+        # if no size in range satisfies both, skip the text entirely (icon
+        # stays centered, as on a dry day) rather than ever drawing
+        # something that overflows the card or collides with the day-label
+        # row below it. Since bold_size now respects the card height
+        # (compute_card_layout), it matches at every forecast_days where
+        # the width allows; above ~10 days the narrow card's width is the
+        # binding constraint and the text shrinks or is left out.
         available_width = max(region.w - icon_size - mm_gap - 4, 1)
         fit = _fit_stacked_lines(assets, candidate_number, mm_unit, bold_size, available_width,
                                   block_center_y=top_y + icon_size // 2, block_bottom_limit=temps_y)
@@ -142,14 +185,4 @@ def draw_forecast_card(image, region, day, assets, text_color, show_moon: bool):
 
     font_bold = assets.font("bold", bold_size)
     draw.text((cx, temps_y), day.day_label, font=font_bold, fill=text_color, anchor="ma")
-    draw.text((cx, temps_y + font_bold.size + 1), f"{day.high}° / {day.low}°", font=font_bold, fill=text_color, anchor="ma")
-
-    if show_moon:
-        moon_size = 14
-        moon_y = region.bottom - moon_size - 4
-        moon_icon = assets.icon(day.moon_icon_key, (moon_size, moon_size))
-        if moon_icon:
-            moon_icon = thicken_icon(moon_icon)
-            image.paste(moon_icon, (region.x + 6, moon_y), moon_icon)
-        draw.text((region.x + 6 + moon_size + 4, moon_y + moon_size // 2), f"{day.moon_phase_pct}%",
-                   font=assets.font("normal", 11), fill=text_color, anchor="lm")
+    draw.text((cx, temps_y + font_bold.size + 1), temps_text, font=font_bold, fill=text_color, anchor="ma")

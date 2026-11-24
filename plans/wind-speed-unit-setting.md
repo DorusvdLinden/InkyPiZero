@@ -81,6 +81,21 @@ same structure:
 </label>
 ```
 
+**6. Added 2026-11-24, built in the same change (same function):**
+
+- **Whole m/s**: in `"ms"` mode the wind speed shows as a whole number
+  (0.82 becomes "1 m/s", not "0.82 m/s"), using the shared `round_temp`
+  half-up helper from `plans/consistent-temperature-rounding.md`
+  (rename it to a general `round_half_up` if that lands first). The
+  Beaufort description (`label`) and the Beaufort number keep using the
+  unrounded speed.
+- **UV label**: `"UV-index 1-12"` becomes `"UV-index"` (the range was
+  wrong anyway: UV starts at 0). Update the example in the `canvas.py`
+  ~line 135 comment and any docs mentioning "UV-index 1-12" (leave the
+  historical `docs/changes.md` entry as it is).
+- Tests: the wind scenario script also asserts the rounded value and the
+  UV label.
+
 ## Documentation updates
 
 - **`docs/settings.md`**: add a `wind_speed_unit` row to the `config.py`
@@ -92,7 +107,7 @@ same structure:
   (the panel still only ever fetches/stores m/s from Open-Meteo), not a
   reintroduction of the reverted imperial/standard system, and - unlike
   that one - touches no chart axis.
-- **`docs/changes.md`**: append entry `57` describing the new setting,
+- **`docs/changes.md`**: append entry `58` (57 is now taken by the exact rain-axis lattice, 2026-09-20) describing the new setting,
   the numeric-Beaufort addition, and why this is lower-risk than entry
   25's reverted attempt (no chart involvement).
 

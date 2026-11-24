@@ -25,14 +25,21 @@ decide how much actually happens:
    no fetch, no render - until that many minutes have passed since the
    last check. Use this to fetch/check less often than every 10 minutes
    without touching the systemd timer itself.
-2. **`force_refresh_max_stale_minutes`** (default `60`) - once data has
-   been fetched, `main.py` only actually **pushes to the physical panel**
-   when it's worth the wear/flash of a real e-paper refresh:
-   - The main current-conditions icon or the big temperature number
-     changed since the last refresh, **or**
+2. **`force_refresh_max_stale_minutes`** (default `120`, was `60`) and
+   **`refresh_temp_delta`** (default `2`) - once data has been fetched,
+   `main.py` only actually **pushes to the physical panel** when it's
+   worth the wear/flash of a real e-paper refresh:
+   - The main icon's **weather group** changed since the last refresh
+     (clear / partly cloudy / cloudy / fog / rain / snow / thunder,
+     `display_freshness.ICON_GROUPS`) - a day/night swap or drizzle to
+     showers waits for the stale timer, **or**
+   - The current temperature is at least `refresh_temp_delta` degrees from
+     the one on screen (so a temperature flapping between -2 and -3 doesn't
+     flash the panel every tick, but slow drift still refreshes once it
+     adds up), **or**
    - More than `force_refresh_max_stale_minutes` has passed since the
      last refresh (keeps slower-moving details - forecast cards, the
-     hourly chart, "Laatste update", sunrise/sunset, moon phase - from
+     hourly chart, "Laatste update", sunrise/sunset - from
      going stale indefinitely during a long stretch of unchanged
      weather), **or**
    - A screen-mode button press or a web-UI settings save requested an
@@ -93,7 +100,7 @@ runs, so this is how the choice survives across renders).
 | Mode | `VALID_MODES` value | Chart style | Data-point grid |
 |---|---|---|---|
 | Original | `"original"` | Dashed lines at the day's actual min/max (+ a 0°C line if it goes below freezing) | 2x3 grid, 6 cells: wind/humidity/pressure/UV/visibility/**Kwaliteit & Pollen** (combined AQI+pollen) |
-| Gridlines | `"gridlines"` (**default**, `DEFAULT_MODE`) | Fixed dotted reference grid every 10°C across the visible range - falls back to every 5°C on a narrow-swing day (temps that never cross more than one multiple of 10), usually giving 2-3 reference lines instead of at most 1 (an even narrower day, within one 5-degree bucket of 0, still gets only 1) | 2x3 grid, same 6 cells as Original |
+| Gridlines | `"gridlines"` (**default**, `DEFAULT_MODE`) | Fixed dotted reference grid every 10°C across the visible range - falls back to every 5°C on a narrow-swing day (temps that never cross more than one multiple of 10), usually giving 2-3 reference lines instead of at most 1 (an even narrower day, within one 5-degree bucket of 0, still gets only 1). The axis bottom snaps down to the next gridline (e.g. a -2°C low gives a -5° bottom), so the bottom of the chart is always a gridline and rain 0 sits on it (`docs/changes.md` entry 59) | 2x3 grid, same 6 cells as Original |
 | Compact | `"compact"` | Same gridlines style as above | Only wind/humidity/UV/**Kwaliteit & Pollen** (`canvas.COMPACT_KINDS`) - 2x2 grid, 4 bigger cells |
 
 If the state file is missing or contains something outside `VALID_MODES`,
@@ -396,8 +403,8 @@ the icon (changed 2026-08-15 - was a smaller `normal`-weight size before,
 capped at 12px regardless of card width).
 
 The number/unit font shares its *ideal* size with the day-label/temps
-text (`bold_size = max(10, int(region.w * 0.15))`, one shared local
-instead of two separately-computed copies of the same formula) but
+text (`bold_size` from `widgets/forecast.py::compute_card_layout`, one
+shared value instead of two separately-computed copies) but
 shrinks below it if the card doesn't have room
 (`widgets/forecast.py::_fit_stacked_lines`, 1px-step shrink-to-fit, checking
 width and height together per candidate size rather than sequentially - a
@@ -407,16 +414,21 @@ land with at least a 1px gap above the day-label row, not literally
 touching it). If no size satisfies both width and height, the text is
 omitted entirely (same as a dry day) rather than ever drawn overflowing
 or colliding. The day-name/code itself (e.g. "zo") has always shared the
-same bold size/weight as the temps text below it - the mm-rain text now
-matches all three **at `forecast_days` 5 through 10** (the default, 7,
-falls in the middle of that band). Below 5 (wider cards), `icon_size`
-caps out independently of card width while `bold_size` keeps growing, so
-the mm-text's fixed vertical budget stops growing with it and it shrinks
-well below `bold_size`; above 10 (narrower cards), `available_width`
-alone becomes the binding constraint and the text shrinks or, eventually,
-omits itself entirely, same as before this change. Not an unconditional
-match at every setting - a known gap outside that band, not silently
-pretending otherwise (see `TODO.md`).
+same bold size/weight as the temps text below it.
+
+Since `docs/changes.md` entry 61 the whole card shares one vertical
+budget (`compute_card_layout`): padding 6, icon, gap 4, two text lines,
+padding 4, inside the fixed 95px card. The text gets the largest size up
+to the old width formula (`int(w * 0.15)`) that fits the card width and
+still leaves the icon at least 35px (and tall enough for the mm text at
+the same size); the icon gets the rest, capped at `min(w * 0.85, h * 0.45)`.
+At 6-10 cards this gives exactly the old sizes (7 cards: 42px icon, 15px
+text); at 5 or fewer the text no longer runs past the card bottom (21px
+text, 37px icon), and the mm text now matches the day label at every
+`forecast_days` from 1 to 10. Above 10 the narrow card's width is the
+binding constraint: the text shrinks (down to 8px) and the mm text may be
+left out. There is no moon phase on the cards any more (removed in entry
+61).
 
 See `scripts/test_forecast_rain_scenarios.py` for this as executable,
 deterministic assertions (dry, both sides of the 0.2mm boundary exactly,
@@ -569,22 +581,27 @@ The app is metric-only by design (°C, m/s, km, mm/cm) - there is no
 `units` setting. Imperial/standard (Kelvin) support existed briefly and
 was removed 2026-08-11 after testing surfaced real chart-axis bugs
 specific to those unit systems (`TODO.md`), rather than being fixed.
+One scoped exception: `wind_speed_unit` (below) can show the wind data
+point as a Beaufort number instead of m/s. That's a display choice for one
+already-metric value (data is still fetched in m/s) that touches no chart
+axis, not a return of the unit-system toggle.
 
 | Field | Default | Effect |
 |---|---|---|
 | `latitude`, `longitude` | Sittard, NL (51.0004365, 5.8993687) | Location passed to every Open-Meteo/Nominatim request, and used to resolve/cache the nearest RIVM station for "Kwaliteit & Pollen" (see above - re-resolved automatically when this changes). The header's location name is Dutch inside the Netherlands, English everywhere else (`weather_data.get_nearest_location_name`) |
 | `timezone` | `"Europe/Amsterdam"` | IANA tz name; only used as a fallback if Open-Meteo's response omits its own `timezone` field |
 | `time_format` | `"24h"` | `"24h"` \| `"12h"` - hour labels on the chart and the header's "Laatste update" time |
-| `forecast_days` | `7` | Number of forecast cards shown in the bottom row (today is excluded from the row itself; `fetch_snapshot` internally requests `forecast_days + 1` days from Open-Meteo) |
+| `forecast_days` | `7` | Number of forecast cards shown in the bottom row, **1-14** (today is excluded from the row itself; `fetch_snapshot` internally requests `forecast_days + 1` days from Open-Meteo, whose forecast stops at 16 days, and with this app's model blend the 16th day comes back empty - so 14 is the most with real data; `settings_store.MAX_FORECAST_DAYS`). A trailing day without data is left out rather than shown as 0°/0°. |
 | `graph_icon_step` | `2` | Draw an hourly weather icon (and x-axis tick/label) every Nth hour on the chart, instead of every hour |
-| `show_moon_phase` | `False` | Whether forecast cards show the moon-phase icon + illumination % (bottom-left of each card) |
 | `background_color` | `"#ffffff"` | Canvas background (hex) |
 | `text_color` | `"#000000"` | Default text/line color (hex) |
 | `inky_saturation` | `0.0` | 0.0-1.0 blend between the panel's desaturated and fully-saturated native palettes (see [Color palette](#color-palette-widgetspalettepy) below) - changing it automatically re-syncs every widget color (`widgets.palette.PALETTE`), not just the final quantization step |
 | `font_family` | `"bitter"` | `"bitter"` \| `"jost"` - see `widgets/icons.py`'s `FONT_FAMILIES`. Bitter is the default after a real-hardware comparison (2026-08-11, see `docs/changes.md`); Jost remains available. Local-only override for testing new candidates without a web UI entry: `main.py --font-family` |
-| `rain_axis_format` | `"mm"` | `"mm"` \| `"category"` - chart's rain axis for rain/hail windows: a plain mm number vs Dutch intensity words (droog/motrgn/licht/matig/zwaar/hevig). Snow/dry windows always show a plain number regardless. In `"category"` mode the rotated side label also drops its `"[mm]"` unit suffix (`"Regen [mm]"` -> `"Regen"`). In "gridlines"/"compact" screen mode, every reference line on a rain/hail window also shows the rain value/word at that same height (temp and rain share one pixel-height axis). In `"category"` mode, once any of those show, the rotated side label is dropped - the wide intensity words ("motrgn" etc.) genuinely collide with it there; it still shows on a rare narrow-temp-range day where no gridline ends up labeled, and always on snow/dry windows (their gridline numbers have no self-explanatory unit/word, so those two keep the side label and skip the extra gridline values entirely). In plain `"mm"` mode, per explicit user ask (see `docs/changes.md` entry 57 for the full history, superseding entries 53-56's rounding-based approach), every gridline's rain number is now **exact, never rounded**: instead of a `rain_axis_max` ceiling interpolated against the real (arbitrary) min/max temps, the chart picks a `rain_step` (mm per gridline gap, from a small clean-number list) and *defines* each gridline's value directly as `steps_above_bottom * rain_step` - the label is the definition of the scale at that point, so the printed number and the line's pixel position can never disagree. `rain_step` escalates upward only as needed so that (a) the value at the true top of the plot is always **at least 3mm** (`MIN_RAIN_AXIS_TOP_MM` - so a dry/near-dry day still shows a properly-scaled axis) and (b) the real day's max rain is never clipped above the plot top. Since bars are scaled off the same fixed step, the real data's peak can sit a little below the very top of the chart on days needing a larger step - a confirmed, explicit tradeoff (bars may shift up or down slightly from where they'd have sat under the old ceiling-based scaling), not a bug. Decimal display (one decimal place) is now purely a property of the chosen step itself (`rain_step` below 1mm) rather than a per-gridline collision fallback - duplicate/inconsistent-step gridlines are structurally impossible under this design, closing the previous design's accepted residual limit for even pathological temp swings. **Both** the top and bottom rain axis-extreme numbers at the true edges of the plot are unconditionally dropped in this mode (previously only the top was) - the interior gridlines alone carry the reading. A day whose temps cross 0 or 1 multiples of 10 (in practice: the whole day stays within roughly ±10°C of freezing, since the temp scale always includes 0) falls back to a 5-degree gridline grid instead of 10, usually giving the rain axis 2-3 reference lines instead of at most 1 (an even narrower day - within one 5-degree bucket of 0 - still gets only 1, and if that squeeze also removes all headroom above the single gridline, the render falls back further to the safe ceiling-based scale rather than risk an off-canvas bar - see `docs/changes.md` entry 57). Per explicit user ask, the rotated side label is **kept** alongside these numbers rather than dropped, pushed past the widest one actually drawn (measured per-render, not a fixed offset) so the two don't land on the same spot. |
+| `rain_axis_format` | `"mm"` | `"mm"` \| `"category"` - chart's rain axis for rain/hail windows: a plain mm number vs Dutch intensity words (droog/motrgn/licht/matig/zwaar/hevig). Snow/dry windows always show a plain number regardless. In `"category"` mode the rotated side label also drops its `"[mm]"` unit suffix (`"Regen [mm]"` -> `"Regen"`). In "gridlines"/"compact" screen mode, every reference line on a rain/hail window also shows the rain value/word at that same height (temp and rain share one pixel-height axis). In `"category"` mode, once any of those show, the rotated side label is dropped - the wide intensity words ("motrgn" etc.) genuinely collide with it there; it still shows on a rare narrow-temp-range day where no gridline ends up labeled, and always on snow/dry windows (their gridline numbers have no self-explanatory unit/word, so those two keep the side label and skip the extra gridline values entirely). In plain `"mm"` mode, per explicit user ask (see `docs/changes.md` entry 57 for the full history, superseding entries 53-56's rounding-based approach), every gridline's rain number is now **exact, never rounded**: instead of a `rain_axis_max` ceiling interpolated against the real (arbitrary) min/max temps, the chart picks a `rain_step` (mm per gridline gap, from a small clean-number list) and *defines* each gridline's value directly as `steps_above_bottom * rain_step` - the label is the definition of the scale at that point, so the printed number and the line's pixel position can never disagree. `rain_step` escalates upward only as needed so that (a) the value at the true top of the plot is always **at least 3mm** (`MIN_RAIN_AXIS_TOP_MM` - so a dry/near-dry day still shows a properly-scaled axis) and (b) the real day's max rain is never clipped above the plot top. The lowest gridline is always the plot bottom (the temperature axis snaps down to it, entry 59), so 0mm is the bottom of the chart and a dry hour never draws a bar. Since bars are scaled off the same fixed step, the real data's peak can sit a little below the very top of the chart on days needing a larger step - a confirmed, explicit tradeoff (bars may shift up or down slightly from where they'd have sat under the old ceiling-based scaling), not a bug. Decimal display (one decimal place) is now purely a property of the chosen step itself (`rain_step` below 1mm) rather than a per-gridline collision fallback - duplicate/inconsistent-step gridlines are structurally impossible under this design, closing the previous design's accepted residual limit for even pathological temp swings. **Both** the top and bottom rain axis-extreme numbers at the true edges of the plot are unconditionally dropped in this mode (previously only the top was) - the interior gridlines alone carry the reading. A day whose temps cross 0 or 1 multiples of 10 (in practice: the whole day stays within roughly ±10°C of freezing, since the temp scale always includes 0) falls back to a 5-degree gridline grid instead of 10, usually giving the rain axis 2-3 reference lines instead of at most 1 (an even narrower day - within one 5-degree bucket of 0 - still gets only 1; only a day whose every hour sits exactly on one gridline value has no headroom above it, and then the render falls back to the safe ceiling-based scale rather than risk an off-canvas bar - see `docs/changes.md` entries 57 and 59). Per explicit user ask, the rotated side label is **kept** alongside these numbers rather than dropped, pushed past the widest one actually drawn (measured per-render, not a fixed offset) so the two don't land on the same spot. |
+| `wind_speed_unit` | `"ms"` | `"ms"` \| `"beaufort"` - the "Wind" data point's number: whole m/s, rounded half up (`0.82` -> `1 m/s`, `weather_data.round_half_up`), or the Beaufort number 0-12 with unit `bft` (`weather_data.get_beaufort_number`). The Dutch description above it (`get_beaufort_description_nl`) always uses the unrounded speed. Web UI only, no button. See `docs/changes.md` entry 60. |
 | `min_update_interval_minutes` | `0` | Minimum minutes between checks, on top of the fixed 10-minute systemd timer cadence - `0` means no extra throttling. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
-| `force_refresh_max_stale_minutes` | `60` | How long the physical display can go unrefreshed while the main icon/temperature are unchanged before a refresh is forced anyway. See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
+| `force_refresh_max_stale_minutes` | `120` | How long the physical display can go unrefreshed while the weather group and temperature stay put before a refresh is forced anyway (was `60` before `docs/changes.md` entry 63). See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
+| `refresh_temp_delta` | `2` | Minimum change in degrees, versus the temperature on screen, that refreshes the panel right away; smaller changes wait for `force_refresh_max_stale_minutes`. Web UI: "Ververssnelheid". See [Display refresh cadence](#display-refresh-cadence-display_freshnesspy) above |
 | `station_enabled` | `False` | Whether current temperature/rain are sourced from a local weather station instead of Open-Meteo's `current` block. See [Local weather station](#local-weather-station-weather_datapy) below |
 | `station_type` | `""` | `""` (disabled) or a key in `weather_data.STATION_ADAPTERS` - only `"generic_http"` (a placeholder, no real vendor wired up) exists today |
 | `station_base_url` | `""` | URL the `"generic_http"` adapter reads flat JSON from |

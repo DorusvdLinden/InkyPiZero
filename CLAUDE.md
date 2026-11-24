@@ -53,7 +53,8 @@ automatically, without being asked each time.
 - **Always test display-freshness logic**: `python scripts/test_display_freshness.py`
   covers `display_freshness.py`'s two throttles - `should_run_check`/`record_check`
   (the configurable `min_update_interval_minutes` pre-fetch check) and
-  `should_update_display`/`record_display` (icon/temp changed, `force_refresh_max_stale_minutes`
+  `should_update_display`/`record_display` (weather group changed, temperature
+  moved `refresh_temp_delta` or more, `force_refresh_max_stale_minutes`
   elapsed, a forced-refresh sentinel pending) - against a temp state directory - no
   network/hardware needed. Run this after any change to `display_freshness.py`,
   `main.py`'s real-hardware render path, or the forced-refresh sentinel calls in
@@ -63,6 +64,23 @@ automatically, without being asked each time.
   render's `DisplayConfig` specifies, via `WeatherCanvas.__init__`/`render_setup_screen`
   - no network/hardware needed. Run this after any change to `widgets/palette.py`,
   `canvas.py`'s `WeatherCanvas.__init__`, or `setup_screen.py`'s `render_setup_screen`.
+
+- **Always test temperature rounding**: `python scripts/test_temperature_rounding.py`
+  covers `weather_data.round_half_up` (the one rule for every whole number
+  shown) and that the header's night low and the chart agree on a night
+  just below 0 - no network/hardware needed. Run this after any change to
+  temperature rounding in `weather_data.py` or to `widgets/chart.py`'s
+  temperature labels/range.
+- **Always test the wind data point**: `python scripts/test_wind_scenarios.py`
+  covers the Beaufort breakpoints, the `wind_speed_unit` setting (whole m/s
+  vs Beaufort number) and the UV label - no network/hardware needed. Run
+  this after any change to the wind/UV data points in `weather_data.py`.
+- **Always test the forecast card layout**: `python scripts/test_forecast_card_layout.py`
+  covers `widgets/forecast.py`'s card budget for 1-14 cards (text inside
+  the card, no overlaps, mm text size) and old settings files loading -
+  no network/hardware needed. Run this after any change to
+  `widgets/forecast.py`, `layout.forecast_card` or the `forecast_days`
+  limit.
 
 ## Documentation maintenance
 

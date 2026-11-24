@@ -16,7 +16,7 @@ python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 
 # 2. Install dependencies (the minimal set - no inky needed for local testing)
-pip install pillow requests pytz astral
+pip install pillow requests pytz
 
 # 3. Render to a file instead of a real display
 python main.py --mock-output output.png
@@ -71,8 +71,20 @@ python main.py --mock-output output.png
   fail-soft fallback (missing/invalid file) since that's exactly the kind
   of thing a hand-edited file can break in ways live testing won't catch.
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
-  skip/force decision (see [settings.md](./settings.md)'s "Display refresh
+  skip/force decision (weather groups, `refresh_temp_delta`, stale timer) (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.
+- `python scripts/test_temperature_rounding.py` - covers the single
+  temperature-rounding rule (`weather_data.round_half_up`) and that the
+  header and chart agree on a night just below 0 - no network/hardware
+  needed.
+- `python scripts/test_wind_scenarios.py` - covers the "Wind" data point's
+  number (whole m/s, or the Beaufort number via `wind_speed_unit`), the
+  Beaufort breakpoints and the plain "UV-index" label - no network/hardware
+  needed.
+- `python scripts/test_forecast_card_layout.py` - covers the forecast
+  card's vertical budget (`compute_card_layout`) for 1-14 cards, dry and
+  rainy: all text inside the card, no overlaps, mm text at the day-label
+  size; plus loading an old settings file - no network/hardware needed.
 - `python scripts/test_palette_sync.py` - covers `widgets.palette.PALETTE`
   staying synced to whatever `inky_saturation` the current render's config
   specifies (see [settings.md](./settings.md)'s "Color palette" section) -

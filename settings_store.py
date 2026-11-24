@@ -52,6 +52,18 @@ def _valid_positive_int(v):
     return isinstance(v, int) and not isinstance(v, bool) and v > 0
 
 
+# fetch_snapshot asks Open-Meteo for forecast_days + 1 days (today plus the
+# cards). The endpoint stops at 16 days, and with this app's model blend
+# (weather_data.OPEN_METEO_MODELS_PARAM) the 16th day comes back all-null
+# (checked 2026-11-24) - so 14 cards is the most with real data. Above 15
+# the whole fetch failed; at 15 the render crashed on the null day.
+MAX_FORECAST_DAYS = 14
+
+
+def _valid_forecast_days(v):
+    return _valid_positive_int(v) and v <= MAX_FORECAST_DAYS
+
+
 def _valid_nonnegative_int(v):
     return isinstance(v, int) and not isinstance(v, bool) and v >= 0
 
@@ -72,6 +84,10 @@ def _valid_rain_axis_format(v):
     return v in ("mm", "category")
 
 
+def _valid_wind_speed_unit(v):
+    return v in ("ms", "beaufort")
+
+
 def _valid_station_type(v):
     return v == "" or v in STATION_ADAPTERS
 
@@ -86,16 +102,17 @@ FIELD_VALIDATORS = {
     "longitude": _valid_longitude,
     "timezone": _valid_timezone,
     "time_format": _valid_time_format,
-    "forecast_days": _valid_positive_int,
+    "forecast_days": _valid_forecast_days,
     "graph_icon_step": _valid_positive_int,
-    "show_moon_phase": _valid_bool,
     "background_color": _valid_hex_color,
     "text_color": _valid_hex_color,
     "inky_saturation": _valid_saturation,
     "font_family": _valid_font_family,
     "rain_axis_format": _valid_rain_axis_format,
+    "wind_speed_unit": _valid_wind_speed_unit,
     "min_update_interval_minutes": _valid_nonnegative_int,
     "force_refresh_max_stale_minutes": _valid_positive_int,
+    "refresh_temp_delta": _valid_positive_int,
     "station_enabled": _valid_bool,
     "station_type": _valid_station_type,
     "station_base_url": _valid_optional_str,
