@@ -2417,8 +2417,10 @@ leave a visible gap under short bars on any sub-freezing, non-multiple-
 of-10 day - not something requested, so the old grounding behavior was
 kept.
 
-**Active** - current design, replacing entries 55-56's ceiling-search
-approach entirely. Verified: `scripts/test_chart_axis_labels.py` (16/16,
+**Active, partly outdated by entry 59** - the 0mm anchor floating above
+the plot bottom (and the bar-grounding note above) is fixed by entry 59's
+axis snap; everything else stands. Current design, replacing entries
+55-56's ceiling-search approach entirely. Verified: `scripts/test_chart_axis_labels.py` (16/16,
 substantially rewritten - direct unit coverage of `_choose_rain_step`/
 `_rain_step_top_value`/`_rain_gridline_value`/`_format_rain_gridline_value`,
 the 3mm floor, clipping-driven escalation, the extreme-cold fractional-step
@@ -2469,6 +2471,36 @@ values, header/chart agreement on a -0.7 night, axis below 0 in both chart
 styles, no duplicate 0° line), plus the existing chart, precip and
 location tests. Before/after renders of the photo's night in
 `mock_display_output/temperature_rounding/`.
+
+### 59. Rain 0 is always the chart bottom (gridlines/compact mode)
+(2026-11-24, plan: `plans/rain-zero-at-chart-bottom.md`)
+
+A photo of the live panel (Sittard, 10 November, temps -2..7°C) showed
+the rain axis "0" partway up the chart and a solid bar under every dry
+hour. Cause: entry 57's exact lattice anchors 0mm on the lowest
+temperature gridline (`grid_start`, 0° that day), but the axis bottom was
+the real low (-2°), and bars are drawn from the plot bottom. On most
+sub-freezing days rain 0 floated above the bottom, and a 0mm hour drew a
+bar up to it. Entry 57 kept the bars grounded on purpose but didn't
+notice this side effect.
+
+Fix (chosen over separate rain ticks, or bars starting at the 0 line):
+in gridlines/compact mode the temperature axis bottom snaps down to the
+next gridline (`floor(min_temp / grid_step) * grid_step`, e.g. -2 -> -5),
+so the plot bottom *is* the lowest gridline and every gridline label
+stays exact. The 10°/5° step choice still uses the real temperatures.
+As a guard, a 0mm hour never draws a bar, whatever the scale.
+
+Cost (accepted): on a cold day the temperature curve uses less of the
+height, e.g. a -0.7°C night now spans -5..2. The zero-headroom fallback
+from entry 57 now only triggers when every hour sits exactly on one
+gridline value. Original mode is unchanged.
+
+**Active.** Verified: new `test_rain_zero_is_plot_bottom_and_dry_hours_draw_no_bar`
+in `scripts/test_chart_axis_labels.py` (the photo's day: one "0" label on
+the plot bottom, one bar per wet hour, evenly stepped labels), the other
+chart tests, precip scenarios and all 14 locations × 3 modes. Before/after
+renders in `mock_display_output/rain_zero_bottom/`.
 
 ---
 

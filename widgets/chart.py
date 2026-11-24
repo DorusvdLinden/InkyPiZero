@@ -210,6 +210,17 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     else:
         grid_step = 10
         grid_start, grid_end = grid_start10, grid_end10
+    # Gridlines/compact mode: snap the axis bottom down to a gridline, so
+    # the plot bottom IS the lowest gridline (docs/changes.md entry 59).
+    # The rain lattice below anchors 0mm at y_temp(grid_start); before this
+    # snap, grid_start sat above the plot bottom on most sub-freezing days
+    # (e.g. min -2, grid_start 0), so rain 0 floated mid-chart and every dry
+    # hour drew a bar from the plot bottom up to it (10 Nov photo). The
+    # grid_step choice above stays based on the real temps.
+    if show_temp_gridlines:
+        min_temp = math.floor(min_temp / grid_step) * grid_step
+        temp_span = (max_temp - min_temp) or 1
+        grid_start = min_temp
     # Rain/hail windows (mm/h), when rain_axis_format="category" (a
     # DisplayConfig/web-UI setting - "mm" is the default), label the rain
     # axis with intensity words instead of raw numbers. Snow (cm/h, a
@@ -283,6 +294,8 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # highlight strip alone (drawn at a fixed height) reads as a solid false
     # floor across hours with essentially no rain
     for x, rain in zip(xs, rains):
+        if rain <= 0:
+            continue  # a dry hour never draws a bar, whatever the scale's anchor
         top = y_rain(rain)
         if (plot_y1 - top) < 0.03 * plot_h:
             continue

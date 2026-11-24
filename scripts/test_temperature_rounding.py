@@ -100,11 +100,14 @@ def test_header_and_chart_agree_on_night_low():
 
 
 def test_chart_axis_goes_below_zero_on_minus_0_7_night():
-    for gridlines in (False, True):
+    """Original mode: the axis bottom is the real low, printed "-1°C".
+    Gridlines mode: the bottom snaps down to the next gridline (entry 59),
+    so a -0.7 low gives a "-5°" bottom gridline - either way below 0."""
+    for gridlines, want in ((False, "-1°C"), (True, "-5°")):
         texts = _texts(_hourly(NIGHT_TEMPS), gridlines)
         left = [t for x, _, t in texts if x < 60]
-        if "-1°C" not in left:
-            print(f"      gridlines={gridlines}: expected a '-1°C' bottom label, left labels {left}")
+        if want not in left:
+            print(f"      gridlines={gridlines}: expected a {want!r} bottom label, left labels {left}")
             return False
     return True
 

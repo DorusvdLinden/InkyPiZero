@@ -427,7 +427,9 @@ def test_no_headroom_falls_back_safely_not_off_canvas():
     plot_y0 for 0mm and hundreds of pixels off-canvas for a real rain
     hour). rain_axis_expansion_eligible's headroom guard must route this
     render through the safe, bounded ceiling-based scale instead - every
-    bar's top must land within [plot_y0, plot_y1]."""
+    bar's top must land within [plot_y0, plot_y1]. (Since entry 59 the axis
+    bottom snaps down to a gridline, so this fixture now gets real headroom
+    and uses the lattice; the bounds check still holds either way.)"""
     hourly = _hourly(lambda h: -3 + (h % 3) * 1.1, lambda h: 2.0 if h == 5 else 0.0)
     plot_y0 = CHART_REGION.y + chart_mod.TOP_MARGIN
     plot_y1 = CHART_REGION.bottom - chart_mod.BOTTOM_MARGIN
@@ -478,6 +480,58 @@ def test_wide_enough_range_does_not_trigger_5deg_fallback():
     return True
 
 
+def test_rain_zero_is_plot_bottom_and_dry_hours_draw_no_bar():
+    """docs/changes.md entry 59 (10 Nov photo): temps -2..7 with a dry
+    morning and rain from the evening. Before, grid_start was 0 while the
+    plot bottom was -2, so rain 0 floated on the 0° gridline and every dry
+    hour drew a bar from the plot bottom up to it. Now the axis bottom
+    snaps down to -5 (5-degree grid), the "0" rain label sits on the plot
+    bottom, dry hours draw nothing, and gridline labels stay exact
+    multiples of the step."""
+    temps = [-2, -1.6, -1, 0.5, 2, 3.5, 5, 6.5, 7, 7, 7, 7, 6, 5, 4, 3.6, 3.6, 4.5, 5, 5.2, 5.5, 6, 6.5, 7.2]
+    rains = [0.0] * 14 + [0.3, 0.5, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 1.6, 2.2]
+    hourly = _hourly(lambda h: temps[h], lambda h: rains[h])
+    plot_y1 = CHART_REGION.bottom - chart_mod.BOTTOM_MARGIN
+
+    image = Image.new("RGB", (800, 480), "white")
+    rects, texts = [], []
+    orig_rect, orig_text = ImageDraw.ImageDraw.rectangle, ImageDraw.ImageDraw.text
+
+    def spy_rect(self, xy, **k):
+        rects.append(xy)
+        return orig_rect(self, xy, **k)
+
+    def spy_text(self, xy, text, *a, **k):
+        if xy[0] > CHART_REGION.right - 90:
+            texts.append((xy[1], text))
+        return orig_text(self, xy, text, *a, **k)
+
+    ImageDraw.ImageDraw.rectangle, ImageDraw.ImageDraw.text = spy_rect, spy_text
+    try:
+        chart_mod.render_chart(
+            image, CHART_REGION, hourly, [], (0, 0, 0), lambda k, s: None, 2,
+            FONT_SMALL, FONT_AXIS, "C", "Regen [mm]",
+            show_temp_gridlines=True, rain_axis_format="mm",
+        )
+    finally:
+        ImageDraw.ImageDraw.rectangle, ImageDraw.ImageDraw.text = orig_rect, orig_text
+
+    zero_ys = [y for y, t in texts if t == "0"]
+    if len(zero_ys) != 1 or abs(zero_ys[0] - plot_y1) > 0.5:
+        print(f"      expected one '0' rain label at plot bottom y={plot_y1}, got {texts}")
+        return False
+    bars = [r for r in rects if r[3] == plot_y1 and r[1] < plot_y1 - 3.5]  # full bar bodies only
+    if len(bars) != sum(1 for r in rains if r > 0):
+        print(f"      expected {sum(1 for r in rains if r > 0)} bars (one per wet hour), got {len(bars)}")
+        return False
+    numbers = sorted(float(t) for _, t in texts if t.replace(".", "").isdigit())
+    steps = {round(b - a, 6) for a, b in zip(numbers, numbers[1:])}
+    if len(steps) != 1:
+        print(f"      expected evenly stepped rain labels, got {numbers}")
+        return False
+    return True
+
+
 TESTS = [
     test_gridlines_mode_never_shows_separate_top_extreme,
     test_uneven_steps_resolved_via_headspace_expansion,
@@ -495,6 +549,7 @@ TESTS = [
     test_negative_narrow_temp_range_also_falls_back_to_5deg,
     test_no_headroom_falls_back_safely_not_off_canvas,
     test_wide_enough_range_does_not_trigger_5deg_fallback,
+    test_rain_zero_is_plot_bottom_and_dry_hours_draw_no_bar,
 ]
 
 

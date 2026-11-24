@@ -70,6 +70,9 @@ reference docs this list feeds into.
   (22 Nov photo): three different rounding rules for the same data. Fixed
   2026-11-24 - one `round_half_up` rule, chart plots unrounded temps
   (docs/changes.md entry 58).
+- [x] Rain axis "0" floated partway up the chart in gridlines mode, with
+  a bar under every dry hour (10 Nov photo). Fixed 2026-11-24 - the axis
+  bottom snaps down to a gridline (docs/changes.md entry 59).
 
 ## Settings
 
