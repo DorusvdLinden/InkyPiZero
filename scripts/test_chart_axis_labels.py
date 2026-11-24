@@ -532,6 +532,33 @@ def test_rain_zero_is_plot_bottom_and_dry_hours_draw_no_bar():
     return True
 
 
+def test_all_zero_day_uses_safe_fallback():
+    """Since entry 59's axis snap, the zero-headroom fallback can only
+    trigger when every hour is exactly 0.0deg (grid_start == max_temp == 0).
+    That render must still keep every bar inside the plot."""
+    hourly = _hourly(lambda h: 0.0, lambda h: 2.0 if h == 5 else 0.0)
+    plot_y0 = CHART_REGION.y + chart_mod.TOP_MARGIN
+    plot_y1 = CHART_REGION.bottom - chart_mod.BOTTOM_MARGIN
+    image = Image.new("RGB", (800, 480), "white")
+    tops = []
+    orig_rect = ImageDraw.ImageDraw.rectangle
+
+    def spy_rect(self, xy, **k):
+        tops.append(xy[1])
+        return orig_rect(self, xy, **k)
+
+    ImageDraw.ImageDraw.rectangle = spy_rect
+    try:
+        chart_mod.render_chart(image, CHART_REGION, hourly, [], (0, 0, 0), lambda k, s: None, 2,
+                               FONT_SMALL, FONT_AXIS, "C", "Regen [mm]", show_temp_gridlines=True)
+    finally:
+        ImageDraw.ImageDraw.rectangle = orig_rect
+    if not tops or any(t < plot_y0 - 0.5 or t > plot_y1 + 0.5 for t in tops):
+        print(f"      expected bar tops within [{plot_y0}, {plot_y1}], got {tops}")
+        return False
+    return True
+
+
 TESTS = [
     test_gridlines_mode_never_shows_separate_top_extreme,
     test_uneven_steps_resolved_via_headspace_expansion,
@@ -550,6 +577,7 @@ TESTS = [
     test_no_headroom_falls_back_safely_not_off_canvas,
     test_wide_enough_range_does_not_trigger_5deg_fallback,
     test_rain_zero_is_plot_bottom_and_dry_hours_draw_no_bar,
+    test_all_zero_day_uses_safe_fallback,
 ]
 
 
