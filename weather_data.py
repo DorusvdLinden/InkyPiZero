@@ -178,17 +178,26 @@ def get_wind_icon_rotation(wind_deg: float) -> float:
     return (wind_deg + 180) % 360
 
 
-def get_beaufort_description_nl(speed_ms: float) -> str:
-    levels = [
-        (0.3, "Windstil"), (1.6, "Zwakke wind"), (3.4, "Zwakke wind"),
-        (5.5, "Matige wind"), (8.0, "Matige wind"), (10.8, "Vrij krachtige wind"),
-        (13.9, "Krachtige wind"), (17.2, "Harde wind"), (20.8, "Stormachtig"),
-        (24.5, "Storm"), (28.5, "Zware storm"), (32.7, "Zeer zware storm"),
-    ]
-    for upper_bound, description in levels:
+# Standard Beaufort breakpoints (m/s): Beaufort N covers speeds below
+# _BEAUFORT_UPPER_BOUNDS_MS[N]; at or above the last bound it's 12.
+_BEAUFORT_UPPER_BOUNDS_MS = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7]
+_BEAUFORT_DESCRIPTIONS_NL = [
+    "Windstil", "Zwakke wind", "Zwakke wind", "Matige wind", "Matige wind",
+    "Vrij krachtige wind", "Krachtige wind", "Harde wind", "Stormachtig",
+    "Storm", "Zware storm", "Zeer zware storm", "Orkaan",
+]
+
+
+def get_beaufort_number(speed_ms: float) -> int:
+    """0-12 on the Beaufort scale, from the unrounded speed."""
+    for number, upper_bound in enumerate(_BEAUFORT_UPPER_BOUNDS_MS):
         if speed_ms < upper_bound:
-            return description
-    return "Orkaan"
+            return number
+    return 12
+
+
+def get_beaufort_description_nl(speed_ms: float) -> str:
+    return _BEAUFORT_DESCRIPTIONS_NL[get_beaufort_number(speed_ms)]
 
 
 def get_humidity_drop_count(humidity) -> int:
@@ -1103,7 +1112,8 @@ def _value_max_today(times, values, tz, current_date):
     return best
 
 
-def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: float) -> list[dict]:
+def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: float,
+                       wind_speed_unit: str = "ms") -> list[dict]:
     data_points = []
     current_data = weather_data.get("current", {})
     hourly_data = weather_data.get("hourly", {})
@@ -1111,10 +1121,16 @@ def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: floa
 
     wind_speed = current_data.get("windspeed", 0)
     wind_deg = current_data.get("winddirection", 0)
+    # Shown as a whole number either way (entry 60): m/s rounded half up,
+    # or the Beaufort number. The description always uses the raw speed.
+    if wind_speed_unit == "beaufort":
+        wind_measurement, wind_unit = get_beaufort_number(wind_speed), "bft"
+    else:
+        wind_measurement, wind_unit = round_half_up(wind_speed), SPEED_UNIT
     data_points.append({
         "kind": "wind",
         "label": get_beaufort_description_nl(wind_speed),
-        "measurement": wind_speed, "unit": SPEED_UNIT,
+        "measurement": wind_measurement, "unit": wind_unit,
         "direction": get_wind_direction_abbr_nl(wind_deg),
         "rotation": get_wind_icon_rotation(wind_deg),
     })
@@ -1141,7 +1157,7 @@ def _parse_data_points(weather_data, aqi_data, current_lki, tz, saturation: floa
     uv_beams = get_uv_beam_points(uv_index_raw)
     uv_index = round(uv_index_raw) if uv_index_raw is not None else "N/A"
     data_points.append({
-        "kind": "uv", "label": "UV-index 1-12", "measurement": uv_index, "unit": uv_rating,
+        "kind": "uv", "label": "UV-index", "measurement": uv_index, "unit": uv_rating,
         "uv_color": uv_color, "uv_beams": uv_beams,
     })
 
@@ -1301,7 +1317,8 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
     current_icon_key = _apply_station_rain_override(current_icon_key, station_rain)
 
     daily_forecast = _parse_forecast(daily, tz, config.latitude, config.inky_saturation)
-    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation)
+    data_points = _parse_data_points(weather_data, aqi_data, current_lki, tz, config.inky_saturation,
+                                     config.wind_speed_unit)
     hourly, sun_events, precip_label = _parse_hourly(
         weather_data.get("hourly", {}), tz, config.time_format,
         daily.get("sunrise", []), daily.get("sunset", []),

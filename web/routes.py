@@ -64,6 +64,7 @@ def _config_from_form(form) -> tuple[DisplayConfig, list[str]]:
     _set("inky_saturation", float)
     _set("font_family", str)
     _set("rain_axis_format", str)
+    _set("wind_speed_unit", str)
     _set("min_update_interval_minutes", int)
     _set("force_refresh_max_stale_minutes", int)
     values["station_enabled"] = form.get("station_enabled") == "on"

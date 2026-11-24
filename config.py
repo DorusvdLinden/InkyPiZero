@@ -27,6 +27,11 @@ class DisplayConfig:
     # widgets/chart.py). "category" only applies to rain/hail windows -
     # snow/dry always show a plain number regardless.
     rain_axis_format: str = "mm"
+    # "ms" | "beaufort" - the "Wind" data point's number: whole m/s, or the
+    # Beaufort number (0-12, "bft"). Display only: data is always fetched
+    # in m/s, and wind is never charted, so no axis logic is involved
+    # (unlike the reverted imperial toggle, docs/changes.md entry 25).
+    wind_speed_unit: str = "ms"
     # 0 = no extra throttling beyond the fixed 10-minute systemd timer tick
     # (install/pi-weather-display.timer) - raising this skips a check
     # entirely (before even fetching weather data) until this many minutes

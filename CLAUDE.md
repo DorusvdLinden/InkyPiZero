@@ -70,6 +70,10 @@ automatically, without being asked each time.
   just below 0 - no network/hardware needed. Run this after any change to
   temperature rounding in `weather_data.py` or to `widgets/chart.py`'s
   temperature labels/range.
+- **Always test the wind data point**: `python scripts/test_wind_scenarios.py`
+  covers the Beaufort breakpoints, the `wind_speed_unit` setting (whole m/s
+  vs Beaufort number) and the UV label - no network/hardware needed. Run
+  this after any change to the wind/UV data points in `weather_data.py`.
 
 ## Documentation maintenance
 

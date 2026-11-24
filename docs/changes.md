@@ -2502,6 +2502,27 @@ the plot bottom, one bar per wet hour, evenly stepped labels), the other
 chart tests, precip scenarios and all 14 locations × 3 modes. Before/after
 renders in `mock_display_output/rain_zero_bottom/`.
 
+### 60. Wind speed unit setting (m/s or Beaufort), whole m/s, plain UV label
+(2026-11-24, plan: `plans/wind-speed-unit-setting.md`)
+
+- New `wind_speed_unit` setting (`"ms"` default, or `"beaufort"`), web UI
+  only, following `rain_axis_format`'s pattern. Beaufort shows the number
+  0-12 with unit "bft" (`get_beaufort_number`, sharing one breakpoint
+  table with the existing `get_beaufort_description_nl`).
+- In m/s mode the speed is a whole number, rounded half up with entry
+  58's `round_half_up` ("1 m/s", not "0.82 m/s"). The Dutch description
+  always uses the unrounded speed.
+- The UV data point's label is plain "UV-index": the old "1-12" range was
+  wrong (UV starts at 0) and added nothing.
+
+Lower risk than entry 25's reverted unit-system toggle: wind is never
+charted, so no axis logic is involved; data is still fetched in m/s.
+
+**Active.** Verified: new `scripts/test_wind_scenarios.py` (Beaufort
+numbers incl. boundaries, unchanged descriptions, both modes, description
+from the raw speed, UV label), palette and location tests. Renders of
+both modes in `mock_display_output/wind_speed_unit/`.
+
 ---
 
 ## Pruned branches

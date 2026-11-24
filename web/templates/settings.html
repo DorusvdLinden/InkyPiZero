@@ -39,6 +39,13 @@
           {% endfor %}
         </select>
       </label>
+      <label>Windsnelheid eenheid
+        <select name="wind_speed_unit">
+          {% for value, label in [("ms", "Meters per seconde (m/s)"), ("beaufort", "Beaufort (bft)")] %}
+            <option value="{{ value }}" {{ "selected" if config.wind_speed_unit == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Aantal dagen vooruit (forecast_days)
         <input type="number" min="1" step="1" name="forecast_days" value="{{ config.forecast_days }}" required>
       </label>

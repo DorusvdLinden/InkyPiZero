@@ -72,6 +72,10 @@ def _valid_rain_axis_format(v):
     return v in ("mm", "category")
 
 
+def _valid_wind_speed_unit(v):
+    return v in ("ms", "beaufort")
+
+
 def _valid_station_type(v):
     return v == "" or v in STATION_ADAPTERS
 
@@ -94,6 +98,7 @@ FIELD_VALIDATORS = {
     "inky_saturation": _valid_saturation,
     "font_family": _valid_font_family,
     "rain_axis_format": _valid_rain_axis_format,
+    "wind_speed_unit": _valid_wind_speed_unit,
     "min_update_interval_minutes": _valid_nonnegative_int,
     "force_refresh_max_stale_minutes": _valid_positive_int,
     "station_enabled": _valid_bool,

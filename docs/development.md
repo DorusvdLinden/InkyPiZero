@@ -77,6 +77,10 @@ python main.py --mock-output output.png
   temperature-rounding rule (`weather_data.round_half_up`) and that the
   header and chart agree on a night just below 0 - no network/hardware
   needed.
+- `python scripts/test_wind_scenarios.py` - covers the "Wind" data point's
+  number (whole m/s, or the Beaufort number via `wind_speed_unit`), the
+  Beaufort breakpoints and the plain "UV-index" label - no network/hardware
+  needed.
 - `python scripts/test_palette_sync.py` - covers `widgets.palette.PALETTE`
   staying synced to whatever `inky_saturation` the current render's config
   specifies (see [settings.md](./settings.md)'s "Color palette" section) -

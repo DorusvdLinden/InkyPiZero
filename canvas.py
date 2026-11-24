@@ -132,7 +132,7 @@ class WeatherCanvas:
     def _fit_font(self, text: str, weight: str, max_size: int, max_width: float, min_size: int = 12):
         """Shrinks in 2px steps until text fits max_width, floor min_size -
         needed since compact mode's cells are a fixed pixel width but data
-        point labels vary a lot in length ("UV-index 1-12" vs "Kwaliteit &
+        point labels vary a lot in length ("UV-index" vs "Kwaliteit &
         Pollen") and draw.text doesn't wrap/clip on its own."""
         for size in range(max_size, min_size - 1, -2):
             font = self.assets.font(weight, size)
