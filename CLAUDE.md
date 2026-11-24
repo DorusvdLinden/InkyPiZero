@@ -64,6 +64,13 @@ automatically, without being asked each time.
   - no network/hardware needed. Run this after any change to `widgets/palette.py`,
   `canvas.py`'s `WeatherCanvas.__init__`, or `setup_screen.py`'s `render_setup_screen`.
 
+- **Always test temperature rounding**: `python scripts/test_temperature_rounding.py`
+  covers `weather_data.round_half_up` (the one rule for every whole number
+  shown) and that the header's night low and the chart agree on a night
+  just below 0 - no network/hardware needed. Run this after any change to
+  temperature rounding in `weather_data.py` or to `widgets/chart.py`'s
+  temperature labels/range.
+
 ## Documentation maintenance
 
 All of this repo's documentation is maintained, not a one-off snapshot -

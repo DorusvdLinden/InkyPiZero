@@ -6,6 +6,7 @@ there's no rotation/scaling involved)."""
 import math
 from PIL import Image, ImageDraw
 
+from weather_data import round_half_up
 from widgets.icons import thicken_icon
 from widgets.palette import PALETTE
 
@@ -397,15 +398,18 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         # <=0deg) - the axis's own value label already shows that number, so a
         # second dashed line+label right on top of it is pure redundancy.
         dashed_lines = []
-        if actual_max != max_temp:
+        # Compared as the printed (rounded) numbers: with unrounded hourly
+        # temps, a 0.3deg low next to a 0deg axis bottom would otherwise
+        # draw a second "0°" line a pixel above the axis's own "0°C".
+        if round_half_up(actual_max) != round_half_up(max_temp):
             dashed_lines.append((actual_max, PALETTE.chart_warm if actual_max >= 0 else PALETTE.chart_cool))
-        if actual_min != min_temp:
+        if round_half_up(actual_min) != round_half_up(min_temp):
             dashed_lines.append((actual_min, PALETTE.chart_warm if actual_min >= 0 else PALETTE.chart_cool))
         for value, color in dashed_lines:
             y = y_temp(value)
             _dotted_horizontal(draw, y, plot_x0, plot_x1, color)
             label_dy = 14 if (plot_y1 - y) > 20 else -14
-            label = f"{value}°"
+            label = f"{round_half_up(value)}°"
             draw.text((plot_x0 + plot_w / 2, y + label_dy), label, font=font_axis, fill=color, anchor="mm")
 
         # black dashed 0deg reference line, only shown when the day actually
@@ -413,7 +417,9 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
         # min_temp = min(actual_min, 0)) - without this there'd be no marker
         # at all for where freezing sits once the axis itself is clamped to
         # the actual (negative) low instead of 0.
-        if min_temp < 0:
+        # (Rounded for the same reason: a -0.3 low prints as "0°C" at the
+        # axis bottom already.)
+        if round_half_up(min_temp) < 0:
             _dotted_horizontal(draw, y_zero, plot_x0, plot_x1, PALETTE.chart_zero_line)
             label_dy = 14 if (plot_y1 - y_zero) > 20 else -14
             draw.text((plot_x0 + plot_w / 2, y_zero + label_dy), "0°", font=font_axis, fill=PALETTE.chart_zero_line, anchor="mm")
@@ -442,9 +448,9 @@ def render_chart(image: Image.Image, region, hourly, sun_events, text_color, ico
     # column (see LEFT_MARGIN).
     temp_unit_suffix = f"°{unit_label_temp}"
     if not suppress_max_temp_label:
-        draw.text((plot_x0 - 6, y_temp(max_temp)), f"{max_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
+        draw.text((plot_x0 - 6, y_temp(max_temp)), f"{round_half_up(max_temp)}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
     if not suppress_min_temp_label:
-        draw.text((plot_x0 - 6, y_temp(min_temp)), f"{min_temp}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
+        draw.text((plot_x0 - 6, y_temp(min_temp)), f"{round_half_up(min_temp)}{temp_unit_suffix}", font=font_axis, fill=text_color, anchor="rm")
 
     # show_intensity_labels (computed above) - the actual peak/trough
     # value, not the rounded-up rain_axis_max ceiling, so the word matches

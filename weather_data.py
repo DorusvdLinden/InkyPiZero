@@ -88,6 +88,16 @@ def format_time(dt: datetime, time_format: str, hour_only: bool = False) -> str:
     return dt.strftime(fmt).lstrip("0")
 
 
+def round_half_up(x: float) -> int:
+    """The one rounding rule for every whole number shown on the panel
+    (temperatures, wind speed): halves round up, so -0.6 -> -1, -0.5 -> 0,
+    2.5 -> 3. Replaces a mix of int() (truncates toward zero, so a -0.7
+    night showed as 0 on the chart) and Python's round() (banker's
+    rounding: 2.5 -> 2) that made the header, chart and forecast cards
+    disagree - docs/changes.md entry 58. Never produces "-0"."""
+    return math.floor(x + 0.5)
+
+
 def get_moon_phase_name(phase_age: float) -> str:
     thresholds = [
         (1.0, "newmoon"), (7.0, "waxingcrescent"), (8.5, "firstquarter"),
@@ -413,7 +423,9 @@ def get_uv_beam_points(uv_index, beam_count=10, cx=60, cy=60, core_r=24, min_len
 @dataclass
 class HourPoint:
     time_label: str
-    temperature: int
+    # Unrounded degC: the chart plots the real curve and rounds only the
+    # numbers it prints (round_half_up), so a -0.7 night dips below 0.
+    temperature: float
     rain: float
     icon_key: str
     is_day_start: bool = False  # True at the first hour of a new calendar date
@@ -903,9 +915,9 @@ def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]
         moon_icon_key = get_moon_phase_icon_key(phase_name, lat)
 
         precip_mm = float(precip_sums[i]) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
-        # Tier from the raw (un-truncated) high, not the display-rounded
-        # int below - int() truncates toward zero, so e.g. -0.3 -> 0 would
-        # otherwise land a real "-5 to 0 C" day one tier too nice. The
+        # Tier from the raw high, not the display-rounded int below - a
+        # rounded -0.3 -> 0 would otherwise land a real "-5 to 0 C" day one
+        # tier too nice. The
         # rain_expected this also returns is intentionally discarded (`_`)
         # in favor of FORECAST_DRY_MM_THRESHOLD below - see that
         # constant's comment for why they're kept as two separate knobs
@@ -916,8 +928,8 @@ def _parse_forecast(daily_data, tz, lat, saturation: float) -> list[DayForecast]
         forecast.append(DayForecast(
             day_label=format_day_abbr_nl(dt),
             icon_key=icon_key,
-            high=int(temp_max[i]) if i < len(temp_max) else 0,
-            low=int(temp_min[i]) if i < len(temp_min) else 0,
+            high=round_half_up(temp_max[i]) if i < len(temp_max) else 0,
+            low=round_half_up(temp_min[i]) if i < len(temp_min) else 0,
             moon_phase_pct=f"{illum_pct:.0f}",
             moon_icon_key=moon_icon_key,
             precip_mm=precip_mm,
@@ -974,7 +986,7 @@ def _night_day_temps(hourly_data, daily_data, tz, current_time) -> tuple[int | N
                 continue
             if start <= dt_hourly < end:
                 values.append(temp)
-        return round(min(values)) if values else None
+        return round_half_up(min(values)) if values else None
 
     last_night_low = _min_in_window(midnight_today, sunrise_today)
     next_night_low = _min_in_window(sunset_today, sunrise_tomorrow)
@@ -1049,7 +1061,7 @@ def _parse_hourly(hourly_data, tz, time_format, sunrises, sunsets) -> tuple[list
         prev_date = dt.date()
         hourly.append(HourPoint(
             time_label=format_time(dt, time_format, hour_only=True),
-            temperature=int(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0,
+            temperature=float(sliced_temperatures[i]) if i < len(sliced_temperatures) else 0.0,
             rain=precip_values[i] if i < len(precip_values) else 0,
             icon_key=map_weather_code_to_icon(code, is_day),
             is_day_start=is_day_start,
@@ -1311,11 +1323,11 @@ def fetch_snapshot(config: DisplayConfig) -> WeatherSnapshot:
         current_date=format_date_nl(dt),
         location=location,
         current_icon_key=current_icon_key,
-        current_temp=round(station_temp if station_temp is not None else current.get("temperature", 0)),
+        current_temp=round_half_up(station_temp if station_temp is not None else current.get("temperature", 0)),
         # Always from Open-Meteo, never the station - no generic station API
         # reliably publishes a computed apparent-temperature figure (needs
         # wind+humidity), a known limitation until a real vendor is picked.
-        feels_like=round(current.get("apparent_temperature", current.get("temperature", 0))),
+        feels_like=round_half_up(current.get("apparent_temperature", current.get("temperature", 0))),
         temp_unit=TEMP_UNIT,
         last_night_low=last_night_low,
         day_high=day_high,

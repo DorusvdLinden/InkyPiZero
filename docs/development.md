@@ -73,6 +73,10 @@ python main.py --mock-output output.png
 - `python scripts/test_display_freshness.py` - covers `display_freshness.py`'s
   skip/force decision (see [settings.md](./settings.md)'s "Display refresh
   cadence") against a temp state directory - no network/hardware needed.
+- `python scripts/test_temperature_rounding.py` - covers the single
+  temperature-rounding rule (`weather_data.round_half_up`) and that the
+  header and chart agree on a night just below 0 - no network/hardware
+  needed.
 - `python scripts/test_palette_sync.py` - covers `widgets.palette.PALETTE`
   staying synced to whatever `inky_saturation` the current render's config
   specifies (see [settings.md](./settings.md)'s "Color palette" section) -

@@ -2436,6 +2436,40 @@ gridlines) and a crafted narrow-range (2-7degC) fixture showing the new
 5-degree fallback line ("5°/3mm") with a bar correctly landing between it
 and "0°/0mm".
 
+### 58. One temperature-rounding rule; the chart plots real temperatures
+(2026-11-24, plan: `plans/consistent-temperature-rounding.md`)
+
+A photo of the live panel (Sittard, 22 November, 20:36) showed a header
+of "-1° / 5° / -1°" while the chart's temperature line sat flat at 0 all
+night. Cause: the same Open-Meteo floats were rounded three different
+ways. The chart's hourly temps and the forecast cards' high/low used
+`int()` (truncation toward zero: a -0.7 night became 0, and 2.9 became 2),
+and the header's night lows and the current/feels-like temperature used
+Python's `round()` (banker's rounding: 2.5 became 2). Truncation also
+caused the chart's staircase look: whole-degree plateaus with steep
+ramps between them.
+
+Now:
+- `weather_data.round_half_up` is the one rule for every whole number
+  shown (halves round up: -0.6 -> -1, -0.5 -> 0, 2.5 -> 3; never "-0").
+  Used for the forecast high/low, header night lows, current temperature
+  and feels-like.
+- `HourPoint.temperature` keeps the unrounded float. The chart draws the
+  real curve and rounds only the numbers it prints (axis-end labels,
+  original mode's dashed min/max labels).
+- Original mode compares *printed* values when deciding to skip a dashed
+  min/max line or the 0° freezing line, so a 0.3° low doesn't draw a
+  second "0°" next to the axis's own "0°C".
+
+The middle "5°" in that photo was correct: it's today's daily high, which
+happened before the chart's 20:00 start.
+
+**Active.** Verified: new `scripts/test_temperature_rounding.py` (rounding
+values, header/chart agreement on a -0.7 night, axis below 0 in both chart
+styles, no duplicate 0° line), plus the existing chart, precip and
+location tests. Before/after renders of the photo's night in
+`mock_display_output/temperature_rounding/`.
+
 ---
 
 ## Pruned branches

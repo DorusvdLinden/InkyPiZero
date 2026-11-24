@@ -64,6 +64,13 @@ reference docs this list feeds into.
   row, overflowing badly. Found via fresh-context review while auditing
   the mm-rain sizing change above, not caused by it.
 
+## Chart
+
+- [x] Header said "-1°" while the chart's temperature line stayed at 0
+  (22 Nov photo): three different rounding rules for the same data. Fixed
+  2026-11-24 - one `round_half_up` rule, chart plots unrounded temps
+  (docs/changes.md entry 58).
+
 ## Settings
 
 - [ ] Add a `wind_speed_unit` setting (m/s vs Beaufort) for the "Wind"
